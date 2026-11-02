@@ -4,7 +4,10 @@
 
 Current identity registry: **M01 — doktur-umair**, branch **`umair-dev`**. All existing handover entries below are attributed to M01 based on the user's explicit mapping. They remain historical checkpoints and do not imply that the other nine members' work is complete or integrated.
 
-Work distribution (29 October 2026): [plan.md §4](plan.md#4-team-structure-and-ownership) divides the work into ten vertical delivery slices of ≈ equal complexity, each owning its own database, backend, frontend and tests; silent infrastructure work is excluded from the balance. Per [AGENTS.md](AGENTS.md), what a member's section records may differ from that member's planned slice, and that is acceptable.
+Work distribution (29 October 2026): [plan.md §4](plan.md#4-team-structure-and-ownership) divides the work into ten vertical delivery slices of ≈ equal complexity, each owning its own database, backend, frontend and tests; silent infrastructure work is excluded from the balance. What a member's section records may differ from that member's planned slice, and that is acceptable.
+
+
+Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` local](#agents-local-only-2026-11-02). The file is removed from tracking and ignored at the repository root; `plan.md` and this handover remain tracked. Removal from `main` requires the normal reviewed PR. Evidence is limited to this working tree and fetched `origin/main` (`2eb332d`) / `doktur/umair-dev` (`a06a2d5`); no other member branches were reviewed.
 
 ### Member status index
 
@@ -489,6 +492,18 @@ pnpm dev
 3. Set a valid private password and confirm it. Expect `ACTIVE`/verified state, then sign in through `/auth/login`; acceptance alone must not create a session. Retry the old token and expect a safe rejection.
 4. After the resend cooldown, resend an invitation and try both email links: only the newest link should work. Revoke another invitation after confirmation and verify its link fails. Stop Mailpit/SMTP and create a separate invite; expect the invited user remains and Admin sees a retry instruction.
 5. Invite a courier before M06 readiness is agreed; submit its link and expect setup-pending, no activation and no token consumption. Check anonymous/Dispatcher access is denied by the API, CSRF/Origin failures are rejected, and keyboard focus/status announcements remain usable at 200% zoom/reduced motion.
+
+<a id="agents-local-only-2026-11-02"></a>
+### Keep agent instructions local (2 November 2026)
+
+- **Member/branch/task:** M01 — doktur-umair, `umair-dev`; remove `AGENTS.md` from GitHub while retaining the local file. Reference: accompanying `chore(docs): keep agent instructions local` commit; removal from `main` pending reviewed PR.
+- **Summary/files:** Removed the root `AGENTS.md` from the Git index with `git rm --cached`; added `/AGENTS.md` to `.gitignore`; removed the active shared-integration link to the now-local file. Local contents are preserved byte-for-byte. Earlier historical entries remain unchanged. See the [shared checkpoint](#shared-integration).
+- **Checks/review:** Verified the local file exists with the same SHA-256 hash, is absent from the index, and matches `.gitignore`; scoped staged whitespace checks passed. No runtime, security-sensitive application logic, accessibility or UI changes; application tests are not applicable. Unrelated README/report and earlier handover changes are excluded from this commit.
+- **Limitations/future work:** This removes the file from the updated branch tip, not earlier commits or other branches. Other contributors must preserve any local copy before pulling the deletion; Git may remove their previously tracked copy. Existing integration blockers and member ownership remain unchanged.
+- **Setup/manual verification:** No application start is needed. Run `cd /Users/umairhassan/Desktop/ead`.
+  1. Run `test -f AGENTS.md && echo "Local file exists"`; expect the message and the original local contents.
+  2. Run `git ls-files -- AGENTS.md` and `git check-ignore -v -- AGENTS.md`; expect no tracked path and the `/AGENTS.md` ignore rule respectively. After editing the local file, `git status --short -- AGENTS.md` should remain empty; do not force-add it.
+  3. Open the updated GitHub branch after push; expect no root `AGENTS.md`. Check `main` after PR merge for the same result. Historical commits can still contain the file. Responsive/offline/permission UI states are not applicable.
 
 <a id="m02"></a>
 ## M02 — TBD
