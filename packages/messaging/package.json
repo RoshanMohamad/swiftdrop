@@ -1,0 +1,23 @@
+{
+  "name": "@swiftdrop/messaging",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs"
+  },
+  "dependencies": {
+    "@swiftdrop/contracts": "workspace:*",
+    "amqplib": "^2.2.0",
+    "dotenv": "^17.2.3",
+    "pino": "^10.4.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "30.5.2",
+    "@types/amqplib": "^0.10.8",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.5"
+  }
+}

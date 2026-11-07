@@ -38,6 +38,7 @@ import {
   PublicTracking,
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
+import { AdminWebhookDeliveries } from "./features/webhook-admin/pages.js";
 import "./styles.css";
 function Guard({ role, children }: { role: Role; children: ReactNode }) {
   const { state } = useSession();
@@ -126,6 +127,7 @@ function Account() {
           <Link to="/admin/users">Staff users</Link>
           <Link to="/admin/zones">Service districts</Link>
           <Link to="/admin/pricing">Pricing</Link>
+          <Link to="/admin/webhooks">Webhook deliveries</Link>
         </div>
       )}
       {state.user?.role === "CUSTOMER" && (
@@ -294,6 +296,14 @@ function App() {
                 element={
                   <Guard role="ADMIN">
                     <NewStaff />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/admin/webhooks"
+                element={
+                  <Guard role="ADMIN">
+                    <AdminWebhookDeliveries />
                   </Guard>
                 }
               />

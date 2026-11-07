@@ -20,6 +20,10 @@ import type { GoogleOidc } from "./modules/auth/google.js";
 import { ParcelService } from "./modules/parcels/service.js";
 import { createParcelRouter } from "./modules/parcels/routes.js";
 import { UsersService, createUsersRouter } from "./modules/users/index.js";
+import {
+  WebhooksService,
+  createWebhooksRouter,
+} from "./modules/webhooks/index.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -28,7 +32,6 @@ export function createApp(deps: {
   logger?: Logger;
   mailer?: AuthMailer;
   google?: GoogleOidc;
-  workerState?: { connected: boolean };
 }) {
   const { db, redis, config, tokens } = deps;
   const logger =
@@ -66,12 +69,9 @@ export function createApp(deps: {
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/ready", async (_req, res) => {
     await Promise.all([db.$queryRaw`SELECT 1`, redis.ping()]);
-    res.json({
-      status: "ready",
-      dependencies: {
-        rabbitmq: deps.workerState?.connected ? "connected" : "reconnecting",
-      },
-    });
+    // Event publication is the outbox relay's job (apps/outbox-relay, own /readyz);
+    // booking stays available while the broker is down because events wait in the outbox.
+    res.json({ status: "ready" });
   });
   if (config.NODE_ENV !== "production") {
     app.get("/api/docs", (_req, res) =>
@@ -107,6 +107,10 @@ export function createApp(deps: {
   );
   app.use("/api/v1/auth", createAuthRouter(service, limiter, config, users));
   app.use("/api/v1/admin/users", createUsersRouter(users, service, config));
+  app.use(
+    "/api/v1/admin/webhook-deliveries",
+    createWebhooksRouter(new WebhooksService(db), service, config),
+  );
   const parcels = new ParcelService(db);
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
   app.use((_req, _res, next) =>

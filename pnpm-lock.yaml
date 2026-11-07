@@ -118,6 +118,49 @@ importers:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(supports-color@10.2.2)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
 
+  apps/outbox-relay:
+    dependencies:
+      '@swiftdrop/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@swiftdrop/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@swiftdrop/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@jest/globals':
+        specifier: 30.5.2
+        version: 30.5.2(supports-color@10.2.2)
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      jest:
+        specifier: ^30.5.2
+        version: 30.5.2(@types/node@24.19.2)(supports-color@10.2.2)
+      testcontainers:
+        specifier: ^11.8.0
+        version: 11.14.0(supports-color@10.2.2)
+      ts-jest:
+        specifier: ^29.4.5
+        version: 29.4.15(@babel/core@7.29.7(supports-color@10.2.2))(@jest/transform@30.5.2(supports-color@10.2.2))(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@24.19.2)(supports-color@10.2.2))(typescript@5.9.3)
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(supports-color@10.2.2)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
+
   apps/web:
     dependencies:
       '@swiftdrop/contracts':
@@ -167,6 +210,49 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(jsdom@27.4.0(@noble/hashes@1.8.0)(supports-color@10.2.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  apps/webhook-svc:
+    dependencies:
+      '@swiftdrop/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@swiftdrop/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@swiftdrop/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@jest/globals':
+        specifier: 30.5.2
+        version: 30.5.2(supports-color@10.2.2)
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      jest:
+        specifier: ^30.5.2
+        version: 30.5.2(@types/node@24.19.2)(supports-color@10.2.2)
+      testcontainers:
+        specifier: ^11.8.0
+        version: 11.14.0(supports-color@10.2.2)
+      ts-jest:
+        specifier: ^29.4.5
+        version: 29.4.15(@babel/core@7.29.7(supports-color@10.2.2))(@jest/transform@30.5.2(supports-color@10.2.2))(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@24.19.2)(supports-color@10.2.2))(typescript@5.9.3)
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(supports-color@10.2.2)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
+
   packages/contracts:
     dependencies:
       '@asteasolutions/zod-to-openapi':
@@ -201,6 +287,37 @@ importers:
       prisma:
         specifier: 7.10.1
         version: 7.10.1(@types/node@24.19.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
+
+  packages/messaging:
+    dependencies:
+      '@swiftdrop/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.4.2
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
+    devDependencies:
+      '@jest/globals':
+        specifier: 30.5.2
+        version: 30.5.2(supports-color@10.2.2)
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      jest:
+        specifier: ^30.5.2
+        version: 30.5.2(@types/node@24.19.2)(supports-color@10.2.2)
+      ts-jest:
+        specifier: ^29.4.5
+        version: 29.4.15(@babel/core@7.29.7(supports-color@10.2.2))(@jest/transform@30.5.2(supports-color@10.2.2))(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@24.19.2)(supports-color@10.2.2))(typescript@5.9.3)
 
 packages:
 
@@ -9027,6 +9144,27 @@ snapshots:
       '@jest/types': 30.5.1
       babel-jest: 30.5.2(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2)
       esbuild: 0.27.7
+      jest-util: 30.5.1
+
+  ts-jest@29.4.15(@babel/core@7.29.7(supports-color@10.2.2))(@jest/transform@30.5.2(supports-color@10.2.2))(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@24.19.2)(supports-color@10.2.2))(typescript@5.9.3):
+    dependencies:
+      bs-logger: 0.2.6
+      fast-json-stable-stringify: 2.1.0
+      handlebars: 4.7.10
+      jest: 30.5.2(@types/node@24.19.2)(supports-color@10.2.2)
+      json5: 2.2.3
+      lodash.memoize: 4.1.2
+      make-error: 1.3.6
+      semver: 7.8.5
+      type-fest: 4.41.0
+      typescript: 5.9.3
+      yargs-parser: 21.1.1
+    optionalDependencies:
+      '@babel/core': 7.29.7(supports-color@10.2.2)
+      '@jest/transform': 30.5.2(supports-color@10.2.2)
+      '@jest/types': 30.5.1
+      babel-jest: 30.5.2(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2)
+      esbuild: 0.28.2
       jest-util: 30.5.1
 
   tslib@2.8.1:
