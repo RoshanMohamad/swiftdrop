@@ -55,7 +55,7 @@ This registry is the source of contributor identity across chats and branches. I
 | Member ID | Delivery slice (plan.md §4.1) | Name | Owned branches |
 | :-- | :-- | :-- | :-- |
 | M01 | 1 / Identity, access and user administration (also silent-work steward) | doktur-umair | `umair-dev` |
-| M02 | 2 / Merchant platform | TBD | TBD |
+| M02 | 2 / Merchant platform | TBD | `feature/Merchant` |
 | M03 | 3 / Pricing, zones and reports | TBD | TBD |
 | M04 | 4 / Customer booking and parcel records | TBD | TBD |
 | M05 | 5 / Parcel lifecycle, cancellation and public tracking | TBD | TBD |

@@ -11,7 +11,7 @@ Work distribution (29 October 2026): [plan.md §4](plan.md#4-team-structure-and-
 | Member | Name | Branch | Planned slice (plan.md §4.1) | Delivered vs merged | Depends on | Next step |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` | Identity, access and user administration (+ silent-work steward) | Sprint 1 dispatcher invitation provisioning/API/Admin UI implemented locally, uncommitted; prior auth/Google/verification and other historical work as recorded; merge to `main` not verified | X-01/X-13 (M10 review), X-15 (M06 readiness), X-03 (M08/M09) | Obtain M10 schema/contract review for C-03 and M06 courier readiness for C-04; then integrate; Sprint 2 suspension/bootstrap remains next; C-02 handoff open |
-| [M02](#m02) | TBD | TBD | Merchant platform | No work recorded | X-05, X-11 | Merchant tables, registration/approval against fake `ParcelsService` |
+| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Commit 1 scaffold added locally, uncommitted; not merged | X-05, X-11 | Add merchant schema, contracts, and registration/approval against fake `ParcelsService` |
 | [M03](#m03) | TBD | TBD | Pricing, zones and reports | No work recorded (pricing/quote baseline exists in M01's local code, C-02) | X-04 | Take over pricing code; FR-I7 reports |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09 | Take over booking code; merchant/staff variants |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | No work recorded (public tracking baseline exists in M01's local code, C-02) | X-05, X-07 | Transition table and `LifecycleService` |
@@ -493,7 +493,22 @@ pnpm dev
 <a id="m02"></a>
 ## M02 — TBD
 
-Planned slice (plan.md §4.1): Merchant platform. No work recorded.
+Planned slice (plan.md §4.1): Merchant platform.
+
+### Commit 1: Merchant module scaffold (7 November 2026)
+
+#### Summary of changes
+- Registered the confirmed branch mapping M02 → `feature/Merchant`; member name remains TBD.
+- Added README placeholders for the merchant backend module and web feature folder, documenting their planned ownership and integration boundaries.
+- No API routes, business behavior, schema, or UI were implemented in this structural phase.
+
+#### Issues identified and unresolved
+- Shared parcel creation remains an M04 dependency (X-05); webhook delivery/log integration remains an M08 dependency (X-10/X-11). Their implementation/readiness was not checked in this branch review.
+- Merchant routes are not mounted yet; route registration and shared web composition require later implementation/integration.
+
+#### Verification and manual review
+- Inspected existing module/feature conventions and confirmed the current branch is `feature/Merchant` with a clean initial working tree.
+- No automated tests or runtime checks apply to README-only placeholders. Review the two README files and `git diff --check` before committing.
 
 <a id="m03"></a>
 ## M03 — TBD
