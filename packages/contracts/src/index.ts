@@ -1,5 +1,7 @@
 import { z } from "zod";
 import commonPasswords from "./common-passwords.json" with { type: "json" };
+export * from "./lifecycle";
+import { parcelStatusSchema } from "./lifecycle";
 const blocked = new Set(commonPasswords);
 export const roleSchema = z.enum([
   "CUSTOMER",
@@ -151,7 +153,7 @@ export type BookingRequest = z.infer<typeof bookingRequestSchema>;
 export const parcelSchema = z.object({
   id: z.string().uuid(),
   trackingNumber: z.string().regex(/^SD[A-Z0-9]{8}$/),
-  status: z.literal("CREATED"),
+  status: parcelStatusSchema,
   feeCents: z.number().int().nonnegative(),
   currency: z.literal("LKR"),
   originTown: z.string(),
@@ -163,7 +165,7 @@ export const parcelSchema = z.object({
   history: z
     .array(
       z.object({
-        status: z.literal("CREATED"),
+        status: parcelStatusSchema,
         town: z.string(),
         createdAt: z.string().datetime(),
       }),
@@ -176,19 +178,37 @@ export const parcelPageSchema = z.object({
 });
 export const publicTrackingSchema = z.object({
   trackingNumber: z.string(),
-  status: z.literal("CREATED"),
+  status: parcelStatusSchema,
   originTown: z.string(),
   destinationTown: z.string(),
   history: z
     .array(
       z.object({
-        status: z.literal("CREATED"),
+        status: parcelStatusSchema,
         town: z.string(),
         createdAt: z.string().datetime(),
       }),
     )
     .max(100),
 });
+export const statusTransitionSchema = z
+  .object({
+    to: z.enum([
+      "PICKED_UP",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "DELIVERED",
+      "FAILED",
+    ]),
+    town: z.string().trim().min(1).max(80),
+    version: z.number().int().positive(),
+  })
+  .strict();
+export type StatusTransition = z.infer<typeof statusTransitionSchema>;
+export const cancelParcelSchema = z
+  .object({ version: z.number().int().positive() })
+  .strict();
+export type CancelParcel = z.infer<typeof cancelParcelSchema>;
 export const zoneSchema = z.object({
   id: z.number().int(),
   district: z.string(),

@@ -2461,7 +2461,7 @@ export interface paths {
                                 id: string;
                                 trackingNumber: string;
                                 /** @enum {string} */
-                                status: "CREATED";
+                                status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                                 feeCents: number;
                                 /** @enum {string} */
                                 currency: "LKR";
@@ -2474,7 +2474,7 @@ export interface paths {
                                 createdAt: string;
                                 history: {
                                     /** @enum {string} */
-                                    status: "CREATED";
+                                    status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                                     town: string;
                                     /** Format: date-time */
                                     createdAt: string;
@@ -2729,7 +2729,7 @@ export interface paths {
                             id: string;
                             trackingNumber: string;
                             /** @enum {string} */
-                            status: "CREATED";
+                            status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                             feeCents: number;
                             /** @enum {string} */
                             currency: "LKR";
@@ -2742,7 +2742,7 @@ export interface paths {
                             createdAt: string;
                             history: {
                                 /** @enum {string} */
-                                status: "CREATED";
+                                status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                                 town: string;
                                 /** Format: date-time */
                                 createdAt: string;
@@ -2997,7 +2997,7 @@ export interface paths {
                             id: string;
                             trackingNumber: string;
                             /** @enum {string} */
-                            status: "CREATED";
+                            status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                             feeCents: number;
                             /** @enum {string} */
                             currency: "LKR";
@@ -3010,7 +3010,7 @@ export interface paths {
                             createdAt: string;
                             history: {
                                 /** @enum {string} */
-                                status: "CREATED";
+                                status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                                 town: string;
                                 /** Format: date-time */
                                 createdAt: string;
@@ -3265,12 +3265,12 @@ export interface paths {
                         "application/json": {
                             trackingNumber: string;
                             /** @enum {string} */
-                            status: "CREATED";
+                            status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                             originTown: string;
                             destinationTown: string;
                             history: {
                                 /** @enum {string} */
-                                status: "CREATED";
+                                status: "CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
                                 town: string;
                                 /** Format: date-time */
                                 createdAt: string;

@@ -5471,7 +5471,13 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "CREATED"
+                        "CREATED",
+                        "PICKED_UP",
+                        "IN_TRANSIT",
+                        "OUT_FOR_DELIVERY",
+                        "DELIVERED",
+                        "FAILED",
+                        "CANCELLED"
                       ]
                     },
                     "feeCents": {
@@ -5511,7 +5517,13 @@
                           "status": {
                             "type": "string",
                             "enum": [
-                              "CREATED"
+                              "CREATED",
+                              "PICKED_UP",
+                              "IN_TRANSIT",
+                              "OUT_FOR_DELIVERY",
+                              "DELIVERED",
+                              "FAILED",
+                              "CANCELLED"
                             ]
                           },
                           "town": {
@@ -6109,7 +6121,13 @@
                           "status": {
                             "type": "string",
                             "enum": [
-                              "CREATED"
+                              "CREATED",
+                              "PICKED_UP",
+                              "IN_TRANSIT",
+                              "OUT_FOR_DELIVERY",
+                              "DELIVERED",
+                              "FAILED",
+                              "CANCELLED"
                             ]
                           },
                           "feeCents": {
@@ -6149,7 +6167,13 @@
                                 "status": {
                                   "type": "string",
                                   "enum": [
-                                    "CREATED"
+                                    "CREATED",
+                                    "PICKED_UP",
+                                    "IN_TRANSIT",
+                                    "OUT_FOR_DELIVERY",
+                                    "DELIVERED",
+                                    "FAILED",
+                                    "CANCELLED"
                                   ]
                                 },
                                 "town": {
@@ -6755,7 +6779,13 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "CREATED"
+                        "CREATED",
+                        "PICKED_UP",
+                        "IN_TRANSIT",
+                        "OUT_FOR_DELIVERY",
+                        "DELIVERED",
+                        "FAILED",
+                        "CANCELLED"
                       ]
                     },
                     "feeCents": {
@@ -6795,7 +6825,13 @@
                           "status": {
                             "type": "string",
                             "enum": [
-                              "CREATED"
+                              "CREATED",
+                              "PICKED_UP",
+                              "IN_TRANSIT",
+                              "OUT_FOR_DELIVERY",
+                              "DELIVERED",
+                              "FAILED",
+                              "CANCELLED"
                             ]
                           },
                           "town": {
@@ -7381,7 +7417,13 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "CREATED"
+                        "CREATED",
+                        "PICKED_UP",
+                        "IN_TRANSIT",
+                        "OUT_FOR_DELIVERY",
+                        "DELIVERED",
+                        "FAILED",
+                        "CANCELLED"
                       ]
                     },
                     "originTown": {
@@ -7398,7 +7440,13 @@
                           "status": {
                             "type": "string",
                             "enum": [
-                              "CREATED"
+                              "CREATED",
+                              "PICKED_UP",
+                              "IN_TRANSIT",
+                              "OUT_FOR_DELIVERY",
+                              "DELIVERED",
+                              "FAILED",
+                              "CANCELLED"
                             ]
                           },
                           "town": {

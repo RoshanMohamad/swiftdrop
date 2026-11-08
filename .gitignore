@@ -18,5 +18,5 @@ packages/db/src/generated/
 # Local M01 sprint planning
 /m01.md
 
-# Local agent instructions
-/AGENTS.md
+# Local-only agent rules (kept out of the shared repo)
+AGENTS.md
