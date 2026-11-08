@@ -19,6 +19,7 @@ import type { AuthMailer } from "./modules/auth/mail.js";
 import type { GoogleOidc } from "./modules/auth/google.js";
 import { ParcelService } from "./modules/parcels/service.js";
 import { createParcelRouter } from "./modules/parcels/routes.js";
+import { LifecycleService, createLifecycleRouter } from "./modules/lifecycle/index.js";
 import { UsersService, createUsersRouter } from "./modules/users/index.js";
 export function createApp(deps: {
   db: Database;
@@ -109,6 +110,8 @@ export function createApp(deps: {
   app.use("/api/v1/admin/users", createUsersRouter(users, service, config));
   const parcels = new ParcelService(db);
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
+  const lifecycle = new LifecycleService(db);
+  app.use("/api/v1", createLifecycleRouter(lifecycle, service, limiter, config));
   app.use((_req, _res, next) =>
     next(new HttpError(404, "NOT_FOUND", "This route does not exist.")),
   );
