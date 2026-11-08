@@ -8,8 +8,10 @@
     "start": "node dist/server.js",
     "typecheck": "tsc",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --selectProjects unit",
-    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --selectProjects integration --runInBand --coverage",
-    "cleanup": "tsx src/cleanup.ts"
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --selectProjects integration unit --runInBand --coverage",
+    "cleanup": "tsx src/cleanup.ts",
+    "admin:create": "tsx src/admin-create.ts",
+    "services:cli": "tsx src/services-cli.ts"
   },
   "dependencies": {
     "@swiftdrop/contracts": "workspace:*",

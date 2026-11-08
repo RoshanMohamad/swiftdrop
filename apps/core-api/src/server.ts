@@ -1,6 +1,7 @@
 import { Redis } from "ioredis";
 import { createDatabase } from "@swiftdrop/db";
 import { createApp } from "./app.js";
+import { createInternalApp } from "./internal-app.js";
 import { loadConfig } from "./shared/config.js";
 import { createTokenService } from "./modules/auth/jwt.js";
 import { createAuthMailer } from "./modules/auth/mail.js";
@@ -46,6 +47,7 @@ const { app } = createApp({
   logger,
   workerState,
 });
+const internalApp = createInternalApp({ db, config, logger });
 const workers = startParcelEventWorkers(
   db,
   config.RABBITMQ_URL,
@@ -55,6 +57,14 @@ const workers = startParcelEventWorkers(
 const server = app.listen(config.PORT, "127.0.0.1", () =>
   console.log(`SwiftDrop API listening at http://127.0.0.1:${config.PORT}`),
 );
+const internalServer = internalApp.listen(
+  config.INTERNAL_PORT,
+  "127.0.0.1",
+  () =>
+    console.log(
+      `SwiftDrop internal API listening at http://127.0.0.1:${config.INTERNAL_PORT}`,
+    ),
+);
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
@@ -62,8 +72,13 @@ async function shutdown() {
   const timeout = setTimeout(() => process.exit(1), 10000);
   timeout.unref();
   try {
-    await new Promise<void>((done, fail) =>
-      server.close((error) => (error ? fail(error) : done())),
+    await Promise.all(
+      [server, internalServer].map(
+        (listener) =>
+          new Promise<void>((done, fail) =>
+            listener.close((error) => (error ? fail(error) : done())),
+          ),
+      ),
     );
     await workers.stop();
     await db.$disconnect();

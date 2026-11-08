@@ -18,7 +18,11 @@ import {
   type BookingRequest,
   type ZoneInput,
   type PriceInput,
-  staffPageSchema,
+  adminUsersPageSchema,
+  adminUserSchema,
+  userStatusChangeSchema,
+  type Role,
+  type UserStatusChange,
   invitationResultSchema,
   acceptInvitationResultSchema,
   createStaffSchema,
@@ -111,58 +115,90 @@ export async function resendVerification(email: string) {
   });
 }
 const bearer = async () => current ?? refreshSession();
-export async function createQuote(input: QuoteRequest) {
+export const sessionExpiredEvents = new EventTarget();
+function expireSession() {
+  blockBootstrap();
+  sessionExpiredEvents.dispatchEvent(new Event("expired"));
+  sessionEvents?.postMessage("signed-out");
+}
+async function authenticated<T>(
+  operation: (session: Session) => Promise<T>,
+  retryRead = false,
+): Promise<T> {
   const session = await bearer();
-  const context = await csrf();
-  return quoteSchema.parse(
-    await checked(
-      await api.POST("/api/v1/quotes", {
-        body: input,
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "X-CSRF-Token": context.csrfToken,
-        },
-      }),
-    ),
-  );
+  try {
+    return await operation(session);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.problem.status !== 401)
+      throw error;
+    const renewed = await refreshSession();
+    // Mutations require a deliberate retry; never repeat a possibly committed write.
+    if (!retryRead) throw error;
+    try {
+      return await operation(renewed);
+    } catch (retryError) {
+      if (retryError instanceof ApiError && retryError.problem.status === 401)
+        expireSession();
+      throw retryError;
+    }
+  }
+}
+export async function createQuote(input: QuoteRequest) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return quoteSchema.parse(
+      await checked(
+        await api.POST("/api/v1/quotes", {
+          body: input,
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
 }
 export async function createParcel(input: BookingRequest, key: string) {
-  const session = await bearer();
-  const context = await csrf();
-  return parcelSchema.parse(
-    await checked(
-      await api.POST("/api/v1/parcels", {
-        params: { header: { "Idempotency-Key": key } },
-        body: input,
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "X-CSRF-Token": context.csrfToken,
-        },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return parcelSchema.parse(
+      await checked(
+        await api.POST("/api/v1/parcels", {
+          params: { header: { "Idempotency-Key": key } },
+          body: input,
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
 }
 export async function listParcels(cursor?: string) {
-  const session = await bearer();
-  return parcelPageSchema.parse(
-    await checked(
-      await api.GET("/api/v1/parcels", {
-        params: { query: cursor ? { cursor } : {} },
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    return parcelPageSchema.parse(
+      await checked(
+        await api.GET("/api/v1/parcels", {
+          params: { query: cursor ? { cursor } : {} },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
 }
 export async function getParcel(id: string) {
-  const session = await bearer();
-  return parcelSchema.parse(
-    await checked(
-      await api.GET("/api/v1/parcels/{id}", {
-        params: { path: { id } },
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    return parcelSchema.parse(
+      await checked(
+        await api.GET("/api/v1/parcels/{id}", {
+          params: { path: { id } },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
 }
 export async function getTracking(trackingNumber: string) {
   return publicTrackingSchema.parse(
@@ -174,130 +210,159 @@ export async function getTracking(trackingNumber: string) {
   );
 }
 export async function listZones() {
-  const session = await bearer();
-  return zoneListSchema.parse(
-    await checked(
-      await api.GET("/api/v1/admin/zones", {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    return zoneListSchema.parse(
+      await checked(
+        await api.GET("/api/v1/admin/zones", {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
 }
 export async function addZone(input: ZoneInput) {
-  const session = await bearer();
-  const context = await csrf();
-  return zoneSchema.parse(
-    await checked(
-      await api.POST("/api/v1/admin/zones", {
-        body: input,
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "X-CSRF-Token": context.csrfToken,
-        },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return zoneSchema.parse(
+      await checked(
+        await api.POST("/api/v1/admin/zones", {
+          body: input,
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
 }
 export async function updateZone(id: number, input: ZoneInput) {
-  const session = await bearer();
-  const context = await csrf();
-  return zoneSchema.parse(
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return zoneSchema.parse(
+      await checked(
+        await api.PATCH("/api/v1/admin/zones/{id}", {
+          params: { path: { id: String(id) } },
+          body: input,
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function deleteZone(id: number) {
+  return authenticated(async (session) => {
+    const context = await csrf();
     await checked(
-      await api.PATCH("/api/v1/admin/zones/{id}", {
+      await api.DELETE("/api/v1/admin/zones/{id}", {
         params: { path: { id: String(id) } },
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "X-CSRF-Token": context.csrfToken,
+        },
+      }),
+    );
+  });
+}
+export async function listPrices() {
+  return authenticated(async (session) => {
+    return priceListSchema.parse(
+      await checked(
+        await api.GET("/api/v1/admin/pricing", {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function addPrice(input: PriceInput) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return checked(
+      await api.POST("/api/v1/admin/pricing", {
         body: input,
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
           "X-CSRF-Token": context.csrfToken,
         },
       }),
-    ),
-  );
+    );
+  });
 }
-export async function deleteZone(id: number) {
-  const session = await bearer();
-  const context = await csrf();
-  await checked(
-    await api.DELETE("/api/v1/admin/zones/{id}", {
-      params: { path: { id: String(id) } },
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        "X-CSRF-Token": context.csrfToken,
-      },
-    }),
-  );
-}
-export async function listPrices() {
-  const session = await bearer();
-  return priceListSchema.parse(
-    await checked(
-      await api.GET("/api/v1/admin/pricing", {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      }),
-    ),
-  );
-}
-export async function addPrice(input: PriceInput) {
-  const session = await bearer();
-  const context = await csrf();
-  return checked(
-    await api.POST("/api/v1/admin/pricing", {
-      body: input,
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        "X-CSRF-Token": context.csrfToken,
-      },
-    }),
-  );
-}
-export async function listStaff(filters: {
-  role?: "COURIER" | "DISPATCHER";
+export async function listUsers(filters: {
+  role?: Role;
   status?: "INVITED" | "ACTIVE" | "SUSPENDED";
   cursor?: string;
 }) {
-  const session = await bearer();
-  return staffPageSchema.parse(
-    await checked(
-      await api.GET("/api/v1/admin/users", {
-        params: { query: filters },
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    return adminUsersPageSchema.parse(
+      await checked(
+        await api.GET("/api/v1/admin/users", {
+          params: { query: filters },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
 }
 export async function createStaff(input: CreateStaff) {
-  const session = await bearer();
-  const context = await csrf();
-  return invitationResultSchema.parse(
-    await checked(
-      await api.POST("/api/v1/admin/users", {
-        body: createStaffSchema.parse(input),
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "X-CSRF-Token": context.csrfToken,
-        },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return invitationResultSchema.parse(
+      await checked(
+        await api.POST("/api/v1/admin/users", {
+          body: createStaffSchema.parse(input),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
 }
 export async function updateInvitation(
   id: number,
   action: "resend" | "revoke",
 ) {
-  const session = await bearer();
-  const context = await csrf();
-  return invitationResultSchema.parse(
-    await checked(
-      await api.POST("/api/v1/admin/users/{id}/invitation", {
-        params: { path: { id: String(id) } },
-        body: invitationActionSchema.parse({ action }),
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "X-CSRF-Token": context.csrfToken,
-        },
-      }),
-    ),
-  );
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return invitationResultSchema.parse(
+      await checked(
+        await api.POST("/api/v1/admin/users/{id}/invitation", {
+          params: { path: { id: String(id) } },
+          body: invitationActionSchema.parse({ action }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function updateUserStatus(
+  id: number,
+  status: UserStatusChange["status"],
+) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return adminUserSchema.parse(
+      await checked(
+        await api.PATCH("/api/v1/admin/users/{id}/status", {
+          params: { path: { id: String(id) } },
+          body: userStatusChangeSchema.parse({ status }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
 }
 export async function acceptInvitation(token: string, password: string) {
   const context = await csrf();
@@ -328,33 +393,35 @@ export async function completeProfile(input: {
   fullName: string;
   phone: string;
 }) {
-  const session = current ?? (await refreshSession());
-  const context = await csrf();
-  const user = await checked(
-    await api.POST("/api/v1/auth/complete-profile", {
-      body: completeProfileSchema.parse(input),
-      headers: {
-        "X-CSRF-Token": context.csrfToken,
-        Authorization: `Bearer ${session.accessToken}`,
-      },
-    }),
-  );
-  return publicUserSchema.parse(user);
-}
-export async function beginGoogleLink(password: string) {
-  return authLock(async () => {
-    const session = current ?? (await refreshSession());
+  return authenticated(async (session) => {
     const context = await csrf();
-    return checked(
-      await api.POST("/api/v1/auth/google/link", {
-        body: { password },
+    const user = await checked(
+      await api.POST("/api/v1/auth/complete-profile", {
+        body: completeProfileSchema.parse(input),
         headers: {
           "X-CSRF-Token": context.csrfToken,
           Authorization: `Bearer ${session.accessToken}`,
         },
       }),
     );
+    return publicUserSchema.parse(user);
   });
+}
+export async function beginGoogleLink(password: string) {
+  return authenticated((session) =>
+    authLock(async () => {
+      const context = await csrf();
+      return checked(
+        await api.POST("/api/v1/auth/google/link", {
+          body: { password },
+          headers: {
+            "X-CSRF-Token": context.csrfToken,
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+        }),
+      );
+    }),
+  );
 }
 export async function login(email: string, password: string) {
   const result = await authLock(async () => {
@@ -395,6 +462,8 @@ export function refreshSession(): Promise<Session> {
   })
     .catch((error) => {
       current = null;
+      if (error instanceof ApiError && error.problem.status === 401)
+        expireSession();
       throw error;
     })
     .finally(() => {
@@ -403,27 +472,17 @@ export function refreshSession(): Promise<Session> {
   return refreshing;
 }
 export async function checkSession() {
-  const session = current ?? (await refreshSession());
-  try {
-    return publicUserSchema.parse(
-      await checked(
-        await api.GET("/api/v1/auth/me", {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        }),
+  return authenticated(
+    async (session) =>
+      publicUserSchema.parse(
+        await checked(
+          await api.GET("/api/v1/auth/me", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
       ),
-    );
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.problem.status !== 401)
-      throw error;
-    const refreshed = await refreshSession();
-    return publicUserSchema.parse(
-      await checked(
-        await api.GET("/api/v1/auth/me", {
-          headers: { Authorization: `Bearer ${refreshed.accessToken}` },
-        }),
-      ),
-    );
-  }
+    true,
+  );
 }
 export async function logout(all = false) {
   const previous = current;

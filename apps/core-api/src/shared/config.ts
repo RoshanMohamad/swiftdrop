@@ -18,9 +18,11 @@ export function loadConfig() {
         .enum(["development", "test", "production"])
         .default("development"),
       PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+      INTERNAL_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
       APP_ORIGIN: z.url(),
       API_ISSUER: z.url(),
       HUMAN_AUDIENCE: z.string().min(1),
+      SERVICE_ISSUER: z.url().default("http://127.0.0.1:3001"),
       DATABASE_URL: z.url(),
       REDIS_URL: z.url(),
       RABBITMQ_URL: z.url().default("amqp://guest:guest@localhost:5672"),
@@ -63,6 +65,12 @@ export function loadConfig() {
       STAFF_ABSOLUTE_SECONDS: z.coerce.number().int().positive().default(86400),
     })
     .superRefine((value, context) => {
+      if (value.PORT === value.INTERNAL_PORT)
+        context.addIssue({
+          code: "custom",
+          path: ["INTERNAL_PORT"],
+          message: "Internal and browser-facing ports must be different.",
+        });
       const configured = [
         value.GOOGLE_CLIENT_ID,
         value.GOOGLE_CLIENT_SECRET,
@@ -106,9 +114,10 @@ export function loadConfig() {
   if (
     env.NODE_ENV === "production" &&
     (origin.protocol !== "https:" ||
-      new URL(env.API_ISSUER).protocol !== "https:")
+      new URL(env.API_ISSUER).protocol !== "https:" ||
+      new URL(env.SERVICE_ISSUER).protocol !== "https:")
   )
-    throw new Error("Production requires HTTPS.");
+    throw new Error("Production requires HTTPS for all token issuers.");
   const read = (path: string) => readFileSync(resolve(root, path), "utf8");
   const csrfSecret = read(env.CSRF_SECRET_FILE).trim();
   const rateSecret = read(env.RATE_LIMIT_SECRET_FILE).trim();
