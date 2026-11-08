@@ -36,6 +36,7 @@ import {
   acceptInvitationSchema,
   acceptInvitationResultSchema,
   notificationLookupResultSchema,
+  dailyReportSummarySchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -153,6 +154,14 @@ for (const [method, path, input, output, status, bearer] of [
   ["delete", "/api/v1/admin/zones/{id}", null, null, 204, true],
   ["get", "/api/v1/admin/pricing", null, z.array(priceSchema), 200, true],
   ["post", "/api/v1/admin/pricing", priceInputSchema, priceSchema, 201, true],
+  [
+    "get",
+    "/api/v1/admin/reports/daily",
+    null,
+    dailyReportSummarySchema,
+    200,
+    true,
+  ],
 ] as const) {
   registry.registerPath({
     method,
@@ -192,6 +201,30 @@ for (const [method, path, input, output, status, bearer] of [
               in: "query" as const,
               required: false,
               schema: { type: "string" as const },
+            },
+          ],
+        }
+      : {}),
+    ...(method === "get" && path === "/api/v1/admin/reports/daily"
+      ? {
+          parameters: [
+            {
+              name: "from",
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const },
+            },
+            {
+              name: "to",
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const },
+            },
+            {
+              name: "format",
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const, enum: ["json", "csv"] },
             },
           ],
         }

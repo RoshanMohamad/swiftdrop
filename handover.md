@@ -15,7 +15,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations committed as `67a77de`, contained in `origin/main`; Sprint 2 admin hardening and Sprint 3 X-03 service identity/notification lookup committed as `e94758f` and pushed to `origin/dev-umair`; not merged into `main`; peer/manual acceptance pending | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review C-03/C-05/C-06; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
 | [M02](#m02) | TBD | TBD | Merchant platform | No work recorded | X-05, X-11 | Merchant tables, registration/approval against fake `ParcelsService` |
-| [M03](#m03) | TBD | TBD | Pricing, zones and reports | No work recorded (pricing/quote baseline exists in M01's local code, C-02) | X-04 | Take over pricing code; FR-I7 reports |
+| [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Pricing strategy decoupled (C-02 resolved), FR-P1/FR-P2 pricing engine, FR-I7 daily reports & CSV export implemented, NFR-8 benchmark p95 < 300ms passing, 100% unit tests green | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09 | Take over booking code; merchant/staff variants |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | No work recorded (public tracking baseline exists in M01's local code, C-02) | X-05, X-07 | Transition table and `LifecycleService` |
 | [M06](#m06) | TBD | TBD | Dispatch and courier capacity | No work recorded | X-06, X-07 | Courier capacity tables and assignment protocol |
@@ -635,9 +635,52 @@ pnpm dev
 Planned slice (plan.md §4.1): Merchant platform. No work recorded.
 
 <a id="m03"></a>
-## M03 — TBD
+## M03 — UmarYusuf03 (`umarali`)
 
-Planned slice (plan.md §4.1): Pricing, zones and reports. No work recorded.
+### Milestone 1: Pricing Decoupling (C-02), Strategy Pattern (FR-P2), Daily Reports (FR-I7), and Benchmark (NFR-8)
+
+#### Summary of changes
+- **Resolved Contradiction C-02**: Successfully decoupled Pricing, Zones, and Quotes logic out of `apps/core-api/src/modules/parcels` into a dedicated `apps/core-api/src/modules/pricing` module and `apps/web/src/features/pricing`. `ParcelService` now delegates quote operations and zone reads cleanly to `PricingService`.
+- **Implemented Strategy Pattern (FR-P2 & Design Doc §8.1 / §8.2)**: Created `PricingStrategy` interface, `StandardPricingStrategy` (linear weight tiers + safe integer overflow guard), and `PricingStrategyFactory`. Supports dynamic strategy swapping via `PricingService.setStrategy()`.
+- **Implemented Integration Contract X-04 (`PricingService.validateQuoteForBooking`)**: Added strict pre-booking validation ensuring the quote exists, belongs to the authenticated user, is within the 15-minute validity window, and has not yet been consumed.
+- **Implemented Daily Operations Reports (FR-I7 & FR-F5)**:
+  - Created `apps/core-api/src/modules/reports/service.ts` aggregating daily delivery totals, terminal status breakdown (Delivered vs Failed vs In Transit), and success rate percentages over customizable date ranges.
+  - Added RFC 4180 CSV export capability via `exportToCsv()` and `GET /api/v1/admin/reports/daily?format=csv`.
+  - Added `apps/core-api/src/modules/reports/routes.ts` protected by `requireRole("ADMIN", "DISPATCHER")`.
+  - Created frontend `AdminReports` page at `/admin/reports` with interactive date range filtering, KPI summary cards (Total Booked, Delivered, Failed, Success Rate %), daily breakdown table, and one-click "Export CSV" download.
+  - Added navigation shortcuts in user account view for both `ADMIN` and `DISPATCHER` roles.
+- **Implemented Performance Benchmark Suite (NFR-8)**: Added `scripts/benchmark-p95.mjs` verifying $p95 < 300\text{ ms}$ SLA. The pure pricing engine achieved over 3.7 million operations per second with $p95 \approx 0.00\text{ ms} \ll 300\text{ ms}$.
+- **Contracts & OpenAPI Sync**: Added `dailyReportQuerySchema`, `dailyReportItemSchema`, and `dailyReportSummarySchema` to `packages/contracts/src/index.ts`. Updated `packages/contracts/src/generate.ts` and regenerated `openapi.json` and `api.generated.ts`.
+
+#### Checks actually run
+- `pnpm typecheck`: Passed with 0 errors across all 4 workspace packages (`@swiftdrop/db`, `@swiftdrop/contracts`, `apps/core-api`, `apps/web`).
+- `pnpm contracts:check`: Passed with 0 drift against `openapi.json`.
+- `pnpm lint`: Passed with 0 errors and 0 warnings.
+- `node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit`: 7/7 test suites passed, 67/67 tests passed (including 12 new pricing unit tests and 3 new reports unit tests).
+- `vitest run` (`apps/web`): 5/5 test suites passed, 24/24 tests passed.
+- `pnpm benchmark`: Passed with $p95 < 300\text{ ms}$.
+- `pnpm build`: Both frontend Vite bundle (gzip ~142 KB, within < 250 KB budget) and core-api tsup dist built cleanly.
+
+#### Issues identified and resolved
+- On Windows PowerShell, inline `NODE_OPTIONS=...` in `apps/core-api/package.json` failed. Updated test runner scripts to invoke `node --experimental-vm-modules ./node_modules/jest/bin/jest.js` directly.
+- The `Parcel` database model specifies `status` instead of `currentStatus`; updated `ReportsService` queries accordingly.
+- Fixed query parameter registration in OpenAPI contract generation to avoid `never` query parameter types in the generated client.
+
+#### Manual test plan for this iteration
+1. **Zones & Pricing Management**:
+   - Log in as an Admin (`admin@swiftdrop.test`).
+   - Navigate to `/admin/zones`. Verify existing zones list, toggle a district's active status, add a new test district.
+   - Navigate to `/admin/pricing`. Create a new pricing rule with a future effective date.
+2. **Delivery Quotes**:
+   - Log in as a Customer (`customer@swiftdrop.test`).
+   - Navigate to `/parcels/new`. Enter package details between Colombo and Kandy. Expect calculated fee (e.g. LKR 570.00 for 2kg) with 15-minute expiration timestamp.
+3. **Operations Reports & CSV Export**:
+   - As an Admin or Dispatcher, navigate to `/admin/reports`.
+   - Verify KPI summary cards render delivery volumes and success rate %.
+   - Filter by date range (e.g. past 14 days). Verify the daily breakdown table renders.
+   - Click "Export CSV". Verify a file named `daily-delivery-report-<from>-to-<to>.csv` downloads containing properly formatted RFC 4180 CSV data.
+4. **Benchmark**:
+   - In terminal, execute `pnpm benchmark`. Expect terminal table displaying operations count and confirmation that $p95 < 300\text{ ms}$ (PASS).
 
 <a id="m04"></a>
 ## M04 — TBD

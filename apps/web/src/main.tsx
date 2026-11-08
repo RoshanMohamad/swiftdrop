@@ -32,6 +32,11 @@ import type { Role } from "@swiftdrop/contracts";
 import {
   AdminPricing,
   AdminZones,
+} from "./features/pricing/index.js";
+import {
+  AdminReports,
+} from "./features/reports/index.js";
+import {
   NewParcel,
   ParcelDetail,
   ParcelList,
@@ -39,12 +44,23 @@ import {
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
 import "./styles.css";
-function Guard({ role, children }: { role: Role; children: ReactNode }) {
+function Guard({
+  role,
+  roles,
+  children,
+}: {
+  role?: Role;
+  roles?: Role[];
+  children: ReactNode;
+}) {
   const { state } = useSession();
   if (!state.user) return <Navigate to="/auth/login" replace />;
   if (!state.user.profileComplete)
     return <Navigate to="/auth/complete-profile" replace />;
-  if (state.user.role !== role)
+  const allowed = roles
+    ? roles.includes(state.user.role)
+    : state.user.role === role;
+  if (!allowed)
     return <Navigate to={roleHome(state.user.role)} replace />;
   return children;
 }
@@ -126,6 +142,12 @@ function Account() {
           <Link to="/admin/users">Users</Link>
           <Link to="/admin/zones">Service districts</Link>
           <Link to="/admin/pricing">Pricing</Link>
+          <Link to="/admin/reports">Operations Reports</Link>
+        </div>
+      )}
+      {state.user?.role === "DISPATCHER" && (
+        <div className="notice account-links">
+          <Link to="/admin/reports">Operations Reports</Link>
         </div>
       )}
       {state.user?.role === "CUSTOMER" && (
@@ -310,6 +332,14 @@ function App() {
                 element={
                   <Guard role="ADMIN">
                     <AdminPricing />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/admin/reports"
+                element={
+                  <Guard roles={["ADMIN", "DISPATCHER"]}>
+                    <AdminReports />
                   </Guard>
                 }
               />

@@ -317,6 +317,34 @@ export const invitationResultSchema = z.object({
 export const acceptInvitationResultSchema = z.object({
   message: z.string(),
 });
+export const dailyReportQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  format: z.enum(["json", "csv"]).default("json").optional(),
+});
+export type DailyReportQuery = z.infer<typeof dailyReportQuerySchema>;
+
+export const dailyReportItemSchema = z.object({
+  date: z.string(),
+  totalBooked: z.number().int().nonnegative(),
+  totalDelivered: z.number().int().nonnegative(),
+  totalFailed: z.number().int().nonnegative(),
+  totalInTransit: z.number().int().nonnegative(),
+  successRatePercent: z.number().min(0).max(100),
+});
+export type DailyReportItem = z.infer<typeof dailyReportItemSchema>;
+
+export const dailyReportSummarySchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  totalBooked: z.number().int().nonnegative(),
+  totalDelivered: z.number().int().nonnegative(),
+  totalFailed: z.number().int().nonnegative(),
+  overallSuccessRatePercent: z.number().min(0).max(100),
+  days: z.array(dailyReportItemSchema),
+});
+export type DailyReportSummary = z.infer<typeof dailyReportSummarySchema>;
+
 export const sessionSchema = z.object({
   state: z.literal("authenticated"),
   accessToken: z.string(),
