@@ -17,6 +17,17 @@ export const emailSchema = z
   .toLowerCase()
   .max(254)
   .email("Enter a valid email address.");
+export const notificationEventIdSchema = z.string().uuid();
+export const notificationLookupResultSchema = z
+  .object({
+    eventId: z.string().uuid(),
+    parcelId: z.string().uuid(),
+    trackingNumber: z.string().min(1).max(16),
+    customerEmail: emailSchema,
+    recipientName: z.string().min(1).max(120),
+    recipientPhone: z.string().regex(/^\+94[1-9]\d{8}$/),
+  })
+  .strict();
 export const passwordSchema = z
   .string()
   .refine((value) => [...value].length >= 15, "Use at least 15 characters.")
@@ -276,6 +287,20 @@ export const staffPageSchema = z.object({
   items: z.array(staffUserSchema).max(101),
   nextCursor: z.string().nullable(),
 });
+export const adminUserSchema = staffUserSchema.extend({
+  fullName: z.string().nullable(),
+  phone: z.string().nullable(),
+  role: roleSchema,
+});
+export const adminUsersPageSchema = z.object({
+  items: z.array(adminUserSchema).max(100),
+  nextCursor: z.string().nullable(),
+});
+export const userStatusChangeSchema = z
+  .object({ status: z.enum(["ACTIVE", "SUSPENDED"]) })
+  .strict();
+export type AdminUser = z.infer<typeof adminUserSchema>;
+export type UserStatusChange = z.infer<typeof userStatusChangeSchema>;
 export const invitationActionSchema = z
   .object({ action: z.enum(["resend", "revoke"]) })
   .strict();

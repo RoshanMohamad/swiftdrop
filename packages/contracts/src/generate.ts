@@ -28,15 +28,23 @@ import {
   priceInputSchema,
   priceSchema,
   createStaffSchema,
-  staffPageSchema,
+  adminUsersPageSchema,
+  adminUserSchema,
+  userStatusChangeSchema,
   invitationActionSchema,
   invitationResultSchema,
   acceptInvitationSchema,
   acceptInvitationResultSchema,
+  notificationLookupResultSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
 registry.registerComponent("securitySchemes", "bearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
+});
+registry.registerComponent("securitySchemes", "serviceBearerAuth", {
   type: "http",
   scheme: "bearer",
   bearerFormat: "JWT",
@@ -230,8 +238,45 @@ for (const [method, path, input, output, status, bearer] of [
     },
   });
 }
+registry.registerPath({
+  method: "get",
+  path: "/internal/v1/notifications/events/{eventId}",
+  summary: "Look up booking contacts for a persisted parcel.created event",
+  parameters: [
+    {
+      name: "eventId",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+  ],
+  security: [{ serviceBearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Booking contact lookup",
+      content: json(notificationLookupResultSchema),
+    },
+    ...Object.fromEntries(
+      [400, 401, 403, 404, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
 for (const [method, path, input, output, status, bearer] of [
-  ["get", "/api/v1/admin/users", null, staffPageSchema, 200, true],
+  ["get", "/api/v1/admin/users", null, adminUsersPageSchema, 200, true],
+  [
+    "patch",
+    "/api/v1/admin/users/{id}/status",
+    userStatusChangeSchema,
+    adminUserSchema,
+    200,
+    true,
+  ],
   [
     "post",
     "/api/v1/admin/users",
@@ -282,7 +327,13 @@ for (const [method, path, input, output, status, bearer] of [
               required: false,
               schema: {
                 type: "string" as const,
-                enum: ["COURIER", "DISPATCHER"],
+                enum: [
+                  "CUSTOMER",
+                  "MERCHANT",
+                  "COURIER",
+                  "DISPATCHER",
+                  "ADMIN",
+                ],
               },
             },
             {

@@ -191,6 +191,31 @@ model ConsumerProgress {
   consumedAt DateTime @default(now()) @map("consumed_at") @db.Timestamptz(3)
   @@map("consumer_progress")
 }
+
+model ServicePrincipal {
+  serviceId    String           @id @map("service_id") @db.VarChar(80)
+  serviceKind  String           @map("service_kind") @db.VarChar(32)
+  audience     String           @db.VarChar(120)
+  permissions  String[]         @default([])
+  revokedAt    DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  keys         ServicePublicKey[]
+  @@map("service_principals")
+}
+
+model ServicePublicKey {
+  keyId        String           @id @map("key_id") @db.VarChar(80)
+  serviceId    String           @map("service_id") @db.VarChar(80)
+  principal    ServicePrincipal @relation(fields: [serviceId], references: [serviceId], onDelete: Cascade)
+  publicKeyPem String           @map("public_key_pem") @db.Text
+  notBefore    DateTime         @map("not_before") @db.Timestamptz(3)
+  notAfter     DateTime?        @map("not_after") @db.Timestamptz(3)
+  revokedAt    DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([serviceId, notBefore, notAfter])
+  @@map("service_public_keys")
+}
 model VerificationToken {
   id         String   @id @default(uuid()) @db.Uuid
   userId     Int      @map("user_id")

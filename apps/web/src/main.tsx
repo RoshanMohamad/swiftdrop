@@ -123,7 +123,7 @@ function Account() {
       )}
       {state.user?.role === "ADMIN" && (
         <div className="notice account-links">
-          <Link to="/admin/users">Staff users</Link>
+          <Link to="/admin/users">Users</Link>
           <Link to="/admin/zones">Service districts</Link>
           <Link to="/admin/pricing">Pricing</Link>
         </div>
