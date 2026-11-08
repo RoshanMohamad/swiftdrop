@@ -29,6 +29,7 @@ import {
   invitationActionSchema,
   acceptInvitationSchema,
   type CreateStaff,
+  type DailyReportSummary,
 } from "@swiftdrop/contracts";
 const api = createClient<paths>({
   baseUrl: window.location.origin,
@@ -290,6 +291,46 @@ export async function addPrice(input: PriceInput) {
         },
       }),
     );
+  });
+}
+export async function getDailyReport(from?: string, to?: string): Promise<DailyReportSummary> {
+  return authenticated(async (session) => {
+    return checked(
+      await api.GET("/api/v1/admin/reports/daily", {
+        params: {
+          query: {
+            from,
+            to,
+            format: "json",
+          },
+        },
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      }),
+    );
+  }, true);
+}
+export async function downloadDailyReportCsv(from?: string, to?: string) {
+  return authenticated(async (session) => {
+    const query = new URLSearchParams({ format: "csv" });
+    if (from) query.set("from", from);
+    if (to) query.set("to", to);
+    const url = `/api/v1/admin/reports/daily?${query.toString()}`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error("Failed to download CSV report.");
+    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `daily-report-${from || "start"}-to-${to || "today"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   });
 }
 export async function listUsers(filters: {

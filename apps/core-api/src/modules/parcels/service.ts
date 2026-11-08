@@ -3,7 +3,6 @@ import { Prisma, type Database } from "@swiftdrop/db";
 import type {
   bookingRequestSchema,
   quoteRequestSchema,
-  quoteSchema,
   parcelSchema,
   publicTrackingSchema,
   zoneInputSchema,
@@ -11,6 +10,7 @@ import type {
 } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
 import type { z } from "zod";
+import { PricingService } from "../pricing/index.js";
 
 const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const requestHash = (body: unknown) =>
@@ -58,82 +58,14 @@ type ZoneInput = z.infer<typeof zoneInputSchema>;
 type PriceInput = z.infer<typeof priceInputSchema>;
 
 export class ParcelService {
-  constructor(private db: Database) {}
+  private pricing: PricingService;
+
+  constructor(private db: Database, pricing?: PricingService) {
+    this.pricing = pricing ?? new PricingService(db);
+  }
 
   async createQuote(userId: number, input: QuoteInput) {
-    const [origin, destination] = await Promise.all([
-      this.db.zone.findFirst({
-        where: {
-          district: { equals: input.originDistrict, mode: "insensitive" },
-          active: true,
-        },
-      }),
-      this.db.zone.findFirst({
-        where: {
-          district: { equals: input.destinationDistrict, mode: "insensitive" },
-          active: true,
-        },
-      }),
-    ]);
-    if (!origin || !destination)
-      throw new HttpError(
-        422,
-        "UNSERVED_AREA",
-        "One or both districts are not currently served.",
-      );
-    if (origin.id === destination.id)
-      throw new HttpError(
-        422,
-        "INVALID_ROUTE",
-        "Choose different pickup and delivery districts.",
-      );
-    const now = new Date();
-    const price = await this.db.priceVersion.findFirst({
-      where: {
-        originZoneId: origin.id,
-        destinationZoneId: destination.id,
-        effectiveFrom: { lte: now },
-      },
-      orderBy: { effectiveFrom: "desc" },
-    });
-    if (!price)
-      throw new HttpError(
-        422,
-        "PRICE_UNAVAILABLE",
-        "A price is not available for this route yet.",
-      );
-    const extraKg = Math.ceil(Math.max(0, input.weightGrams - 1000) / 1000);
-    const feeCents = price.baseCents + price.perExtraKgCents * extraKg;
-    if (!Number.isSafeInteger(feeCents) || feeCents > 2_147_483_647)
-      throw new HttpError(
-        503,
-        "PRICE_UNAVAILABLE",
-        "The current price configuration cannot be used. Please contact support.",
-      );
-    const expiresAt = new Date(now.getTime() + 15 * 60_000);
-    const quote = await this.db.quote.create({
-      data: {
-        userId,
-        originZoneId: origin.id,
-        destinationZoneId: destination.id,
-        priceVersionId: price.id,
-        weightGrams: input.weightGrams,
-        lengthMm: input.lengthMm,
-        widthMm: input.widthMm,
-        heightMm: input.heightMm,
-        feeCents,
-        expiresAt,
-      },
-    });
-    return {
-      ...input,
-      id: quote.id,
-      feeCents,
-      currency: "LKR" as const,
-      expiresAt: iso(expiresAt),
-      originTown: origin.town,
-      destinationTown: destination.town,
-    } satisfies z.infer<typeof quoteSchema>;
+    return this.pricing.createQuote(userId, input);
   }
 
   async book(userId: number, idempotencyKey: string, input: BookingInput) {
@@ -370,89 +302,21 @@ export class ParcelService {
   }
 
   async zones() {
-    return this.db.zone.findMany({
-      orderBy: { district: "asc" },
-      select: { id: true, district: true, town: true, active: true },
-    });
+    return this.pricing.listZones();
   }
   async createZone(input: ZoneInput) {
-    const duplicate = await this.db.zone.findFirst({
-      where: { district: { equals: input.district, mode: "insensitive" } },
-    });
-    if (duplicate)
-      throw new HttpError(
-        409,
-        "DISTRICT_EXISTS",
-        "That district is already in the service list.",
-      );
-    return this.db.zone.create({
-      data: input,
-      select: { id: true, district: true, town: true, active: true },
-    });
+    return this.pricing.createZone(input);
   }
   async updateZone(id: number, input: ZoneInput) {
-    const exists = await this.db.zone.findUnique({ where: { id } });
-    if (!exists)
-      throw new HttpError(404, "ZONE_NOT_FOUND", "District not found.");
-    if (exists.district !== input.district || exists.town !== input.town)
-      throw new HttpError(
-        409,
-        "ZONE_REFERENCED",
-        "District names and public towns are fixed after creation to preserve existing quotes and tracking history.",
-      );
-    return this.db.zone.update({
-      where: { id },
-      data: { active: input.active },
-      select: { id: true, district: true, town: true, active: true },
-    });
+    return this.pricing.updateZone(id, input);
   }
   async deleteZone(id: number) {
-    try {
-      await this.db.zone.delete({ where: { id } });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2003"
-      )
-        throw new HttpError(
-          409,
-          "ZONE_IN_USE",
-          "This district is used by pricing or delivery records and cannot be deleted.",
-        );
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2025"
-      )
-        throw new HttpError(404, "ZONE_NOT_FOUND", "District not found.");
-      throw error;
-    }
+    return this.pricing.deleteZone(id);
   }
   async prices() {
-    return this.db.priceVersion.findMany({
-      orderBy: [{ effectiveFrom: "desc" }, { id: "desc" }],
-    });
+    return this.pricing.listPrices();
   }
   async createPrice(input: PriceInput) {
-    if (input.originZoneId === input.destinationZoneId)
-      throw new HttpError(
-        400,
-        "INVALID_ROUTE",
-        "Choose different pickup and delivery districts.",
-      );
-    const [origin, destination] = await Promise.all([
-      this.db.zone.findUnique({ where: { id: input.originZoneId } }),
-      this.db.zone.findUnique({ where: { id: input.destinationZoneId } }),
-    ]);
-    if (!origin?.active || !destination?.active)
-      throw new HttpError(400, "ZONE_INACTIVE", "Choose two active districts.");
-    if (new Date(input.effectiveFrom) <= new Date())
-      throw new HttpError(
-        400,
-        "INVALID_EFFECTIVE_DATE",
-        "New prices must take effect in the future.",
-      );
-    return this.db.priceVersion.create({
-      data: { ...input, effectiveFrom: new Date(input.effectiveFrom) },
-    });
+    return this.pricing.createPrice(input);
   }
 }

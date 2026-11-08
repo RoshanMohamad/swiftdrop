@@ -1,10 +1,7 @@
 import { Router } from "express";
 import {
   bookingRequestSchema,
-  priceInputSchema,
-  quoteRequestSchema,
   trackingNumberSchema,
-  zoneInputSchema,
 } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
 import { protectMutations } from "../../shared/mutations.js";
@@ -30,26 +27,6 @@ export function createParcelRouter(
     requireRole("CUSTOMER"),
     requireCompleteProfile,
   ];
-  const admin = [
-    authenticate(auth),
-    requireRole("ADMIN"),
-    requireCompleteProfile,
-  ];
-  router.post(
-    "/quotes",
-    protectMutations(config),
-    ...customer,
-    async (req, res) => {
-      res
-        .status(201)
-        .json(
-          await service.createQuote(
-            res.locals.user.id,
-            quoteRequestSchema.parse(req.body),
-          ),
-        );
-    },
-  );
   router.post(
     "/parcels",
     protectMutations(config),
@@ -94,53 +71,6 @@ export function createParcelRouter(
       );
       res.json(await service.track(number));
     },
-  );
-  router.get("/admin/zones", ...admin, async (_req, res) =>
-    res.json(await service.zones()),
-  );
-  router.post(
-    "/admin/zones",
-    protectMutations(config),
-    ...admin,
-    async (req, res) =>
-      res
-        .status(201)
-        .json(await service.createZone(zoneInputSchema.parse(req.body))),
-  );
-  router.patch(
-    "/admin/zones/:id",
-    protectMutations(config),
-    ...admin,
-    async (req, res) => {
-      const id = Number(req.params.id);
-      if (!Number.isSafeInteger(id) || id < 1)
-        throw new HttpError(400, "INVALID_ZONE", "District id is invalid.");
-      res.json(await service.updateZone(id, zoneInputSchema.parse(req.body)));
-    },
-  );
-  router.delete(
-    "/admin/zones/:id",
-    protectMutations(config),
-    ...admin,
-    async (req, res) => {
-      const id = Number(req.params.id);
-      if (!Number.isSafeInteger(id) || id < 1)
-        throw new HttpError(400, "INVALID_ZONE", "District id is invalid.");
-      await service.deleteZone(id);
-      res.status(204).end();
-    },
-  );
-  router.get("/admin/pricing", ...admin, async (_req, res) =>
-    res.json(await service.prices()),
-  );
-  router.post(
-    "/admin/pricing",
-    protectMutations(config),
-    ...admin,
-    async (req, res) =>
-      res
-        .status(201)
-        .json(await service.createPrice(priceInputSchema.parse(req.body))),
   );
   return router;
 }

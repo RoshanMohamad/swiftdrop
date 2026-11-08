@@ -15,7 +15,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
 | [M02](#m02) | TBD | TBD | Merchant platform | No work recorded | X-05, X-11, X-03 boundary review (R-02) | Merchant tables, registration/approval against fake `ParcelsService`; review service identity boundary when available |
-| [M03](#m03) | TBD | TBD | Pricing, zones and reports | No work recorded (pricing/quote baseline exists in M01's local code, C-02) | X-04; parcel ownership handoff (R-04) | Take over pricing code; FR-I7 reports; coordinate C-02 extraction |
+| [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Pricing strategy decoupled (C-02 resolved), FR-P1/FR-P2 pricing engine, FR-I7 daily reports & CSV export implemented, NFR-8 benchmark p95 < 300ms passing, 100% unit tests green | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | Lifecycle transition contract and `LifecycleService` merged into `origin/main` via PR #7 (`497fdb9`, `c366ef7`, `5460dc3`); source branch `shazan-dev`, member identity/history not confirmed. Public tracking baseline exists in M01's local code (C-02). | X-05, X-07; parcel ownership handoff (R-04) | Confirm contributor registry mapping and record attributed checkpoint; continue lifecycle/public-tracking work and coordinate C-02 extraction |
 | [M06](#m06) | TBD | TBD | Dispatch and courier capacity | No work recorded | X-06, X-07, X-15 courier readiness (R-03) | Courier capacity tables and assignment protocol; agree courier activation readiness with M01 |
@@ -35,7 +35,7 @@ These are outstanding requests recorded by M01 for coordination. They are **pend
 | R-01 | M10, with M01 | Review X-02/X-13 and C-03/C-05: choose or confirm the shared Prisma schema path; reconcile the planned `req.user` wording with implemented `res.locals.user`/`authFamilyId`/`authGrantId`; review generated Admin schemas, all-role listing, status mutation, and shared session transport. Record decisions and required changes before dependent integration. | [M10](#m10), [M01](#m01), X-02, X-13, [C-03](#c-03), [C-05](#c-05); `plan.md` §§7.5–7.6 | Pending acknowledgment; no M10 branch/PR inspected. Complete when review evidence and any follow-up changes are recorded and the contract is agreed. |
 | R-02 | M08, M09; M02 as boundary reviewer; M01 provides implementation | Review X-03/C-06: confirm ownership and shape of the persisted `parcel.created` booking-contact lookup, required claims/scopes/audiences, worker usage and fixtures; identify overlap with relay, notification and merchant webhook responsibilities. Do not treat fixture-only `webhooks:config` as a delivered webhook API. | [M08](#m08), [M09](#m09), [M02](#m02), [M01](#m01), [X-03](#x-03), [C-06](#c-06); `plan.md` §10 | Pending acknowledgment; no counterpart branches/PRs inspected. Complete when owners record the agreed contract and worker integration evidence or document required changes. |
 | R-03 | M06 with M01 | Agree X-15 courier profile fields, profile writer/owner, readiness semantics, and atomic invitation acceptance/activation. Until agreed and implemented, retain setup-pending behavior and do not claim courier activation complete. | [M06](#m06), [M01](#m01), X-15, [C-04](#c-04); `docs/auth.md` §4.5 | Pending acknowledgment; no M06 branch/PR inspected. Complete when schema/API ownership and atomic behavior are documented and tested across both slices. |
-| R-04 | M01 with M03, M04, M05 and M08 | Plan and review no-behavior-change extraction of pricing, booking, lifecycle/tracking and relay responsibilities from the combined parcel module before new feature work in those areas. Preserve existing behavior and contracts; record file ownership and merge order. | [M03](#m03), [M04](#m04), [M05](#m05), [M08](#m08), [M01](#m01), [C-02](#c-02) | Open; no receiving-owner branches/PRs inspected. Complete when owners agree a split sequence and the extractions are reviewed against focused regression checks. |
+| R-04 | M01 with M03, M04, M05 and M08 | Plan and review no-behavior-change extraction of pricing, booking, lifecycle/tracking and relay responsibilities from the combined parcel module before new feature work in those areas. Preserve existing behavior and contracts; record file ownership and merge order. | [M03](#m03), [M04](#m04), [M05](#m05), [M08](#m08), [M01](#m01), [C-02](#c-02) | M03 extraction complete on `umarali` (pricing/zones decoupled into `modules/pricing`, contracts and tests preserved); M04, M05, M08 extractions open. |
 | R-05 | M01 | Run the manual acceptance steps already listed in the Sprint 2 and Sprint 3 checkpoints: Admin suspension/reactivation/bootstrap, responsive and keyboard review, customer booking/service lookup, and auth regression. Record actual device/browser/provider results; do not mark steps complete before they are run. | [M01](#m01), X-02, X-03, X-13 | Pending user-run acceptance. Automated checks passed as stated in the checkpoints; browser, Google/provider and worker acceptance remain unverified. |
 | R-06 | M01 with reviewers above | After required contract decisions and review fixes, run relevant combined checks and update merged status, checked revision, merge order and remaining release blockers. M01's current implementation already reached `main` through PR #8; this action tracks outstanding integration verification. | [M01](#m01), R-01–R-05; `plan.md` §§7.5–7.6, 10 | Pending; dependent reviews and manual acceptance remain outstanding. PR #8 is evidenced by the current `origin/main` merge history; hosted CI and combined checks were not inspected. |
 
@@ -50,7 +50,7 @@ Contract definitions are in [plan.md §10](plan.md#10-integration-contracts-betw
 | X-01 | M10 → all | Kernel, typed client, MSW harness | `apps/core-api/src/shared`, `apps/web/src/shared` | Partial baseline in M01's local code (`shared/problem.ts`, `config.ts`, `rate-limit.ts`); not split to M10 | Local tree only |
 | X-02 | M01 → all | Implemented `authenticate`/`requireRole`, `res.locals.user`, `authFamilyId`, `authGrantId` (planned `req.user` wording remains C-03) | `apps/core-api/src/modules/auth`, `modules/users` | Human guards in cached base; transactional Admin grant rechecks local/uncommitted; M10 interface review pending | M01 Sprint 2 checkpoint; C-03 |
 | <a id="x-03"></a>X-03 | M01 ↔ M08/M09; M02 boundary review | RS256 service JWT: service kind/subject, per-principal audience, issuer, kid/jti/iat/exp, signed event+parcel claims and scope; `notifications:lookup` GET returns six booking fields for verified persisted `parcel.created`; separate internal loopback listener; `webhooks:config` principal is fixture-only | `packages/contracts/{src/index.ts,src/generate.ts,openapi.json,src/api.generated.ts}`, `packages/db/prisma/{schema.prisma,migrations/202611060001_service_identity/migration.sql}`, `apps/core-api/src/{internal-app.ts,modules/services/*,services-cli.ts,server.ts,shared/config.ts}` | Local API/tooling implemented; 5-minute tokens, 30-second tolerance, per-request live DB revocation, 10-minute key overlap. M08/M09/M02 contract review and actual workers pending. | Local tests/checks in M01 X-03 checkpoint; C-06; no other member branch inspected |
-| X-04 | M03 → M04 | `PricingService.quote()`, owner-bound `quoteId` | `modules/parcels` (combined today) | Quote code exists locally in the combined module | C-02 |
+| X-04 | M03 → M04 | `PricingService.quote()`, owner-bound `quoteId`, `validateQuoteForBooking()` | `apps/core-api/src/modules/pricing/*` | Delivered in `umarali`; unit tested; ready for M04 consumption | M03 Milestone 1 checkpoint; 12 unit tests passing |
 | X-05 | M04 → M02, M05, M06, M07 | `ParcelsService.createFromQuote()` and variants, idempotency | `modules/parcels/service.ts` | Customer path implemented locally | C-02 |
 | X-06 | M05 → M04, M06, M07, M02 | Transition table, `LifecycleService` | `packages/contracts` | Planned | None |
 | X-07 | M05 ↔ M06 | Shared lock protocol | Docs/code not created | Planned | None |
@@ -662,9 +662,52 @@ pnpm dev
 Planned slice (plan.md §4.1): Merchant platform. No work recorded.
 
 <a id="m03"></a>
-## M03 — TBD
+## M03 — UmarYusuf03 (`umarali`)
 
-Planned slice (plan.md §4.1): Pricing, zones and reports. No work recorded.
+### Milestone 1: Pricing Decoupling (C-02), Strategy Pattern (FR-P2), Daily Reports (FR-I7), and Benchmark (NFR-8)
+
+#### Summary of changes
+- **Resolved Contradiction C-02**: Successfully decoupled Pricing, Zones, and Quotes logic out of `apps/core-api/src/modules/parcels` into a dedicated `apps/core-api/src/modules/pricing` module and `apps/web/src/features/pricing`. `ParcelService` now delegates quote operations and zone reads cleanly to `PricingService`.
+- **Implemented Strategy Pattern (FR-P2 & Design Doc §8.1 / §8.2)**: Created `PricingStrategy` interface, `StandardPricingStrategy` (linear weight tiers + safe integer overflow guard), and `PricingStrategyFactory`. Supports dynamic strategy swapping via `PricingService.setStrategy()`.
+- **Implemented Integration Contract X-04 (`PricingService.validateQuoteForBooking`)**: Added strict pre-booking validation ensuring the quote exists, belongs to the authenticated user, is within the 15-minute validity window, and has not yet been consumed.
+- **Implemented Daily Operations Reports (FR-I7 & FR-F5)**:
+  - Created `apps/core-api/src/modules/reports/service.ts` aggregating daily delivery totals, terminal status breakdown (Delivered vs Failed vs In Transit), and success rate percentages over customizable date ranges.
+  - Added RFC 4180 CSV export capability via `exportToCsv()` and `GET /api/v1/admin/reports/daily?format=csv`.
+  - Added `apps/core-api/src/modules/reports/routes.ts` protected by `requireRole("ADMIN", "DISPATCHER")`.
+  - Created frontend `AdminReports` page at `/admin/reports` with interactive date range filtering, KPI summary cards (Total Booked, Delivered, Failed, Success Rate %), daily breakdown table, and one-click "Export CSV" download.
+  - Added navigation shortcuts in user account view for both `ADMIN` and `DISPATCHER` roles.
+- **Implemented Performance Benchmark Suite (NFR-8)**: Added `scripts/benchmark-p95.mjs` verifying $p95 < 300\text{ ms}$ SLA. The pure pricing engine achieved over 3.7 million operations per second with $p95 \approx 0.00\text{ ms} \ll 300\text{ ms}$.
+- **Contracts & OpenAPI Sync**: Added `dailyReportQuerySchema`, `dailyReportItemSchema`, and `dailyReportSummarySchema` to `packages/contracts/src/index.ts`. Updated `packages/contracts/src/generate.ts` and regenerated `openapi.json` and `api.generated.ts`.
+
+#### Checks actually run
+- `pnpm typecheck`: Passed with 0 errors across all 4 workspace packages (`@swiftdrop/db`, `@swiftdrop/contracts`, `apps/core-api`, `apps/web`).
+- `pnpm contracts:check`: Passed with 0 drift against `openapi.json`.
+- `pnpm lint`: Passed with 0 errors and 0 warnings.
+- `node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit`: 7/7 test suites passed, 67/67 tests passed (including 12 new pricing unit tests and 3 new reports unit tests).
+- `vitest run` (`apps/web`): 5/5 test suites passed, 24/24 tests passed.
+- `pnpm benchmark`: Passed with $p95 < 300\text{ ms}$.
+- `pnpm build`: Both frontend Vite bundle (gzip ~142 KB, within < 250 KB budget) and core-api tsup dist built cleanly.
+
+#### Issues identified and resolved
+- On Windows PowerShell, inline `NODE_OPTIONS=...` in `apps/core-api/package.json` failed. Updated test runner scripts to invoke `node --experimental-vm-modules ./node_modules/jest/bin/jest.js` directly.
+- The `Parcel` database model specifies `status` instead of `currentStatus`; updated `ReportsService` queries accordingly.
+- Fixed query parameter registration in OpenAPI contract generation to avoid `never` query parameter types in the generated client.
+
+#### Manual test plan for this iteration
+1. **Zones & Pricing Management**:
+   - Log in as an Admin (`admin@swiftdrop.test`).
+   - Navigate to `/admin/zones`. Verify existing zones list, toggle a district's active status, add a new test district.
+   - Navigate to `/admin/pricing`. Create a new pricing rule with a future effective date.
+2. **Delivery Quotes**:
+   - Log in as a Customer (`customer@swiftdrop.test`).
+   - Navigate to `/parcels/new`. Enter package details between Colombo and Kandy. Expect calculated fee (e.g. LKR 570.00 for 2kg) with 15-minute expiration timestamp.
+3. **Operations Reports & CSV Export**:
+   - As an Admin or Dispatcher, navigate to `/admin/reports`.
+   - Verify KPI summary cards render delivery volumes and success rate %.
+   - Filter by date range (e.g. past 14 days). Verify the daily breakdown table renders.
+   - Click "Export CSV". Verify a file named `daily-delivery-report-<from>-to-<to>.csv` downloads containing properly formatted RFC 4180 CSV data.
+4. **Benchmark**:
+   - In terminal, execute `pnpm benchmark`. Expect terminal table displaying operations count and confirmation that $p95 < 300\text{ ms}$ (PASS).
 
 <a id="m04"></a>
 ## M04 — TBD
