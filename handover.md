@@ -13,7 +13,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 
 | Member | Name | Branch | Planned slice (plan.md §4.1) | Delivered vs merged | Depends on | Next step |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover coordination update is pending publication and review | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Publish the handover update for review; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
+| [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
 | [M02](#m02) | TBD | TBD | Merchant platform | No work recorded | X-05, X-11, X-03 boundary review (R-02) | Merchant tables, registration/approval against fake `ParcelsService`; review service identity boundary when available |
 | [M03](#m03) | TBD | TBD | Pricing, zones and reports | No work recorded (pricing/quote baseline exists in M01's local code, C-02) | X-04; parcel ownership handoff (R-04) | Take over pricing code; FR-I7 reports; coordinate C-02 extraction |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
@@ -647,14 +647,14 @@ pnpm dev
 <a id="m01-main-sync-2026-11-08"></a>
 ### Integration: fast-forward from main and publish review update (8 November 2026)
 
-**Member:** M01 — doktur-umair · **Branch:** `umair-dev` · **Task:** synchronize `main`, publish the pending handover update, and prepare review into `main` · **Reference:** pending push/PR at time of checkpoint.
+**Member:** M01 — doktur-umair · **Branch:** `umair-dev` · **Task:** synchronize `main`, publish the handover update, and prepare review into `main` · **Reference:** PR #9, open.
 
 - Fetched `origin/main` and `origin/umair-dev`. The local branch was at `8d7cf9c`; `origin/main` was at `948133d` and already contained the earlier M01 implementation through PR #8. `origin/umair-dev` was at `b33e15a`.
 - Fast-forwarded `umair-dev` to `948133d`, bringing in already-merged M05 lifecycle changes. No conflicts occurred. The existing local `handover.md` edits did not overlap incoming changes and were preserved.
 - This checkpoint corrects the shared status to show M01 implementation merged by PR #8 and records the branch synchronization. No application code was changed in this iteration.
 - **Checks:** `git diff --check` passed for the handover update. Runtime checks are not applicable; no automated project checks or hosted CI were run. No other member branches or PRs were reviewed.
-- **Manual review:** inspect the handover status/integration rows and this checkpoint; after publication, open the `umair-dev` → `main` PR and confirm it contains only the handover synchronization record. No UI or runtime acceptance is part of this documentation update. Existing M01 browser/provider acceptance and peer reviews remain open as listed in R-01–R-05.
-- **Next:** review the handover-only PR; keep implementation and combined readiness claims scoped to the evidence above.
+- **Manual review:** inspect the handover status/integration rows and this checkpoint; PR #9 is open from `umair-dev` to `main` and contains the handover synchronization record. GitHub showed no merge conflicts and 2 of 4 checks successful, with 2 in progress; the Copilot review could not run because the requester lacked remaining review quota. No UI or runtime acceptance is part of this documentation update. Existing M01 browser/provider acceptance and peer reviews remain open as listed in R-01–R-05.
+- **Next:** complete review/merge of PR #9 and verify the remaining checks; keep implementation and combined readiness claims scoped to the evidence above.
 
 <a id="m02"></a>
 ## M02 — TBD
