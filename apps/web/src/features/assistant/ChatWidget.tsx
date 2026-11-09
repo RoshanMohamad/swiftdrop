@@ -83,7 +83,7 @@ export function ChatWidget() {
             </button>
           </header>
 
-          <div className="chat-messages">
+          <div className="chat-messages" role="log" aria-live="polite" aria-atomic="false">
             {messages.map((msg, index) => (
               <div key={index} className={`chat-bubble chat-bubble-${msg.role}`}>
                 <div className="chat-bubble-text" style={{ whiteSpace: "pre-wrap" }}>
@@ -92,14 +92,14 @@ export function ChatWidget() {
               </div>
             ))}
             {pending && (
-              <div className="chat-bubble chat-bubble-assistant chat-bubble-typing">
+              <div className="chat-bubble chat-bubble-assistant chat-bubble-typing" role="status" aria-label="Processing request">
                 <span>Checking SwiftDrop database…</span>
               </div>
             )}
             <div ref={bottomRef} />
           </div>
 
-          <div className="chat-suggestions">
+          <div className="chat-suggestions" aria-label="Suggested questions">
             <button
               type="button"
               className="chip-btn"
@@ -123,7 +123,7 @@ export function ChatWidget() {
             </button>
           </div>
 
-          {error && <div className="chat-error">{error}</div>}
+          {error && <div className="chat-error" role="alert">{error}</div>}
 
           <form className="chat-input-bar" onSubmit={onSubmit}>
             <input
