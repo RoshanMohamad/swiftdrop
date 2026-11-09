@@ -350,6 +350,28 @@ export const dailyReportSummarySchema = z.object({
 });
 export type DailyReportSummary = z.infer<typeof dailyReportSummarySchema>;
 
+export const assistantChatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().max(2000),
+});
+
+export const assistantChatInputSchema = z
+  .object({
+    message: z.string().trim().min(1).max(1000),
+    history: z.array(assistantChatMessageSchema).optional(),
+  })
+  .strict();
+export type AssistantChatInput = z.infer<typeof assistantChatInputSchema>;
+
+export const assistantChatOutputSchema = z
+  .object({
+    reply: z.string(),
+    toolsUsed: z.array(z.string()),
+    data: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+export type AssistantChatOutput = z.infer<typeof assistantChatOutputSchema>;
+
 export const sessionSchema = z.object({
   state: z.literal("authenticated"),
   accessToken: z.string(),

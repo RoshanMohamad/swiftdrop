@@ -23,6 +23,7 @@ import { PricingService, createPricingRouter } from "./modules/pricing/index.js"
 import { ReportsService, createReportsRouter } from "./modules/reports/index.js";
 import { LifecycleService, createLifecycleRouter } from "./modules/lifecycle/index.js";
 import { UsersService, createUsersRouter } from "./modules/users/index.js";
+import { AssistantService, createAssistantRouter } from "./modules/assistant/index.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -118,6 +119,8 @@ export function createApp(deps: {
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
   const lifecycle = new LifecycleService(db);
   app.use("/api/v1", createLifecycleRouter(lifecycle, service, limiter, config));
+  const assistant = new AssistantService(db, pricing, parcels);
+  app.use("/api/v1", createAssistantRouter(assistant, service, limiter, config));
   app.use((_req, _res, next) =>
     next(new HttpError(404, "NOT_FOUND", "This route does not exist.")),
   );

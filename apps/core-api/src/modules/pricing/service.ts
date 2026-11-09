@@ -31,6 +31,13 @@ export class PricingService {
   }
 
   /**
+   * Returns the current pricing strategy.
+   */
+  getStrategy(): PricingStrategy {
+    return this.strategy;
+  }
+
+  /**
    * Generates a 15-minute quote for delivery between two active districts.
    * Conforms to FR-P2.
    */

@@ -36,6 +36,7 @@ import {
 import {
   AdminReports,
 } from "./features/reports/index.js";
+import { ChatWidget } from "./features/assistant/index.js";
 import {
   NewParcel,
   ParcelDetail,
@@ -388,6 +389,7 @@ function App() {
         <span>SwiftDrop · Sri Lanka</span>
         <span>Every delivery, a connection.</span>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
