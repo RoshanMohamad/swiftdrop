@@ -37,6 +37,8 @@ import {
   acceptInvitationResultSchema,
   notificationLookupResultSchema,
   dailyReportSummarySchema,
+  assistantChatInputSchema,
+  assistantChatOutputSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -161,6 +163,14 @@ for (const [method, path, input, output, status, bearer] of [
     dailyReportSummarySchema,
     200,
     true,
+  ],
+  [
+    "post",
+    "/api/v1/assistant/chat",
+    assistantChatInputSchema,
+    assistantChatOutputSchema,
+    200,
+    false,
   ],
 ] as const) {
   registry.registerPath({

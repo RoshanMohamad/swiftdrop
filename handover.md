@@ -15,7 +15,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
 | [M02](#m02) | TBD | TBD | Merchant platform | No work recorded | X-05, X-11, X-03 boundary review (R-02) | Merchant tables, registration/approval against fake `ParcelsService`; review service identity boundary when available |
-| [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Pricing strategy decoupled (C-02 resolved), FR-P1/FR-P2 pricing engine, FR-I7 daily reports & CSV export implemented, NFR-8 benchmark p95 < 300ms passing, 100% unit tests green | X-04 | Full integration verification with M04 quote consumption |
+| [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Core deliverables merged into main (PR #10); Milestone 2 completed: FR-B2 AI Assistant Service (MCP read-only tools) & FR-F9 Chat Widget delivered with 100% test coverage | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | Lifecycle transition contract and `LifecycleService` merged into `origin/main` via PR #7 (`497fdb9`, `c366ef7`, `5460dc3`); source branch `shazan-dev`, member identity/history not confirmed. Public tracking baseline exists in M01's local code (C-02). | X-05, X-07; parcel ownership handoff (R-04) | Confirm contributor registry mapping and record attributed checkpoint; continue lifecycle/public-tracking work and coordinate C-02 extraction |
 | [M06](#m06) | TBD | TBD | Dispatch and courier capacity | No work recorded | X-06, X-07, X-15 courier readiness (R-03) | Courier capacity tables and assignment protocol; agree courier activation readiness with M01 |
@@ -708,6 +708,32 @@ Planned slice (plan.md §4.1): Merchant platform. No work recorded.
    - Click "Export CSV". Verify a file named `daily-delivery-report-<from>-to-<to>.csv` downloads containing properly formatted RFC 4180 CSV data.
 4. **Benchmark**:
    - In terminal, execute `pnpm benchmark`. Expect terminal table displaying operations count and confirmation that $p95 < 300\text{ ms}$ (PASS).
+
+### Milestone 2: AI Delivery Assistant (FR-B2) & Floating Chat Widget (FR-F9)
+
+#### Summary of changes
+- **Implemented AI Delivery Assistant Service (FR-B2 & Design Doc §12.2)**:
+  - Created `apps/core-api/src/modules/assistant/service.ts` providing 4 grounded read-only MCP tools:
+    1. `quote_delivery_fee`: Quotes fee between two active districts for a given weight using the active `PricingStrategy`.
+    2. `get_parcel_status`: Retrieves real-time public parcel tracking status by tracking number (`SD...`).
+    3. `list_my_parcels`: Lists parcels for the authenticated user, or prompts guest users to log in.
+    4. `find_zone`: Discovers active districts and towns served across Sri Lanka.
+  - Natural-language intent recognition and deterministic tool execution engine grounded strictly in real database data without hallucination.
+- **Added Assistant Router & OpenAPI Schema**:
+  - Added `POST /api/v1/assistant/chat` endpoint in `apps/core-api/src/modules/assistant/routes.ts` with optional Bearer JWT resolution and IP rate limiting.
+  - Registered Zod contracts `assistantChatInputSchema` and `assistantChatOutputSchema` in `packages/contracts/src/index.ts` and regenerated OpenAPI with 0 drift.
+- **Implemented UI Chat Widget (FR-F9)**:
+  - Created `apps/web/src/features/assistant/ChatWidget.tsx`: accessible floating button at bottom-right, expandable dialog window with quick action suggestion chips, scrollable message history, and live API dispatch.
+  - Mounted in `apps/web/src/main.tsx` globally across all screens.
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all 4 workspace packages.
+- `pnpm contracts:check`: Clean with 0 drift.
+- `pnpm lint`: 0 errors, 0 warnings.
+- `node --experimental-vm-modules ./node_modules/jest/bin/jest.js test/assistant.unit.test.ts`: 6/6 tests passing.
+- `vitest run src/features/assistant/ChatWidget.test.tsx`: 4/4 component tests passing.
+- `pnpm --filter web test`: 35/35 frontend tests passing across all 8 suites.
+- `pnpm build`: Clean production build.
 
 <a id="m04"></a>
 ## M04 — TBD

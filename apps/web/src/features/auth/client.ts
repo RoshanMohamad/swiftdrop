@@ -558,3 +558,19 @@ export const errorMessage = (error: unknown) =>
   error instanceof ApiError
     ? `${error.message}${error.retryAfter ? ` Retry after ${error.retryAfter} seconds.` : ""}`
     : "Cannot reach SwiftDrop. Check your connection and try again.";
+
+export async function sendAssistantMessage(
+  message: string,
+  history: Array<{ role: "user" | "assistant"; content: string }> = [],
+) {
+  const headers: Record<string, string> = {};
+  if (current?.accessToken) {
+    headers.Authorization = `Bearer ${current.accessToken}`;
+  }
+  return checked(
+    await api.POST("/api/v1/assistant/chat", {
+      body: { message, history },
+      headers,
+    }),
+  );
+}
