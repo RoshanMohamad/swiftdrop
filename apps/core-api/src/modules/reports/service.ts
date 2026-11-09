@@ -1,12 +1,26 @@
 import type { Database } from "@swiftdrop/db";
 import type { DailyReportItem, DailyReportSummary } from "@swiftdrop/contracts";
 
+/**
+ * Daily Operations Reports Service (FR-I7)
+ *
+ * Provides aggregation of delivery throughput, terminal failure rates,
+ * and operational success rates across customizable date windows.
+ * Generates RFC 4180 standard CSV exports for offline spreadsheet auditing.
+ *
+ * @see plan.md §2.4 (Async Integration & Operations Reporting)
+ * @see SWIFTDROP_DESIGN_DOCUMENTATION.md §3.4
+ */
 export class ReportsService {
   constructor(private db: Database) {}
 
   /**
    * Aggregates daily deliveries, terminal outcomes, and success rates.
    * Conforms to FR-I7 and Design Doc §3.4.
+   *
+   * @param fromStr Start date in YYYY-MM-DD or ISO timestamp format. Defaults to 14 days ago.
+   * @param toStr End date in YYYY-MM-DD or ISO timestamp format. Defaults to now.
+   * @returns DailyReportSummary containing KPI totals and daily breakdown items.
    */
   async getDailyReport(
     fromStr?: string,
@@ -122,6 +136,11 @@ export class ReportsService {
 
   /**
    * Converts a daily report summary into RFC 4180 compliant CSV.
+   * Uses standard CRLF (\r\n) line terminators and generates both
+   * individual daily line items and an aggregated summary footer line.
+   *
+   * @param summary The DailyReportSummary to serialize.
+   * @returns Formatted RFC 4180 CSV string ready for download attachment.
    */
   exportToCsv(summary: DailyReportSummary): string {
     const header = [

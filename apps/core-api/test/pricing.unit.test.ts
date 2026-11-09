@@ -64,6 +64,28 @@ describe("Pricing Strategy Pattern (FR-P2, Design Doc §8.1)", () => {
     expect(strategy.calculate(input, rule)).toBe(70000);
   });
 
+  it("calculates exactly 1 extra kg for 2000g boundary", () => {
+    const input: QuoteCalculationInput = {
+      weightGrams: 2000,
+      lengthMm: 150,
+      widthMm: 150,
+      heightMm: 150,
+    };
+    // 50000 + 1 * 10000 = 60000
+    expect(strategy.calculate(input, rule)).toBe(60000);
+  });
+
+  it("calculates accurate fee for heavy delivery parcel (25kg)", () => {
+    const input: QuoteCalculationInput = {
+      weightGrams: 25000,
+      lengthMm: 300,
+      widthMm: 300,
+      heightMm: 300,
+    };
+    // 50000 + 24 * 10000 = 290000 (LKR 2,900.00)
+    expect(strategy.calculate(input, rule)).toBe(290000);
+  });
+
   it("PricingStrategyFactory returns standard strategy by default", () => {
     const strat = PricingStrategyFactory.getStrategy("STANDARD");
     expect(strat).toBeInstanceOf(StandardPricingStrategy);

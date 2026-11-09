@@ -16,7 +16,23 @@ export interface PricingRuleSnapshot {
   effectiveFrom: Date;
 }
 
+/**
+ * Strategy interface for delivery quote price calculation.
+ * Encapsulates the pricing algorithm so that distinct business models
+ * (e.g. Standard weight tier, Promotional, Express) can be configured
+ * or swapped dynamically at runtime without modifying client code.
+ *
+ * @see SWIFTDROP_DESIGN_DOCUMENTATION.md §8.1 & §8.2
+ */
 export interface PricingStrategy {
+  /**
+   * Calculates the delivery fee in Sri Lankan Rupee integer cents.
+   *
+   * @param input Parcel physical dimensions and weight in grams.
+   * @param rule The active versioned pricing rule snapshot applicable to the route.
+   * @returns Calculated total delivery fee in integer cents (LKR).
+   * @throws {HttpError} 503 if fee exceeds 32-bit integer boundaries.
+   */
   calculate(input: QuoteCalculationInput, rule: PricingRuleSnapshot): number;
 }
 

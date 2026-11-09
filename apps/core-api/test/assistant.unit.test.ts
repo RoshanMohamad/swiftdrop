@@ -127,4 +127,22 @@ describe("AI Delivery Assistant (FR-B2, Design Doc §12.2)", () => {
     expect(res.toolsUsed).toContain("find_zone");
     expect(res.reply).toContain("active districts");
   });
+
+  it("handles unserved district quotes gracefully without throwing", async () => {
+    const res = await assistant.chat(undefined, {
+      message: "How much to send 2 kg from Colombo to MarsCity?",
+      history: [],
+    });
+    expect(res.toolsUsed).toContain("quote_delivery_fee");
+    expect(res.reply).toContain("not currently in our active service zones");
+  });
+
+  it("handles case-insensitive district queries in quotes", async () => {
+    const res = await assistant.chat(undefined, {
+      message: "Quote delivery for 1 kg from colombo to kandy",
+      history: [],
+    });
+    expect(res.toolsUsed).toContain("quote_delivery_fee");
+    expect(res.reply).toContain("LKR 500.00");
+  });
 });
