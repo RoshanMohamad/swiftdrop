@@ -1,6 +1,7 @@
 import { connect, type ChannelModel, type ConfirmChannel } from "amqplib";
 import type { Logger } from "pino";
 import { Prisma, type Database } from "@swiftdrop/db";
+import type { ReceiptService } from "../receipts/service.js";
 
 type WorkerState = { connected: boolean };
 const EXCHANGE = "swiftdrop.events";
@@ -13,6 +14,7 @@ export function startParcelEventWorkers(
   url: string,
   logger: Logger,
   state: WorkerState,
+  receipts?: ReceiptService,
 ) {
   let stopped = false;
   let connection: ChannelModel | undefined;
@@ -47,6 +49,7 @@ export function startParcelEventWorkers(
         });
         await consumerChannel.assertQueue(QUEUE, { durable: true });
         await consumerChannel.bindQueue(QUEUE, EXCHANGE, "parcel.created");
+        await consumerChannel.bindQueue(QUEUE, EXCHANGE, "parcel.delivered");
         await consumerChannel.prefetch(32);
         await consumerChannel.consume(QUEUE, (message) => {
           if (!message) return;
@@ -111,15 +114,21 @@ export function startParcelEventWorkers(
     if (
       typeof event.eventId !== "string" ||
       event.eventId !== messageId ||
-      event.eventType !== "parcel.created" ||
+      (event.eventType !== "parcel.created" &&
+        event.eventType !== "parcel.delivered") ||
       typeof event.parcelId !== "string" ||
-      event.status !== "CREATED" ||
       typeof event.town !== "string" ||
-      typeof event.createdAt !== "string"
+      typeof event.createdAt !== "string" ||
+      (event.eventType === "parcel.created" && event.status !== "CREATED") ||
+      (event.eventType === "parcel.delivered" && event.status !== "DELIVERED")
     )
       throw new InvalidEvent("Invalid parcel event.");
+    if (event.eventType === "parcel.delivered") {
+      if (!receipts) throw new Error("Receipt worker is not configured.");
+      await receipts.generateForDelivered(event.parcelId);
+    }
     const inserted = await db.consumerProgress.createMany({
-      data: [{ eventId: event.eventId, eventType: "parcel.created" }],
+      data: [{ eventId: event.eventId, eventType: event.eventType }],
       skipDuplicates: true,
     });
     if (inserted.count)

@@ -1,4 +1,5 @@
 import { Prisma, type Database } from "@swiftdrop/db";
+import { randomUUID } from "node:crypto";
 import {
   canTransition,
   canReattemptDelivery,
@@ -69,9 +70,27 @@ export class LifecycleService {
               "This parcel was modified by someone else. Reload and retry.",
             );
 
-          await tx.parcelHistory.create({
+          const history = await tx.parcelHistory.create({
             data: { parcelId, status: to, town },
           });
+          if (to === "DELIVERED") {
+            const eventId = randomUUID();
+            await tx.outboxEvent.create({
+              data: {
+                eventId,
+                eventType: "parcel.delivered",
+                aggregateId: parcelId,
+                payload: {
+                  eventId,
+                  eventType: "parcel.delivered",
+                  parcelId,
+                  status: to,
+                  town,
+                  createdAt: history.createdAt.toISOString(),
+                },
+              },
+            });
+          }
 
           return {
             status: to,

@@ -156,6 +156,10 @@ export const parcelSchema = z.object({
   status: parcelStatusSchema,
   feeCents: z.number().int().nonnegative(),
   currency: z.literal("LKR"),
+  weightGrams: z.number().int().positive(),
+  lengthMm: z.number().int().positive(),
+  widthMm: z.number().int().positive(),
+  heightMm: z.number().int().positive(),
   originTown: z.string(),
   destinationTown: z.string(),
   recipientName: z.string(),
@@ -175,6 +179,11 @@ export const parcelSchema = z.object({
 export const parcelPageSchema = z.object({
   items: z.array(parcelSchema),
   nextCursor: z.string().nullable(),
+});
+export const receiptSchema = z.object({
+  receiptReference: z.string().min(1).max(40),
+  downloadUrl: z.url(),
+  expiresAt: z.string().datetime(),
 });
 export const publicTrackingSchema = z.object({
   trackingNumber: z.string(),

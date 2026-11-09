@@ -2465,6 +2465,10 @@ export interface paths {
                                 feeCents: number;
                                 /** @enum {string} */
                                 currency: "LKR";
+                                weightGrams: number;
+                                lengthMm: number;
+                                widthMm: number;
+                                heightMm: number;
                                 originTown: string;
                                 destinationTown: string;
                                 recipientName: string;
@@ -2733,6 +2737,10 @@ export interface paths {
                             feeCents: number;
                             /** @enum {string} */
                             currency: "LKR";
+                            weightGrams: number;
+                            lengthMm: number;
+                            widthMm: number;
+                            heightMm: number;
                             originTown: string;
                             destinationTown: string;
                             recipientName: string;
@@ -3001,6 +3009,10 @@ export interface paths {
                             feeCents: number;
                             /** @enum {string} */
                             currency: "LKR";
+                            weightGrams: number;
+                            lengthMm: number;
+                            widthMm: number;
+                            heightMm: number;
                             originTown: string;
                             destinationTown: string;
                             recipientName: string;
@@ -3015,6 +3027,259 @@ export interface paths {
                                 /** Format: date-time */
                                 createdAt: string;
                             }[];
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parcels/{id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** /api/v1/parcels/{id}/receipt */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            receiptReference: string;
+                            /** Format: uri */
+                            downloadUrl: string;
+                            /** Format: date-time */
+                            expiresAt: string;
                         };
                     };
                 };
