@@ -6,7 +6,26 @@ import type {
 import { PricingService } from "../pricing/service.js";
 import { ParcelService } from "../parcels/service.js";
 
+/**
+ * AssistantService implements Member 03's AI Delivery Assistant (FR-B2).
+ *
+ * It provides an intelligent conversational assistant backed by four grounded,
+ * read-only Model Context Protocol (MCP) tools:
+ * 1. `quote_delivery_fee`: Calculates delivery quotes using the decoupled PricingStrategy.
+ * 2. `get_parcel_status`: Queries public tracking information by tracking number.
+ * 3. `list_my_parcels`: Retrieves the signed-in customer's recent delivery bookings.
+ * 4. `find_zone`: Discovers active districts and coverage areas.
+ *
+ * All operations are strictly read-only and enforce authorization boundaries.
+ */
 export class AssistantService {
+  /**
+   * Initializes the AssistantService with necessary database and domain services.
+   *
+   * @param db - Prisma database client
+   * @param pricing - Decoupled PricingService instance for quote calculations
+   * @param parcels - ParcelService instance for tracking and customer bookings
+   */
   constructor(
     private db: Database,
     private pricing: PricingService,
@@ -14,8 +33,13 @@ export class AssistantService {
   ) {}
 
   /**
-   * MCP Tool 1: quote_delivery_fee
-   * Calculates fee between two districts for a given weight.
+   * MCP Tool 1: `quote_delivery_fee`
+   *
+   * Grounded tool to calculate instant delivery fees between two districts
+   * based on parcel weight and the active versioned pricing rules.
+   *
+   * @param params - Object containing originDistrict, destinationDistrict, and weightKg
+   * @returns Detailed quote calculation or friendly rejection reason
    */
   async toolQuoteDeliveryFee(params: {
     originDistrict: string;
@@ -94,8 +118,13 @@ export class AssistantService {
   }
 
   /**
-   * MCP Tool 2: get_parcel_status
-   * Tracks a parcel by tracking number (e.g. SD7A8B9C1).
+   * MCP Tool 2: `get_parcel_status`
+   *
+   * Grounded tool to retrieve real-time parcel tracking status,
+   * lifecycle state, and route history using public tracking number.
+   *
+   * @param trackingNumber - 10-character parcel tracking number (e.g., "SD7A8B9C1")
+   * @returns Current delivery status, origin/destination towns, and update timestamp
    */
   async toolGetParcelStatus(trackingNumber: string) {
     try {
@@ -119,8 +148,13 @@ export class AssistantService {
   }
 
   /**
-   * MCP Tool 3: list_my_parcels
-   * Lists the authenticated user's recent parcels.
+   * MCP Tool 3: `list_my_parcels`
+   *
+   * Authenticated grounded tool to fetch the current customer's recent deliveries.
+   * Guarantees user tenant isolation by verifying the authenticated user session.
+   *
+   * @param userId - ID of the authenticated user requesting their parcels
+   * @returns List of customer parcels or authentication prompt
    */
   async toolListMyParcels(userId: number | undefined) {
     if (!userId) {
@@ -147,8 +181,12 @@ export class AssistantService {
   }
 
   /**
-   * MCP Tool 4: find_zone
-   * Lists active service districts and towns.
+   * MCP Tool 4: `find_zone`
+   *
+   * Grounded tool to query active delivery zones and operational districts.
+   *
+   * @param districtQuery - Optional substring filter for district search
+   * @returns Active districts matching the filter criteria
    */
   async toolFindZone(districtQuery?: string) {
     const districts = await this.db.zone.findMany({
@@ -171,9 +209,14 @@ export class AssistantService {
   }
 
   /**
-   * Main chat processing endpoint:
-   * Parses user intent, executes appropriate read-only MCP tools,
-   * and returns grounded responses.
+   * Main chat processing pipeline:
+   * 1. Evaluates user intent using natural language pattern matching.
+   * 2. Executes appropriate grounded MCP tool with extracted parameters.
+   * 3. Formats grounded response message with Markdown and metadata.
+   *
+   * @param userId - ID of authenticated user (if signed in)
+   * @param input - AssistantChatInput containing user's chat message and history
+   * @returns Grounded assistant response with toolsUsed audit list and optional data payload
    */
   async chat(
     userId: number | undefined,
