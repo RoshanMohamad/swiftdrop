@@ -10308,6 +10308,9 @@
                   "items": {
                     "type": "object",
                     "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
                       "originZoneId": {
                         "type": "integer",
                         "minimum": 0,
@@ -10332,19 +10335,19 @@
                         "type": "string",
                         "format": "date-time"
                       },
-                      "id": {
-                        "type": "integer"
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
                       }
                     },
                     "required": [
+                      "id",
                       "originZoneId",
                       "destinationZoneId",
                       "baseCents",
                       "perExtraKgCents",
-                      "effectiveFrom",
-                      "id"
-                    ],
-                    "additionalProperties": false
+                      "effectiveFrom"
+                    ]
                   }
                 }
               }
@@ -10929,6 +10932,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
                     "originZoneId": {
                       "type": "integer",
                       "minimum": 0,
@@ -10953,19 +10959,19 @@
                       "type": "string",
                       "format": "date-time"
                     },
-                    "id": {
-                      "type": "integer"
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
                     }
                   },
                   "required": [
+                    "id",
                     "originZoneId",
                     "destinationZoneId",
                     "baseCents",
                     "perExtraKgCents",
-                    "effectiveFrom",
-                    "id"
-                  ],
-                  "additionalProperties": false
+                    "effectiveFrom"
+                  ]
                 }
               }
             }

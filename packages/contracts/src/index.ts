@@ -233,9 +233,14 @@ export const priceInputSchema = z
   })
   .strict();
 export type PriceInput = z.infer<typeof priceInputSchema>;
-export const priceSchema = priceInputSchema.extend({
+export const priceSchema = z.object({
   id: z.number().int(),
+  originZoneId: z.number().int().positive(),
+  destinationZoneId: z.number().int().positive(),
+  baseCents: z.number().int().nonnegative().max(100000000),
+  perExtraKgCents: z.number().int().nonnegative().max(100000000),
   effectiveFrom: z.string().datetime(),
+  createdAt: z.string().datetime().optional(),
 });
 export const zoneListSchema = z.array(zoneSchema);
 export const priceListSchema = z.array(priceSchema);

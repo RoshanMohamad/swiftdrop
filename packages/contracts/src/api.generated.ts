@@ -4504,13 +4504,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            id: number;
                             originZoneId: number;
                             destinationZoneId: number;
                             baseCents: number;
                             perExtraKgCents: number;
                             /** Format: date-time */
                             effectiveFrom: string;
-                            id: number;
+                            /** Format: date-time */
+                            createdAt?: string;
                         }[];
                     };
                 };
@@ -4754,13 +4756,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            id: number;
                             originZoneId: number;
                             destinationZoneId: number;
                             baseCents: number;
                             perExtraKgCents: number;
                             /** Format: date-time */
                             effectiveFrom: string;
-                            id: number;
+                            /** Format: date-time */
+                            createdAt?: string;
                         };
                     };
                 };
