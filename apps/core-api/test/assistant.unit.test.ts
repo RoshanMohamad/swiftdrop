@@ -41,13 +41,19 @@ describe("AI Delivery Assistant (FR-B2, Design Doc §12.2)", () => {
           {
             id: "p1",
             trackingNumber: "SDABC12345",
-            status: "BOOKED",
+            status: "CREATED",
             recipientName: "Nimal Perera",
             feeCents: 57000,
             createdAt: new Date("2026-11-09T10:00:00Z"),
             originZone: { town: "Colombo 01" },
             destinationZone: { town: "Kandy Central" },
-            history: [{ status: "BOOKED", town: "Colombo 01", createdAt: new Date() }],
+            quote: {
+              weightGrams: 2000,
+              lengthMm: 250,
+              widthMm: 180,
+              heightMm: 120,
+            },
+            history: [{ status: "CREATED", town: "Colombo 01", createdAt: new Date() }],
           },
         ]),
       findUnique: (args: { where: { trackingNumber: string } }) => {
