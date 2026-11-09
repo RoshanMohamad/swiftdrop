@@ -22,6 +22,7 @@ import {
   bookingRequestSchema,
   parcelSchema,
   parcelPageSchema,
+  receiptSchema,
   publicTrackingSchema,
   zoneInputSchema,
   zoneSchema,
@@ -140,6 +141,7 @@ for (const [method, path, input, output, status, bearer] of [
   ["post", "/api/v1/parcels", bookingRequestSchema, parcelSchema, 201, true],
   ["get", "/api/v1/parcels", null, parcelPageSchema, 200, true],
   ["get", "/api/v1/parcels/{id}", null, parcelSchema, 200, true],
+  ["get", "/api/v1/parcels/{id}/receipt", null, receiptSchema, 200, true],
   [
     "get",
     "/api/v1/track/{trackingNumber}",

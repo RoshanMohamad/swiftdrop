@@ -10,6 +10,7 @@ import {
   quoteSchema,
   parcelSchema,
   parcelPageSchema,
+  receiptSchema,
   publicTrackingSchema,
   zoneSchema,
   zoneListSchema,
@@ -194,6 +195,18 @@ export async function getParcel(id: string) {
     return parcelSchema.parse(
       await checked(
         await api.GET("/api/v1/parcels/{id}", {
+          params: { path: { id } },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function getParcelReceipt(id: string) {
+  return authenticated(async (session) => {
+    return receiptSchema.parse(
+      await checked(
+        await api.GET("/api/v1/parcels/{id}/receipt", {
           params: { path: { id } },
           headers: { Authorization: `Bearer ${session.accessToken}` },
         }),

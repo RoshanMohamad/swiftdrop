@@ -7,6 +7,7 @@ import { createTokenService } from "./modules/auth/jwt.js";
 import { createAuthMailer } from "./modules/auth/mail.js";
 import pino from "pino";
 import { startParcelEventWorkers } from "./modules/parcels/events.js";
+import { ReceiptService } from "./modules/receipts/service.js";
 const config = loadConfig();
 const db = createDatabase(config.DATABASE_URL);
 const redis = new Redis(config.REDIS_URL, {
@@ -46,6 +47,7 @@ const { app } = createApp({
   mailer: createAuthMailer(config.SMTP_URL),
   logger,
   workerState,
+  receipts: new ReceiptService(db, config),
 });
 const internalApp = createInternalApp({ db, config, logger });
 const workers = startParcelEventWorkers(
@@ -53,6 +55,7 @@ const workers = startParcelEventWorkers(
   config.RABBITMQ_URL,
   logger,
   workerState,
+  new ReceiptService(db, config),
 );
 const server = app.listen(config.PORT, "127.0.0.1", () =>
   console.log(`SwiftDrop API listening at http://127.0.0.1:${config.PORT}`),

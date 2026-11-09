@@ -31,6 +31,10 @@ const publicParcel = (
   status: parcel.status,
   feeCents: parcel.feeCents,
   currency: "LKR" as const,
+  weightGrams: parcel.quote.weightGrams,
+  lengthMm: parcel.quote.lengthMm,
+  widthMm: parcel.quote.widthMm,
+  heightMm: parcel.quote.heightMm,
   originTown: parcel.originZone.town,
   destinationTown: parcel.destinationZone.town,
   recipientName: parcel.recipientName,
@@ -46,6 +50,14 @@ const publicParcel = (
 const parcelInclude = {
   originZone: { select: { town: true } },
   destinationZone: { select: { town: true } },
+  quote: {
+    select: {
+      weightGrams: true,
+      lengthMm: true,
+      widthMm: true,
+      heightMm: true,
+    },
+  },
   history: {
     orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
     take: 100,

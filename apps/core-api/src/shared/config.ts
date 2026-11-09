@@ -24,6 +24,13 @@ export function loadConfig() {
       HUMAN_AUDIENCE: z.string().min(1),
       SERVICE_ISSUER: z.url().default("http://127.0.0.1:3001"),
       DATABASE_URL: z.url(),
+      MINIO_ENDPOINT: z.url().default("http://localhost:9000"),
+      MINIO_ACCESS_KEY: z.string().min(1).default("swiftdrop"),
+      MINIO_SECRET_KEY: z.string().min(1).default("local-development-only"),
+      MINIO_BUCKET: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/)
+        .default("swiftdrop-receipts"),
       REDIS_URL: z.url(),
       RABBITMQ_URL: z.url().default("amqp://guest:guest@localhost:5672"),
       AUTH_PRIVATE_KEY_FILE: z.string().min(1),
@@ -146,6 +153,15 @@ export function loadConfig() {
     env.RABBITMQ_URL === "amqp://guest:guest@localhost:5672"
   )
     throw new Error("Production requires a dedicated RabbitMQ credential.");
+  if (
+    env.NODE_ENV === "production" &&
+    (env.MINIO_ENDPOINT.startsWith("http://localhost") ||
+      env.MINIO_ACCESS_KEY === "swiftdrop" ||
+      env.MINIO_SECRET_KEY === "local-development-only")
+  )
+    throw new Error(
+      "Production requires dedicated MinIO credentials and endpoint.",
+    );
   return {
     ...env,
     root,

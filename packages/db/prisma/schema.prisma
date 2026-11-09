@@ -143,6 +143,7 @@ model Parcel {
   recipientAddress String @map("recipient_address") @db.VarChar(300)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   history ParcelHistory[]
+  receipt Receipt?
   @@index([userId, createdAt, id])
   @@map("parcels")
 }
@@ -156,6 +157,17 @@ model ParcelHistory {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   @@index([parcelId, createdAt, id])
   @@map("parcel_history")
+}
+
+model Receipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  parcelId        String   @unique @map("parcel_id") @db.Uuid
+  parcel          Parcel   @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  reference       String   @unique @db.VarChar(40)
+  objectKey       String   @unique @map("object_key") @db.VarChar(255)
+  generatedAt     DateTime @map("generated_at") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@map("parcel_receipts")
 }
 
 model IdempotencyRecord {
