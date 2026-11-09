@@ -242,9 +242,14 @@ export const priceInputSchema = z
   })
   .strict();
 export type PriceInput = z.infer<typeof priceInputSchema>;
-export const priceSchema = priceInputSchema.extend({
+export const priceSchema = z.object({
   id: z.number().int(),
+  originZoneId: z.number().int().positive(),
+  destinationZoneId: z.number().int().positive(),
+  baseCents: z.number().int().nonnegative().max(100000000),
+  perExtraKgCents: z.number().int().nonnegative().max(100000000),
   effectiveFrom: z.string().datetime(),
+  createdAt: z.string().datetime().optional(),
 });
 export const zoneListSchema = z.array(zoneSchema);
 export const priceListSchema = z.array(priceSchema);
@@ -353,6 +358,28 @@ export const dailyReportSummarySchema = z.object({
   days: z.array(dailyReportItemSchema),
 });
 export type DailyReportSummary = z.infer<typeof dailyReportSummarySchema>;
+
+export const assistantChatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().max(2000),
+});
+
+export const assistantChatInputSchema = z
+  .object({
+    message: z.string().trim().min(1).max(1000),
+    history: z.array(assistantChatMessageSchema).optional(),
+  })
+  .strict();
+export type AssistantChatInput = z.infer<typeof assistantChatInputSchema>;
+
+export const assistantChatOutputSchema = z
+  .object({
+    reply: z.string(),
+    toolsUsed: z.array(z.string()),
+    data: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+export type AssistantChatOutput = z.infer<typeof assistantChatOutputSchema>;
 
 export const sessionSchema = z.object({
   state: z.literal("authenticated"),

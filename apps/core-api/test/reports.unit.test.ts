@@ -123,4 +123,43 @@ describe("Daily Operations Reports Service (FR-I7, Design Doc §3.4)", () => {
     expect(csv).toContain("2026-11-02,2,1,0,1,100.0");
     expect(csv).toContain("SUMMARY,5,3,1,-,75.0");
   });
+
+  it("handles single-day report with 100% delivery success", async () => {
+    const parcels = [
+      { id: "1", status: "DELIVERED", createdAt: new Date("2026-11-05T10:00:00Z") },
+      { id: "2", status: "DELIVERED", createdAt: new Date("2026-11-05T14:00:00Z") },
+    ];
+    const mockDb = {
+      parcel: { findMany: async () => parcels },
+    } as unknown as Database;
+
+    const service = new ReportsService(mockDb);
+    const report = await service.getDailyReport("2026-11-05", "2026-11-05");
+
+    expect(report.totalBooked).toBe(2);
+    expect(report.totalDelivered).toBe(2);
+    expect(report.totalFailed).toBe(0);
+    expect(report.overallSuccessRatePercent).toBe(100.0);
+    expect(report.days).toHaveLength(1);
+    expect(report.days[0].successRatePercent).toBe(100.0);
+  });
+
+  it("handles days with only in-transit parcels without division by zero error", async () => {
+    const parcels = [
+      { id: "1", status: "IN_TRANSIT", createdAt: new Date("2026-11-06T10:00:00Z") },
+    ];
+    const mockDb = {
+      parcel: { findMany: async () => parcels },
+    } as unknown as Database;
+
+    const service = new ReportsService(mockDb);
+    const report = await service.getDailyReport("2026-11-06", "2026-11-06");
+
+    expect(report.totalBooked).toBe(1);
+    expect(report.totalDelivered).toBe(0);
+    expect(report.totalFailed).toBe(0);
+    expect(report.overallSuccessRatePercent).toBe(0);
+    expect(report.days[0].totalInTransit).toBe(1);
+    expect(report.days[0].successRatePercent).toBe(0);
+  });
 });

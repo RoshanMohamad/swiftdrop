@@ -25,6 +25,7 @@ import { LifecycleService, createLifecycleRouter } from "./modules/lifecycle/ind
 import { UsersService, createUsersRouter } from "./modules/users/index.js";
 import { createReceiptRouter } from "./modules/receipts/routes.js";
 import type { ReceiptService } from "./modules/receipts/service.js";
+import { AssistantService, createAssistantRouter } from "./modules/assistant/index.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -126,6 +127,8 @@ export function createApp(deps: {
       "/api/v1",
       createReceiptRouter(deps.receipts, service, config),
     );
+  const assistant = new AssistantService(db, pricing, parcels);
+  app.use("/api/v1", createAssistantRouter(assistant, service, limiter, config));
   app.use((_req, _res, next) =>
     next(new HttpError(404, "NOT_FOUND", "This route does not exist.")),
   );
