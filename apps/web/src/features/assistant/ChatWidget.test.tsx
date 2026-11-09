@@ -74,4 +74,41 @@ describe("AI Delivery Assistant Widget (FR-F9)", () => {
       screen.getByRole("button", { name: /open ai delivery assistant/i }),
     ).toBeInTheDocument();
   });
+
+  it("triggers suggestion chip on click", async () => {
+    const user = userEvent.setup();
+    render(<ChatWidget />);
+
+    await user.click(
+      screen.getByRole("button", { name: /open ai delivery assistant/i }),
+    );
+
+    const chip = screen.getByRole("button", { name: /Districts/i });
+    await user.click(chip);
+
+    expect(sendAssistantMessage).toHaveBeenCalledWith(
+      "Which districts do you serve?",
+      expect.any(Array),
+    );
+  });
+
+  it("displays error message and re-enables input on failure", async () => {
+    vi.mocked(sendAssistantMessage).mockRejectedValueOnce(
+      new Error("Network connection dropped."),
+    );
+
+    const user = userEvent.setup();
+    render(<ChatWidget />);
+
+    await user.click(
+      screen.getByRole("button", { name: /open ai delivery assistant/i }),
+    );
+
+    const input = screen.getByLabelText(/message to assistant/i);
+    await user.type(input, "Track SD12345678");
+    await user.click(screen.getByRole("button", { name: /^send$/i }));
+
+    expect(await screen.findByText(/Network connection dropped/i)).toBeInTheDocument();
+    expect(input).not.toBeDisabled();
+  });
 });
