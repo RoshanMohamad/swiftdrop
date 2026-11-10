@@ -14,7 +14,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | Member | Name | Branch | Planned slice (plan.md §4.1) | Delivered vs merged | Depends on | Next step |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
-| [M02](#m02) | TBD | TBD | Merchant platform | No work recorded | X-05, X-11, X-03 boundary review (R-02) | Merchant tables, registration/approval against fake `ParcelsService`; review service identity boundary when available |
+| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local, uncommitted M02 checkpoint: merchant schema, registration, Admin review API and initial screens; not merged | X-05 (orders, later), X-11 (webhook config, later), X-03 boundary review (R-02) | Complete API clients/OAuth/orders/webhooks/dashboard; review X-03 boundary with M01/M08/M09 |
 | [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Core deliverables merged into main (PR #10); Milestone 2 completed: FR-B2 AI Assistant Service (MCP read-only tools) & FR-F9 Chat Widget delivered with 100% test coverage | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | Lifecycle transition contract and `LifecycleService` merged into `origin/main` via PR #7 (`497fdb9`, `c366ef7`, `5460dc3`); source branch `shazan-dev`, member identity/history not confirmed. Public tracking baseline exists in M01's local code (C-02). | X-05, X-07; parcel ownership handoff (R-04) | Confirm contributor registry mapping and record attributed checkpoint; continue lifecycle/public-tracking work and coordinate C-02 extraction |
@@ -62,6 +62,8 @@ Contract definitions are in [plan.md §10](plan.md#10-integration-contracts-betw
 | X-13 | every member → M10 | Feature routes/nav and shared session transport composition | `apps/web/src/features/*`, `main.tsx` | M01 users/auth routes and all-role list/session-expiry updates implemented locally; shared shell/MSW composition and M10 review pending | M01 Sprint 2 checkpoint; C-05 |
 | X-14 | every member → M01 | Dockerfile/Compose/CI/Helm entries | `compose*.yaml`, `.github/` | Compose/CI exist from M01; per-service entries planned | Local tree only |
 | X-15 | M06 ↔ M01 | Proposed courier profile/readiness contract before invitation activation; `docs/auth.md` §4.5 | `modules/users`, future M06 courier profile module/schema | Unagreed; dispatcher onboarding proceeds independently; courier acceptance returns setup-pending without consuming its invitation until required fields, writer and atomicity are agreed | M01 Sprint 1 implementation checkpoint, 30 October 2026; C-04; no M06 branch inspected |
+
+| X-16 | M02 → Admin web and merchant account | `POST /api/v1/merchant/register`, `GET /api/v1/admin/merchants`, `PATCH /api/v1/admin/merchants/{id}/review`; merchant states `PENDING` → `APPROVED` or `REJECTED` | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611100001_merchants}`, `apps/core-api/src/modules/merchants`, `apps/web/src/features/merchant` | Implemented locally; schema, contract and type checks passed; not merged. Registration atomically creates the account and pending application; review is Admin-guarded and row-locked. API-client unlock and OAuth are future M02 work. | M02 checkpoint 10 November 2026; manual acceptance pending |
 
 ### Contradictions and overlaps
 
@@ -674,7 +676,35 @@ Planned slice (plan.md §4.1): Merchant platform.
 
 #### Verification and manual review
 - Inspected existing module/feature conventions and confirmed the current branch is `feature/Merchant` with a clean initial working tree.
-- No automated tests or runtime checks apply to README-only placeholders. Review the two README files and `git diff --check` before committing.
+- No automated tests or runtime checks applied to the README-only placeholder change. This was superseded by the implementation checkpoint below.
+
+### M02 checkpoint: Merchant registration and approval (10 November 2026)
+
+#### Summary of changes
+- Added the `Merchant` model and additive migration with unique user ownership, business name, pending/approved/rejected status and reviewer audit fields.
+- Added strict contracts and generated OpenAPI/typed-client operations for merchant registration, Admin application listing and review decisions.
+- Added public `POST /api/v1/merchant/register`, which hashes the password and transactionally creates a `MERCHANT` user plus a `PENDING` business. Duplicate email receives the same generic acceptance response to avoid disclosing account existence.
+- Added Admin-only application listing and approve/reject endpoints. Reviews lock the merchant row and only transition a pending application once.
+- Added `/auth/merchant-register` signup and `/admin/merchants` review screens; linked merchant signup from customer registration and Admin account shortcuts.
+
+#### Dependencies, boundaries and unresolved work
+- API clients, OAuth, merchant orders, webhook settings, dashboard and delivery-log views remain future M02 work.
+- Orders must use M04's `ParcelsService`/merchant variant under [X-05](#x-05); M02 must not duplicate parcel creation. Delivery attempts/logs depend on M08 [X-10](#x-10), and webhook configuration lookup remains [X-11](#x-11).
+- M02's X-03 boundary review requested under [R-02](#r-02) remains pending; no M01/M08/M09 counterpart branch was inspected. Worker behavior remains unverified.
+- Route composition touches `apps/web/src/main.tsx`, a shared M10 integration seam under [X-13](#x-13); no M10 review is claimed.
+
+#### Checks and limitations
+- Passed TypeScript checks for contracts, database, core API and web; `prisma validate`; generated-contract drift check; and `git diff --check`.
+- No tests were added or run in this checkpoint. No database migration was applied to a running database, and no browser/manual acceptance was performed.
+
+#### Manual acceptance
+From the repository root, with `.env` configured and a database available, run `pnpm db:generate`, `pnpm db:migrate`, then `pnpm dev`.
+
+1. Open `/auth/register`, follow the merchant application link, and submit valid business/contact details. Expect a generic application response; retry with the same email and expect the same response without a second account/application.
+2. Check invalid email, non-Sri Lankan phone, weak password, mismatched confirmation, and blank/overlong business name. Expect field feedback and no submission. Repeat at narrow mobile width and keyboard-only; focus should move to the first invalid field.
+3. Sign in as an Admin and open `/admin/merchants`. Approve an application; expect its status to update and actions to disappear. Try reviewing it again and expect a conflict.
+4. Register a second application and reject it. Confirm the browser prompt; expect rejected status. Verify a non-Admin receives 403 and an unauthenticated request receives 401 on Admin endpoints.
+5. Send concurrent decisions for one pending application. Expect exactly one to succeed and the other to receive a conflict.
 
 <a id="m03"></a>
 ## M03 — UmarYusuf03 (`umarali`)
