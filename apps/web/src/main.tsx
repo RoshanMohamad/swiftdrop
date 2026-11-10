@@ -29,13 +29,8 @@ import {
   SecuritySettings,
 } from "./features/auth/google-pages.js";
 import type { Role } from "@swiftdrop/contracts";
-import {
-  AdminPricing,
-  AdminZones,
-} from "./features/pricing/index.js";
-import {
-  AdminReports,
-} from "./features/reports/index.js";
+import { AdminPricing, AdminZones } from "./features/pricing/index.js";
+import { AdminReports } from "./features/reports/index.js";
 import { ChatWidget } from "./features/assistant/index.js";
 import {
   NewParcel,
@@ -44,6 +39,7 @@ import {
   PublicTracking,
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
+import { AdminMerchants, MerchantSignup } from "./features/merchant/pages.js";
 import "./styles.css";
 function Guard({
   role,
@@ -61,8 +57,7 @@ function Guard({
   const allowed = roles
     ? roles.includes(state.user.role)
     : state.user.role === role;
-  if (!allowed)
-    return <Navigate to={roleHome(state.user.role)} replace />;
+  if (!allowed) return <Navigate to={roleHome(state.user.role)} replace />;
   return children;
 }
 function Account() {
@@ -141,6 +136,7 @@ function Account() {
       {state.user?.role === "ADMIN" && (
         <div className="notice account-links">
           <Link to="/admin/users">Users</Link>
+          <Link to="/admin/merchants">Merchant applications</Link>
           <Link to="/admin/zones">Service districts</Link>
           <Link to="/admin/pricing">Pricing</Link>
           <Link to="/admin/reports">Operations Reports</Link>
@@ -272,6 +268,10 @@ function App() {
             <Routes>
               <Route path="/auth/login" element={<AuthForm />} />
               <Route path="/auth/register" element={<AuthForm registering />} />
+              <Route
+                path="/auth/merchant-register"
+                element={<MerchantSignup />}
+              />
               <Route path="/auth/verify-email" element={<VerifyEmail />} />
               <Route path="/auth/accept-invite" element={<AcceptInvite />} />
               <Route path="/auth/google/result" element={<GoogleResult />} />
@@ -309,6 +309,14 @@ function App() {
                 element={
                   <Guard role="ADMIN">
                     <AdminUsers />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/admin/merchants"
+                element={
+                  <Guard role="ADMIN">
+                    <AdminMerchants />
                   </Guard>
                 }
               />
