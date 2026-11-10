@@ -50,7 +50,30 @@ model User {
   oauthTransactions OAuthTransaction[]
   quotes Quote[]
   parcels Parcel[]
+  merchant Merchant?
+  reviewedMerchants Merchant[] @relation("MerchantReviewer")
   @@map("users")
+}
+
+enum MerchantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Merchant {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       Int            @unique @map("user_id")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName String         @map("business_name") @db.VarChar(160)
+  status       MerchantStatus @default(PENDING)
+  reviewedAt   DateTime?      @map("reviewed_at") @db.Timestamptz(3)
+  reviewedById Int?           @map("reviewed_by_id")
+  reviewedBy   User?          @relation("MerchantReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@index([status, createdAt, id])
+  @@map("merchants")
 }
 
 model StaffInvitation {
