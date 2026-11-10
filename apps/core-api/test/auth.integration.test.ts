@@ -5,6 +5,7 @@ import {
   describe,
   expect,
   it,
+  jest,
 } from "@jest/globals";
 import {
   GenericContainer,
@@ -13,13 +14,15 @@ import {
 } from "testcontainers";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import bcrypt from "bcrypt";
 import request from "supertest";
 import { Redis } from "ioredis";
 import pino from "pino";
 import { createDatabase, type Database, RoleName } from "@swiftdrop/db";
 import { createApp } from "../src/app.js";
+import { createInternalApp } from "../src/internal-app.js";
+import { signServiceEventToken } from "../src/modules/services/signing.js";
 import { cleanupAuth } from "../src/modules/auth/index.js";
 import { createTokenService } from "../src/modules/auth/jwt.js";
 import { tokenHash } from "../src/modules/auth/service.js";
@@ -132,13 +135,19 @@ beforeAll(async () => {
   config = {
     NODE_ENV: "test",
     PORT: 3000,
+    INTERNAL_PORT: 3001,
     APP_ORIGIN: "http://localhost:5173",
     SMTP_URL: "smtp://localhost:1025",
     API_ISSUER: "http://localhost:3000",
     HUMAN_AUDIENCE: "swiftdrop-web",
+    SERVICE_ISSUER: "http://127.0.0.1:3001",
     DATABASE_URL: databaseURL,
     REDIS_URL: "",
     RABBITMQ_URL: "amqp://localhost",
+    MINIO_ENDPOINT: "http://localhost:9000",
+    MINIO_ACCESS_KEY: "test",
+    MINIO_SECRET_KEY: "test-secret",
+    MINIO_BUCKET: "test-receipts",
     AUTH_KEY_ID: "test-1",
     AUTH_PRIVATE_KEY_FILE: "",
     AUTH_PUBLIC_KEYS_FILE: "",
@@ -202,7 +211,7 @@ beforeAll(async () => {
 }, 240000);
 beforeEach(async () => {
   await db.$executeRaw`TRUNCATE users CASCADE`;
-  await db.$executeRaw`TRUNCATE outbox_events, consumer_progress, idempotency_records`;
+  await db.$executeRaw`TRUNCATE outbox_events, consumer_progress, idempotency_records, service_principals CASCADE`;
   await redis.flushdb();
   verificationLink = "";
   invitationLink = "";
@@ -216,6 +225,78 @@ afterAll(async () => {
   await postgres?.stop();
 });
 describe("customer HTTP boundary", () => {
+  it("enforces live service-key revocation across separate internal API instances", async () => {
+    const serviceId = "notification-svc";
+    const serviceKind = "notification";
+    const audience = "swiftdrop-notification-worker";
+    const signingPair = generateKeyPairSync("rsa", { modulusLength: 3072 });
+    const privateKey = signingPair.privateKey
+      .export({ type: "pkcs8", format: "pem" })
+      .toString();
+    const publicKeyPem = signingPair.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const keyId = `notification-${randomUUID()}`;
+    const eventId = randomUUID();
+    const parcelId = randomUUID();
+    await db.servicePrincipal.create({
+      data: {
+        serviceId,
+        serviceKind,
+        audience,
+        permissions: ["notifications:lookup"],
+      },
+    });
+    await db.servicePublicKey.create({
+      data: { keyId, serviceId, publicKeyPem, notBefore: new Date() },
+    });
+    await db.outboxEvent.create({
+      data: {
+        eventId,
+        eventType: "parcel.created",
+        aggregateId: parcelId,
+        payload: { eventId, eventType: "parcel.created", parcelId },
+      },
+    });
+    const token = await signServiceEventToken({
+      privateKey,
+      keyId,
+      serviceId,
+      serviceKind,
+      issuer: config.SERVICE_ISSUER,
+      audience,
+      scope: "notifications:lookup",
+      eventId,
+      parcelId,
+    });
+    const first = createInternalApp({
+      db,
+      config,
+      logger: pino({ enabled: false }),
+    });
+    const second = createInternalApp({
+      db,
+      config,
+      logger: pino({ enabled: false }),
+    });
+    await request(api.app)
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(401);
+    await request(first)
+      .get(`/internal/v1/notifications/events/${eventId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(404);
+    await db.servicePrincipal.update({
+      where: { serviceId },
+      data: { revokedAt: new Date() },
+    });
+    await request(second)
+      .get(`/internal/v1/notifications/events/${eventId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(401);
+  });
+
   it("invites a dispatcher, activates only on explicit acceptance, and then allows ordinary login", async () => {
     const admin = await user("ADMIN", "admin@example.test");
     const agent = request.agent(api.app);
@@ -308,7 +389,7 @@ describe("customer HTTP boundary", () => {
     ).toBe("INVITED");
   });
 
-  it("lists only staff and rotates/revokes invitations while retaining mail-failed accounts", async () => {
+  it("filters staff and rotates/revokes invitations while retaining mail-failed accounts", async () => {
     const admin = await user("ADMIN", "admin@example.test");
     const agent = request.agent(api.app);
     const logged = await post(agent, "login", { email: admin.email, password });
@@ -1144,5 +1225,620 @@ describe("customer quote and booking workflow", () => {
       .get("/api/v1/parcels")
       .set("Authorization", `Bearer ${suspendedSession.response.accessToken}`)
       .expect(401);
+  });
+});
+
+describe("M01 account administration", () => {
+  async function operator(email = "operator@example.test") {
+    const account = await user("ADMIN", email);
+    const credentials = await api.service.login(account.email, password);
+    const authenticated = await api.service.authenticate(
+      `Bearer ${credentials.response.accessToken}`,
+    );
+    return {
+      account,
+      credentials,
+      actor: {
+        id: account.id,
+        familyId: authenticated.familyId,
+        jti: authenticated.jti,
+      },
+    };
+  }
+  async function patchStatus(
+    token: string,
+    id: number | string,
+    body: object,
+    options = { csrf: true, origin: config.APP_ORIGIN },
+  ) {
+    const agent = request.agent(api.app);
+    const csrf = await agent.get("/api/v1/auth/csrf").expect(200);
+    const pending = agent
+      .patch(`/api/v1/admin/users/${id}/status`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Origin", options.origin);
+    if (options.csrf) pending.set("X-CSRF-Token", csrf.body.csrfToken);
+    return pending.send(body);
+  }
+
+  it("lists every role, nullable Google profiles, bounded pages and safe fields", async () => {
+    const admin = await operator();
+    for (const role of [
+      "CUSTOMER",
+      "MERCHANT",
+      "COURIER",
+      "DISPATCHER",
+    ] as const)
+      await user(role, `${role.toLowerCase()}@example.test`);
+    await db.user.create({
+      data: {
+        email: "incomplete@example.test",
+        roleId: "CUSTOMER",
+        googleSub: "incomplete",
+        fullName: null,
+        phone: null,
+      },
+    });
+    const headers = {
+      Authorization: `Bearer ${admin.credentials.response.accessToken}`,
+    };
+    const first = await request(api.app)
+      .get("/api/v1/admin/users?limit=2")
+      .set(headers)
+      .expect(200);
+    expect(first.body.items).toHaveLength(2);
+    expect(first.body.nextCursor).toBeTruthy();
+    const second = await request(api.app)
+      .get(`/api/v1/admin/users?limit=2&cursor=${first.body.nextCursor}`)
+      .set(headers)
+      .expect(200);
+    expect(
+      second.body.items.every(
+        (item: { id: number }) => item.id > first.body.items[1].id,
+      ),
+    ).toBe(true);
+    const all = await request(api.app)
+      .get("/api/v1/admin/users")
+      .set(headers)
+      .expect(200);
+    expect(
+      new Set(all.body.items.map((item: { role: string }) => item.role)).size,
+    ).toBe(5);
+    expect(
+      all.body.items.find(
+        (item: { email: string }) => item.email === "incomplete@example.test",
+      ),
+    ).toMatchObject({ fullName: null, phone: null });
+    expect(Object.keys(all.body.items[0]).sort()).toEqual([
+      "createdAt",
+      "email",
+      "fullName",
+      "id",
+      "invitationExpiresAt",
+      "phone",
+      "role",
+      "status",
+    ]);
+    expect(
+      (
+        await request(api.app)
+          .get("/api/v1/admin/users?role=MERCHANT&status=ACTIVE")
+          .set(headers)
+      ).body.items,
+    ).toHaveLength(1);
+    for (const query of [
+      "role=ROOT",
+      "status=DELETED",
+      "limit=101",
+      "cursor=invalid",
+      "unknown=1",
+    ])
+      await request(api.app)
+        .get(`/api/v1/admin/users?${query}`)
+        .set(headers)
+        .expect(400);
+    expect(all.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("enforces the role matrix, CSRF, Origin, strict DTOs and IDs", async () => {
+    const target = await user();
+    await request(api.app).get("/api/v1/admin/users").expect(401);
+    for (const role of [
+      "CUSTOMER",
+      "MERCHANT",
+      "COURIER",
+      "DISPATCHER",
+    ] as const) {
+      const actor = await user(
+        role,
+        `actor-${role}@example.test`.toLowerCase(),
+      );
+      const session = await api.service.login(actor.email, password);
+      await request(api.app)
+        .get("/api/v1/admin/users")
+        .set("Authorization", `Bearer ${session.response.accessToken}`)
+        .expect(403);
+      expect(
+        (
+          await patchStatus(session.response.accessToken, target.id, {
+            status: "SUSPENDED",
+          })
+        ).status,
+      ).toBe(403);
+    }
+    expect(
+      (await patchStatus("invalid", target.id, { status: "SUSPENDED" })).status,
+    ).toBe(401);
+    const admin = await operator();
+    const token = admin.credentials.response.accessToken;
+    expect(
+      (
+        await patchStatus(
+          token,
+          target.id,
+          { status: "SUSPENDED" },
+          { csrf: false, origin: config.APP_ORIGIN },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await patchStatus(
+          token,
+          target.id,
+          { status: "SUSPENDED" },
+          { csrf: true, origin: "https://evil.example" },
+        )
+      ).status,
+    ).toBe(403);
+    for (const body of [
+      { status: "INVITED" },
+      { status: "ACTIVE", role: "ADMIN" },
+      {},
+    ])
+      expect((await patchStatus(token, target.id, body)).status).toBe(400);
+    for (const id of ["-1", "1.1", "1e1", "9007199254740992", "abc"])
+      expect(
+        (await patchStatus(token, id, { status: "SUSPENDED" })).status,
+      ).toBe(400);
+    expect(
+      (await patchStatus(token, 2147483647, { status: "SUSPENDED" })).status,
+    ).toBe(404);
+  });
+
+  it("atomically revokes all families/actions across instances and never resurrects credentials", async () => {
+    const admin = await operator();
+    const target = await user();
+    const first = await api.service.login(target.email, password);
+    const successor = await api.service.refresh(first.refreshToken);
+    const other = await api.service.login(target.email, password);
+    const now = new Date();
+    const verification = await db.verificationToken.create({
+      data: {
+        userId: target.id,
+        tokenHash: tokenHash("verification"),
+        generation: 1,
+        expiresAt: new Date(now.getTime() + 60000),
+      },
+    });
+    const invitation = await db.staffInvitation.create({
+      data: {
+        userId: target.id,
+        tokenHash: tokenHash("invitation"),
+        generation: 1,
+        expiresAt: new Date(now.getTime() + 60000),
+      },
+    });
+    const oauth = await db.oAuthTransaction.create({
+      data: {
+        userId: target.id,
+        familyId: (
+          await api.service.authenticate(
+            `Bearer ${successor.response.accessToken}`,
+          )
+        ).familyId,
+        passwordHash: hash,
+        intent: "link",
+        stateHash: tokenHash("state"),
+        browserHash: tokenHash("browser"),
+        nonce: "nonce",
+        encryptedVerifier: "encrypted",
+        expiresAt: new Date(now.getTime() + 60000),
+      },
+    });
+    const instance = createApp({
+      db,
+      redis,
+      config,
+      tokens: await createTokenService(config),
+      logger: pino({ enabled: false }),
+    });
+    const result = await patchStatus(
+      admin.credentials.response.accessToken,
+      target.id,
+      { status: "SUSPENDED" },
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.status).toBe("SUSPENDED");
+    const families = await db.authSession.findMany({
+      where: { userId: target.id },
+    });
+    expect(families).toHaveLength(2);
+    expect(
+      families.every(
+        (family) =>
+          family.revokedAt && family.revocationReason === "suspension",
+      ),
+    ).toBe(true);
+    expect(
+      await db.accessGrant.count({ where: { family: { userId: target.id } } }),
+    ).toBe(0);
+    expect(
+      await db.refreshToken.count({ where: { family: { userId: target.id } } }),
+    ).toBe(3);
+    expect(
+      (
+        await db.verificationToken.findUniqueOrThrow({
+          where: { id: verification.id },
+        })
+      ).revokedAt,
+    ).not.toBeNull();
+    expect(
+      (
+        await db.staffInvitation.findUniqueOrThrow({
+          where: { id: invitation.id },
+        })
+      ).revokedAt,
+    ).not.toBeNull();
+    expect(
+      (await db.oAuthTransaction.findUniqueOrThrow({ where: { id: oauth.id } }))
+        .consumedAt,
+    ).not.toBeNull();
+    await request(instance.app)
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${other.response.accessToken}`)
+      .expect(401);
+    await expect(
+      instance.service.refresh(successor.refreshToken),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      api.service.login(target.email, password),
+    ).rejects.toMatchObject({ status: 401 });
+    await patchStatus(admin.credentials.response.accessToken, target.id, {
+      status: "ACTIVE",
+    });
+    await expect(api.service.refresh(other.refreshToken)).rejects.toMatchObject(
+      { status: 401 },
+    );
+    await expect(
+      api.service.authenticate(`Bearer ${successor.response.accessToken}`),
+    ).rejects.toMatchObject({ status: 401 });
+    const fresh = await api.service.login(target.email, password);
+    await api.users.changeStatus(admin.actor, target.id, "ACTIVE");
+    await expect(
+      api.service.authenticate(`Bearer ${fresh.response.accessToken}`),
+    ).resolves.toBeDefined();
+  });
+
+  it("rejects invited activation and credentialless reactivation; supports Google-only accounts", async () => {
+    const admin = await operator();
+    const invited = await db.user.create({
+      data: {
+        email: "invited@example.test",
+        fullName: "Invited Staff",
+        phone: input.phone,
+        roleId: "DISPATCHER",
+        status: "INVITED",
+      },
+    });
+    for (const status of ["ACTIVE", "SUSPENDED"] as const)
+      await expect(
+        api.users.changeStatus(admin.actor, invited.id, status),
+      ).rejects.toMatchObject({ status: 409, code: "INVITATION_REQUIRED" });
+    await db.user.update({
+      where: { id: invited.id },
+      data: { status: "SUSPENDED" },
+    });
+    await expect(
+      api.users.changeStatus(admin.actor, invited.id, "ACTIVE"),
+    ).rejects.toMatchObject({ code: "CREDENTIALS_REQUIRED" });
+    await db.user.update({
+      where: { id: invited.id },
+      data: { googleSub: "staff-google-is-not-supported" },
+    });
+    await expect(
+      api.users.changeStatus(admin.actor, invited.id, "ACTIVE"),
+    ).rejects.toMatchObject({ code: "CREDENTIALS_REQUIRED" });
+    const google = await db.user.create({
+      data: {
+        email: "googleonly@example.test",
+        roleId: "CUSTOMER",
+        googleSub: "googleonly",
+        status: "SUSPENDED",
+      },
+    });
+    await expect(
+      api.users.changeStatus(admin.actor, google.id, "ACTIVE"),
+    ).resolves.toMatchObject({ status: "ACTIVE", fullName: null, phone: null });
+    expect(
+      (
+        await patchStatus(
+          admin.credentials.response.accessToken,
+          admin.account.id,
+          { status: "SUSPENDED" },
+        )
+      ).body.code,
+    ).toBe("SELF_SUSPENSION");
+    expect(
+      await db.user.count({ where: { roleId: "ADMIN", status: "ACTIVE" } }),
+    ).toBe(1);
+  });
+
+  it("serializes competing admins and retains an active administrator", async () => {
+    const first = await operator("first@example.test");
+    const second = await operator("second@example.test");
+    const results = await Promise.allSettled([
+      api.users.changeStatus(first.actor, second.account.id, "SUSPENDED"),
+      api.users.changeStatus(second.actor, first.account.id, "SUSPENDED"),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      await db.user.count({ where: { roleId: "ADMIN", status: "ACTIVE" } }),
+    ).toBe(1);
+  });
+
+  it("denies a previously authenticated actor after logout, including invitation mutations", async () => {
+    const admin = await operator();
+    const target = await user();
+    await api.service.revokeAll(admin.account.id);
+    await expect(
+      api.users.changeStatus(admin.actor, target.id, "SUSPENDED"),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      api.users.create(admin.actor, { ...input, role: "DISPATCHER" }),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      api.users.invitationAction(admin.actor, target.id, "revoke"),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(
+      (await db.user.findUniqueOrThrow({ where: { id: target.id } })).status,
+    ).toBe("ACTIVE");
+  });
+
+  it.each(["logout", "suspension"])(
+    "rejects an actor %s between middleware authentication and its write",
+    async (kind) => {
+      const admin = await operator();
+      const otherAdmin =
+        kind === "suspension"
+          ? await operator("other-admin@example.test")
+          : null;
+      const target = await user();
+      let signal!: () => void;
+      let release!: () => void;
+      const reached = new Promise<void>((done) => {
+        signal = done;
+      });
+      const proceed = new Promise<void>((done) => {
+        release = done;
+      });
+      const original = api.service.authenticate.bind(api.service);
+      const spy = jest
+        .spyOn(api.service, "authenticate")
+        .mockImplementation(async (header) => {
+          const result = await original(header);
+          if (result.user.id === admin.account.id) {
+            signal();
+            await proceed;
+          }
+          return result;
+        });
+      try {
+        const pending = patchStatus(
+          admin.credentials.response.accessToken,
+          target.id,
+          { status: "SUSPENDED" },
+        );
+        await reached;
+        if (otherAdmin)
+          await api.users.changeStatus(
+            otherAdmin.actor,
+            admin.account.id,
+            "SUSPENDED",
+          );
+        else await api.service.revokeAll(admin.account.id);
+        release();
+        expect((await pending).status).toBe(401);
+        expect(
+          (await db.user.findUniqueOrThrow({ where: { id: target.id } }))
+            .status,
+        ).toBe("ACTIVE");
+      } finally {
+        release();
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it.each(["CUSTOMER", "MERCHANT", "COURIER", "DISPATCHER", "ADMIN"] as const)(
+    "suspends and reactivates a %s account",
+    async (role) => {
+      const admin = await operator();
+      const target = await user(role, "target@example.test");
+      expect(
+        (await api.users.changeStatus(admin.actor, target.id, "SUSPENDED"))
+          .status,
+      ).toBe("SUSPENDED");
+      const suspended = await db.user.findUniqueOrThrow({
+        where: { id: target.id },
+      });
+      await api.users.changeStatus(admin.actor, target.id, "SUSPENDED");
+      expect(
+        await db.user.findUniqueOrThrow({ where: { id: target.id } }),
+      ).toEqual(suspended);
+      expect(
+        (await api.users.changeStatus(admin.actor, target.id, "ACTIVE")).status,
+      ).toBe("ACTIVE");
+    },
+  );
+
+  it("serializes invitation acceptance with suspension without bypassing the invited state", async () => {
+    const admin = await operator();
+    const invited = await api.users.create(admin.actor, {
+      fullName: "Invited Staff",
+      email: "pending@example.test",
+      phone: input.phone,
+      role: "DISPATCHER",
+    });
+    const token = new URL(invitationLink).hash.slice("#token=".length);
+    const results = await Promise.allSettled([
+      api.users.accept(token, password),
+      api.users.changeStatus(admin.actor, invited.user.id, "SUSPENDED"),
+    ]);
+    expect(results[0].status).toBe("fulfilled");
+    const target = await db.user.findUniqueOrThrow({
+      where: { id: invited.user.id },
+    });
+    expect(target.status).toBe(
+      results[1].status === "fulfilled" ? "SUSPENDED" : "ACTIVE",
+    );
+    if (results[1].status === "rejected")
+      expect(results[1].reason).toMatchObject({ code: "INVITATION_REQUIRED" });
+    expect(await db.authSession.count({ where: { userId: target.id } })).toBe(
+      0,
+    );
+  });
+
+  it("cancels operator creation before work or rolls it back before commit", async () => {
+    const { createAdmin } = await import("../src/modules/users/admin.js");
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      createAdmin(db, input, controller.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    const pending = new AbortController();
+    const cancelling = db.$extends({
+      query: {
+        user: {
+          async create({ args, query }) {
+            const result = await query(args);
+            pending.abort();
+            return result;
+          },
+        },
+      },
+    });
+    await expect(
+      createAdmin(cancelling as Database, input, pending.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(await db.user.count()).toBe(0);
+  });
+
+  it("serializes login and refresh racing suspension and leaves no usable target grant", async () => {
+    const admin = await operator();
+    const target = await user();
+    const original = await api.service.login(target.email, password);
+    const results = await Promise.allSettled([
+      api.users.changeStatus(admin.actor, target.id, "SUSPENDED"),
+      api.service.login(target.email, password),
+      api.service.refresh(original.refreshToken),
+    ]);
+    expect(results[0].status).toBe("fulfilled");
+    for (const result of results.slice(1)) {
+      if (result.status === "fulfilled" && "response" in result.value) {
+        await expect(
+          api.service.authenticate(
+            `Bearer ${result.value.response.accessToken}`,
+          ),
+        ).rejects.toMatchObject({ status: 401 });
+      }
+    }
+    expect(
+      await db.accessGrant.count({ where: { family: { userId: target.id } } }),
+    ).toBe(0);
+  });
+
+  it("rolls back status, sessions and actions if any revocation write fails", async () => {
+    const admin = await operator();
+    const target = await user();
+    const original = await api.service.login(target.email, password);
+    const failing = db.$extends({
+      query: {
+        verificationToken: {
+          async updateMany() {
+            throw new Error("injected failure");
+          },
+        },
+      },
+    });
+    const { UsersService } = await import("../src/modules/users/service.js");
+    const users = new UsersService(failing as Database, config.APP_ORIGIN);
+    await expect(
+      users.changeStatus(admin.actor, target.id, "SUSPENDED"),
+    ).rejects.toThrow("injected failure");
+    expect(
+      (await db.user.findUniqueOrThrow({ where: { id: target.id } })).status,
+    ).toBe("ACTIVE");
+    await expect(
+      api.service.authenticate(`Bearer ${original.response.accessToken}`),
+    ).resolves.toBeDefined();
+    await expect(
+      api.service.refresh(original.refreshToken),
+    ).resolves.toBeDefined();
+  });
+
+  it("creates first/subsequent admins without sessions, preserves existing accounts and serializes duplicates", async () => {
+    const { createAdmin } = await import("../src/modules/users/admin.js");
+    const adminInput = { ...input, email: "bootstrap@example.test" };
+    const results = await Promise.all([
+      createAdmin(db, adminInput),
+      createAdmin(db, adminInput),
+    ]);
+    expect(results.sort()).toEqual(["created", "unchanged"]);
+    const account = await db.user.findUniqueOrThrow({
+      where: { email: adminInput.email },
+    });
+    expect(account).toMatchObject({
+      roleId: "ADMIN",
+      status: "ACTIVE",
+      emailVerifiedAt: null,
+    });
+    expect(await bcrypt.compare(password, account.passwordHash!)).toBe(true);
+    expect(bcrypt.getRounds(account.passwordHash!)).toBe(12);
+    expect(await db.authSession.count()).toBe(0);
+    await createAdmin(db, {
+      ...adminInput,
+      fullName: "Replacement Name",
+      password: "Different bootstrap password!",
+    });
+    expect(
+      await db.user.findUniqueOrThrow({ where: { id: account.id } }),
+    ).toEqual(account);
+    expect(
+      await createAdmin(db, { ...adminInput, email: "second@example.test" }),
+    ).toBe("created");
+    const customer = await user("CUSTOMER", "conflict@example.test");
+    await expect(
+      createAdmin(db, { ...adminInput, email: customer.email }),
+    ).rejects.toMatchObject({ status: 409 });
+    await db.user.update({
+      where: { id: account.id },
+      data: { status: "SUSPENDED" },
+    });
+    await expect(createAdmin(db, adminInput)).rejects.toMatchObject({
+      status: 409,
+    });
+    await db.user.update({
+      where: { id: account.id },
+      data: { status: "INVITED" },
+    });
+    await expect(createAdmin(db, adminInput)).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(
+      createAdmin(db, { ...adminInput, password: "short" }),
+    ).rejects.toThrow();
   });
 });

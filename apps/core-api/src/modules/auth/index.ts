@@ -8,6 +8,7 @@ export function authenticate(service: AuthService): RequestHandler {
       const result = await service.authenticate(req.get("authorization"));
       res.locals.user = result.user;
       res.locals.authFamilyId = result.familyId;
+      res.locals.authGrantId = result.jti;
       next();
     } catch (error) {
       next(error);

@@ -16,6 +16,7 @@ import {
   errorMessage,
   refreshSession,
   sessionEvents,
+  sessionExpiredEvents,
 } from "./client.js";
 type State = {
   status: "loading" | "anonymous" | "authenticated" | "error";
@@ -76,6 +77,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     bootstrap();
+    sessionExpiredEvents.addEventListener("expired", clear);
     const listener = (event: MessageEvent) => {
       if (event.data === "signed-out") {
         blockBootstrap();
@@ -90,6 +92,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       generation.current++;
       sessionEvents?.removeEventListener("message", listener);
+      sessionExpiredEvents.removeEventListener("expired", clear);
     };
   }, [bootstrap, clear]);
   return (

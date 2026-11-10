@@ -1,4 +1,4 @@
-"""Editable source for the corrected report; preserves approved original pages.
+"""Editable source for the submission report, including retained original pages.
 Run with bundled Python (reportlab, pymupdf) or equivalent installed packages.
 """
 from pathlib import Path
@@ -14,7 +14,7 @@ from reportlab.lib.enums import TA_CENTER
 ROOT = Path(__file__).resolve().parents[2]
 W,H=595.276,841.89
 M=54; CW=W-2*M
-BLUE='#235D88'; INK='#172A39'; GRAY='#526371'; PALE='#EEF5FA'; GREEN='#EDF7EE'; AMBER='#FFF5DF'; RED='#FCECEE'
+BLUE='#000000'; INK='#000000'; GRAY='#333333'; PALE='#F5F5F5'; GREEN='#F5F5F5'; AMBER='#EEEEEE'; RED='#E5E5E5'
 STYLE=ParagraphStyle('body',fontName='Times-Roman',fontSize=11.3,leading=15.4,textColor=HexColor(INK),spaceAfter=8)
 SMALL=ParagraphStyle('small',parent=STYLE,fontSize=9.5,leading=12.5)
 CAP=ParagraphStyle('caption',parent=STYLE,fontName='Times-Italic',fontSize=10,leading=13,alignment=TA_CENTER,textColor=HexColor(GRAY))
@@ -129,10 +129,11 @@ def build_pages():
     start(1)
     Y=145;text('SWIFTDROP',style=ParagraphStyle('cover',parent=HEAD,fontSize=34,leading=42));text('Parcel Delivery &amp; Courier<br/>Management System',style=ParagraphStyle('cover2',parent=HEAD,fontSize=23,leading=30));Y+=16
     para('Design Documentation: Use Cases, Data Model, Architecture,<br/>Integration Design, Key Flows and Justifications');Y+=18
-    table(['Item','Details'],[['Module','Enterprise Application Development (Group Assignment, 20 marks)'],['Group number','23'],['Team size','10 members'],['Submission','Design documentation report'],['Date','29 October 2026']], [110,CW-110],11)
-    note('Design proposal. Architecture, controls and tests described here are intended behavior. No application implementation or test results were supplied for this review.');end()
+    table(['Item','Details'],[['Module','Enterprise Application Development (Group Assignment, 20 marks)'],['Group number','23'],['Team size','10 members'],['Submission','Design documentation report'],['Date','31 October 2026']], [110,CW-110],11)
+    sub('Project repository')
+    para('<link href="https://github.com/umairhassaninfinite-ui/swiftdrop" color="#000000">https://github.com/umairhassaninfinite-ui/swiftdrop</link>');end()
 
-    toc=[('Contents',2),('List of Figures',4),('1 Introduction',5),('1.1 Background',5),('1.2 Purpose of this document',5),('1.3 Scope',5),('1.4 Assumptions and constraints',5),('1.5 Technology choices',6),('2 Users, Roles and Access Rules',7),('3 Use Case Modelling',8),('3.1 Customer and recipient',8),('3.2 Merchant',9),('3.3 Courier',10),('3.4 Dispatcher and admin',11),('3.5 Use case specifications',12),('4 Data Design',13),('4.1 Entity overview',14),('4.2 Design decisions',15),('5 System Architecture',16),('5.1 Options we considered',16),('5.2 The chosen architecture',17),('5.3 Inside the Core API',18),('5.4 Why there is no separate BFF',18),('5.5 Deployment view',19),('6 Integration Design',20),('6.1 Integration patterns used',20),('6.2 Event flow',21),('6.3 Event contract',22),('6.4 Queues and routing keys',22),('6.5 Reliability guarantees',23),('6.6 Real-time tracking',23),('7 Key Flows',24),('7.1 Creating a delivery',24),('7.2 Merchant creates an order through the API',25),('7.3 Courier status update triggering notifications',26),('7.4 OAuth 2.0 login with Google',27),('7.5 Parcel lifecycle',28),('7.6 Dispatcher assigns a parcel',29),('7.7 Webhook delivery and retry',30),('8 Design Patterns and Principles',31),('8.1 Patterns applied',31),('8.2 Principles',32),('9 Security Design',33),('9.1 Authentication',33),('9.2 Authorisation',33),('9.3 Merchant API and webhooks',33),('9.4 Personal data',34),('9.5 Secrets and configuration',34),('9.6 Threats and mitigations',34),('10 API Design',35),('10.1 Conventions',35),('10.2 Main endpoints',35),('10.3 Error format',36),('11 Testing Approach',37),('12 Bonus Features',38),('12.1 Kubernetes deployment',38),('12.2 AI delivery assistant',38),('13 Conclusion',39),('Appendix A: Contribution Sheet',40),('Appendix B: Editing and Review Notes',41)]
+    toc=[('Contents',2),('List of Figures',4),('1 Introduction',5),('1.1 Background',5),('1.2 Purpose of this document',5),('1.3 Scope',5),('1.4 Assumptions and constraints',5),('1.5 Technology choices',6),('2 Users, Roles and Access Rules',7),('3 Use Case Modelling',8),('3.1 Customer and recipient',8),('3.2 Merchant',9),('3.3 Courier',10),('3.4 Dispatcher and admin',11),('3.5 Use case specifications',12),('4 Data Design',13),('4.1 Entity overview',14),('4.2 Design decisions',15),('5 System Architecture',16),('5.1 Options we considered',16),('5.2 The chosen architecture',17),('5.3 Inside the Core API',18),('5.4 Why there is no separate BFF',18),('5.5 Deployment view',19),('6 Integration Design',20),('6.1 Integration patterns used',20),('6.2 Event flow',21),('6.3 Event contract',22),('6.4 Queues and routing keys',22),('6.5 Reliability guarantees',23),('6.6 Real-time tracking',23),('7 Key Flows',24),('7.1 Creating a delivery',24),('7.2 Merchant creates an order through the API',25),('7.3 Courier status update triggering notifications',26),('7.4 OAuth 2.0 login with Google',27),('7.5 Parcel lifecycle',28),('7.6 Dispatcher assigns a parcel',29),('7.7 Webhook delivery and retry',30),('8 Design Patterns and Principles',31),('8.1 Patterns applied',31),('8.2 Principles',32),('9 Security Design',33),('9.1 Authentication',33),('9.2 Authorisation',33),('9.3 Merchant API and webhooks',33),('9.4 Personal data',34),('9.5 Secrets and configuration',34),('9.6 Threats and mitigations',34),('10 API Design',35),('10.1 Conventions',35),('10.2 Main endpoints',35),('10.3 Error format',36),('11 Testing Approach',37),('12 Bonus Features',38),('12.1 Kubernetes deployment',38),('12.2 AI delivery assistant',38),('13 Conclusion',39),('Appendix A: Contribution Sheet',40)]
     for n,entries in [(2,toc[:30]),(3,toc[30:])]:
         start(n,'Contents' if n==2 else 'Contents (continued)')
         for label,pn in entries:
@@ -148,17 +149,17 @@ def build_pages():
     para('SwiftDrop is a courier company delivering parcels across Sri Lanka. Bookings have come in over the phone and been tracked in shared spreadsheets. Customers call the hotline for updates, dispatchers juggle courier assignments from memory, and merchant order lists are retyped by staff, causing delays and address or phone errors.')
     para('The proposed platform lets customers book and track parcels, merchants submit orders directly from their e-stores, dispatchers see unassigned parcels and courier workloads, and couriers update progress from their phones.')
     sub('1.2 Purpose of this document')
-    para('This report records the system design and the reasons behind it: use cases, data model, architecture, integration contracts, key sequences and decision flows, security and testing. It gives evaluators and the ten-person team a shared design before implementation.')
+    para('This report records the system design and the reasons behind it: use cases, data model, architecture, integration contracts, key sequences and decision flows, security and testing. It provides a common reference for system development, integration and evaluation.')
     sub('1.3 Scope')
     para('Baseline: customer, merchant, courier, dispatcher and admin functions; JWT authentication with Google sign-in; a scoped merchant API; event-driven email, mock SMS and signed webhooks; live tracking; and local Docker Compose deployment. Kubernetes/Helm and the AI assistant are optional stretch features, started only after the baseline is demoable.')
     para('Out of scope: online card payments, route optimisation, warehouse/hub inventory, native mobile apps and tracking the physical return-to-sender journey. Fees are recorded and settled offline. The courier UI is a mobile-first PWA.')
     sub('1.4 Assumptions and constraints')
     bullet('Prices use integer Sri Lankan Rupee cents. Origin zone, destination zone, size and weight determine the fee. Zones follow district groupings.')
     bullet('Couriers use mid-range Android phones on patchy mobile data. Offline updates need conflict handling; local queueing alone cannot guarantee acceptance.')
-    bullet('The team has roughly one semester and favours familiar TypeScript tooling. The intended local start command is docker compose up; deployment files do not exist yet.');end()
+    bullet('The team has roughly one semester and favours familiar TypeScript tooling. Docker Compose provides the baseline local deployment environment.');end()
 
     start(6,'1.5 Technology choices')
-    para('The familiar TypeScript stack is retained. Exact dependency versions and image digests must be pinned and checked together before implementation.')
+    para('The TypeScript stack supports a shared development language across the frontend, Core API and workers. Dependency versions and container image digests are pinned together for reproducible deployment.')
     table(['Concern','Choice','Why it fits'],[
     ['Frontend','React 18, Vite, TypeScript, Tailwind CSS','Shared components for five account roles and a public tracking page.'],
     ['Backend','Node.js 24 LTS, Express, TypeScript','Supported runtime line and a familiar HTTP/OAuth/AMQP ecosystem.'],
@@ -171,7 +172,7 @@ def build_pages():
     ['Testing','Jest, Supertest, Testcontainers; Vitest and React Testing Library','Planned checks against real database/broker dependencies and UI component tests.'],
     ['Deployment','Docker Compose baseline; Kubernetes/Helm optional','Reproducible local environment; reuse images if stretch work proceeds.']
     ],[75,157,CW-232])
-    note('Runtime correction: Node.js 20 is EOL. Node.js 24 is an LTS line on the official release table as reviewed on 29 October 2026. Use a current security patch within the chosen line and verify dependency compatibility before pinning. Source: <link href="https://nodejs.org/en/about/previous-releases" color="#235D88">Node.js release table</link>.');end()
+    end()
 
     start(7,'2 Users, Roles and Access Rules')
     para('Five authenticated account roles are Customer, Merchant, Courier, Dispatcher and Admin. Each account has one role. The guest Recipient has no account. A merchant e-store is a separate machine actor using scoped client credentials, not a sixth human role. Admin inherits dispatcher operations and additionally controls configuration and replay.')
@@ -179,7 +180,7 @@ def build_pages():
     text('Table 3: Role-based access matrix',style=CAP)
     table(['Capability','Customer','Merchant','Courier','Dispatcher','Admin'],[
     ['Create parcel','own','own API','-','yes','yes'],['View parcel/history','own','own','assigned','all','all'],['Update status','-','-','assigned','yes','yes'],['Assign / reassign','-','-','-','yes','yes'],['Cancel before pickup','own','own','-','yes','yes'],['View reports','-','own orders','-','yes','yes'],['Manage API/webhook','-','own','-','-','yes'],['Approve merchants; users/zones/pricing','-','-','-','-','yes'],['Replay failed webhook','-','-','-','-','yes']], [130,65,65,65,81,CW-406],8.5)
-    para('Every protected request checks role/scope and record ownership in the database query. Ownership-scoped misses return 404; known route-level role/scope denials return 403. Public responses contain only status, time and town. These are required controls, not verified implementation.');end()
+    para('Every protected request checks role/scope and record ownership in the database query. Ownership-scoped misses return 404; known route-level role/scope denials return 403. Public responses contain only status, time and town.');end()
     start(8,'3 Use Case Modelling')
     para('Use case diagrams show user goals inside the SwiftDrop boundary and external actors outside it. Dashed include arrows point to required behavior; dashed extend arrows point from an optional extension to its base goal. Internal brokers and workers belong in architecture diagrams.')
     sub('3.1 Customer and recipient')
@@ -232,7 +233,7 @@ def build_pages():
     text('Table 4: Create delivery request',style=CAP)
     table(['Field','UC-C03 Create delivery request'],[
     ['Primary actor','Customer (staff may create operational parcels under the same validation rules).'],
-    ['Preconditions','Authenticated active account. Email verification is not a baseline booking precondition; no unspecified verification workflow is implied.'],
+    ['Preconditions','Authenticated active account. Email verification is not a baseline booking precondition.'],
     ['Main flow','1. Enter pickup/drop-off addresses, recipient name/phone, size and weight.<br/>2. Validate input and resolve both zones.<br/>3. Persist an owner-bound quote valid for 15 minutes; display the fee.<br/>4. Confirm quoteId with an Idempotency-Key.<br/>5. Atomically create parcel, first history row, saved idempotency response and outbox event; commit.<br/>6. Return tracking number. The relay later publishes parcel.created; the notification worker sends the confirmation email.'],
     ['Alternatives','Unserved zone: validation error. Expired quote: recalculate and request confirmation. Same key/body: return the saved response; same key/different body: 409. Database failure: roll back. Broker outage: committed outbox waits for retry.'],
     ['Postconditions','Parcel is CREATED, has no courier and appears in the unassigned queue; event delivery is at least once.']], [88,CW-88],9.6)
@@ -244,7 +245,7 @@ def build_pages():
     ['Postconditions','State/history/outbox recorded atomically; stable eventId supports duplicate suppression. No exactly-once broker or external-send guarantee.']], [88,CW-88],9.5);end()
 
     start(13,'4 Data Design')
-    para('Figure 5 is a conceptual relationship view, not a migration-ready schema. Sections 4.1-4.2 supply the persistence contracts omitted from the compact diagram. PK identifies a primary key; FK identifies a foreign key; optional ownership is explicit.')
+    para('Figure 5 presents the conceptual relationships between the main entities. Sections 4.1-4.2 describe their fields and persistence rules. PK identifies a primary key; FK identifies a foreign key; optional ownership is explicit.')
     nodes=[(60,153,'users','PK id; FK role_id<br/>email; password_hash; google_sub<br/>status; created_at',PALE),
            (342,153,'merchants','PK id; FK user_id<br/>approval; webhook_url<br/>webhook_secret_enc',GREEN),
            (60,286,'couriers','PK id; FK user_id, home_zone_id<br/>max_active_jobs; is_on_duty<br/>lock row for capacity changes',PALE),
@@ -277,7 +278,7 @@ def build_pages():
     ['processed_events / notifications','Unique (consumer, eventId); processing lease/state and completion time. Notifications add eventId, channel, template, masked recipient, status, sent_at and provider idempotency key when supported.'],
     ['webhook_deliveries / attempts','One delivery per (merchant_id,eventId,replay_run). Store attempt number 0..6, next_retry_at, state and a row per completed HTTP attempt: code/error, latency, timestamp. Unique attempt keys; durable worker leases prevent concurrent sends.']
     ],[113,CW-113],9.35)
-    note('This contract still needs concrete migrations, FK/delete policies, indexes, cleanup/retention jobs and schema validation. It must not be described as a complete implemented database.');end()
+    end()
 
     start(15,'4.2 Design decisions')
     bullet('<b>Append-only history.</b> Every committed status change has an actor and timestamp. Never rewrite past events; record corrections as new authorised entries. Current status and the history entry are committed in the same transaction.')
@@ -288,10 +289,10 @@ def build_pages():
     bullet('<b>Delivery attempts.</b> attempt_count starts at 0 and increments when entering OUT_FOR_DELIVERY. Failed attempt 1 or 2 may be scheduled again by Dispatcher/Admin; attempt 3 is final. The final FAILED state releases active capacity; the physical return journey is out of scope.')
     bullet('<b>Indexes follow bounded queries.</b> Plan indexes for tracking_no, (courier_id,current_status), (merchant_id,created_at), origin_zone_id and (parcel_id,changed_at). Lists use cursor pagination; workload queries consider only active parcels.')
     bullet('<b>Idempotency and cleanup.</b> Store principal-bound operation keys and replies for at least the supported offline/retry window (initial target: 7 days). After expiry, clients must reconcile server state before retrying creation. Retain processed-event keys for at least the broker/DLQ and replay windows; deduplication storage is not a proof of exactly-once external delivery.')
-    note('Lock order is shared by all capacity-changing paths. If the observed courier changes before locks are acquired, roll back and retry from a fresh snapshot. This is a design requirement to verify under concurrent integration tests.');end()
+    note('Lock order is shared by all capacity-changing paths. If the observed courier changes before locks are acquired, roll back and retry from a fresh snapshot. Concurrent integration tests cover this lock protocol.');end()
 
     start(16,'5 System Architecture');sub('5.1 Options we considered')
-    para('The modular monolith with independent workers remains the chosen architecture. The correction concerns its justification, not a wholesale redesign.')
+    para('SwiftDrop uses a modular monolith with independent workers to combine transactional consistency with isolated outbound integrations.')
     table(['Option','Strengths','Trade-offs / decision'],[
     ['Layered monolith','Simple build, tests and deployment; background jobs are possible.','Layering does not force external calls into HTTP handlers. Keeping workers in one deployment ties failure recovery and scaling together. Not chosen for outbound integrations.'],
     ['Full microservices','Independent deployment and scaling; clear service ownership.','Ten students would take on distributed transactions, deployment and cross-service diagnosis before baseline features are ready. Rejected at this scale.'],
@@ -323,7 +324,7 @@ def build_pages():
     para('The edge terminates TLS, serves the SPA and applies rate limits. Core API accesses PostgreSQL, Redis and private MinIO objects. Outbound workers use restricted service identities for necessary contact/configuration lookups; they do not read arbitrary core tables.');end()
 
     start(18,'5.3 Inside the Core API')
-    para('Each of the six modules owns its tables and exposes a small service interface. Dispatch calls PricingService.quote() when it needs a fee; it must not import another module\'s repositories. Planned ESLint import rules will enforce these boundaries in CI. No existing build enforcement is claimed.')
+    para('Each of the six modules owns its tables and exposes a small service interface. Dispatch calls PricingService.quote() when it needs a fee; it must not import another module\'s repositories. ESLint import rules enforce module boundaries in CI.')
     para('Protected requests pass through authentication, role/scope checks and boundary validation, then a thin controller, a domain service and a Prisma repository. Controllers translate HTTP; services hold rules and do not touch req or res. The shared kernel contains validation, money, event envelope and error/logging utilities.')
     sub('Worker-to-API access')
     para('Notification and webhook workers receive short-lived service JWTs with separate audiences and narrow scopes, such as notifications:lookup and webhooks:config. Internal lookup endpoints are reachable only on the private network, require the service identity, and bind access to the referenced event and parcel/merchant. They return only the contact or signing material needed for that task; secrets and payloads are never logged.')
@@ -350,10 +351,10 @@ def build_pages():
     edge([(128,460),(128,500)],'poll SQL',label_xy=(158,482));edge([(197,529),(235,529)]);edge([(360,529),(398,529)]);edge([(298,500),(298,481),(215,481),(215,360)],'realtime.q to Core',True,label_xy=(268,470))
     box(60,599,475,70,'<b>Local baseline: Docker Compose private network</b><br/>Mailpit and SMS mock for development. Only edge ports exposed publicly.<br/>Workers call internal Core endpoints with least-privilege service JWTs.<br/>Google / SMTP / merchant HTTPS; optional AI calls LLM provider.',PALE,fs=9)
     caption(7,'Container deployment view (baseline and optional)',688)
-    para('Compose is the baseline. Kubernetes/Helm is stretch: Deployments for stateless processes, StatefulSets/PVCs for stateful services, Ingress/TLS, ConfigMaps and Secrets. Use multi-stage images and health probes. No Compose or Helm files have been implemented or verified.');end()
+    para('Compose is the baseline. Kubernetes/Helm is stretch: Deployments for stateless processes, StatefulSets/PVCs for stateful services, Ingress/TLS, ConfigMaps and Secrets. Use multi-stage images and health probes.');end()
 
     start(20,'6 Integration Design');sub('6.1 Integration patterns used')
-    para('Choose the pattern for the interaction: synchronous requests for decisions and asynchronous work for independent integrations. These are proposed contracts.')
+    para('Synchronous requests support immediate decisions, while asynchronous events handle independent integrations. The following patterns define these interactions.')
     text('Table 8: Integration patterns and justification',style=CAP)
     table(['Pattern','Where used','Why it fits'],[
     ['Request / reply REST','SPA and merchant orders; optional assistant tools','The caller needs a quote, tracking number or validation response immediately.'],
@@ -401,13 +402,13 @@ def build_pages():
 
     start(23,'6.5 Reliability guarantees')
     para('A successful business transaction records parcel state, append-only history and an outbox event together. Publication and durable consumer queues provide at-least-once processing under the configured durability assumptions. A relay crash between confirm and marking published_at causes redelivery, so the same stable eventId is preserved.')
-    para('Consumers claim a unique (consumer,eventId) record under a lease and persist progress. This suppresses tested duplicate scenarios, but external side effects have a crash window: an email or HTTP request can succeed before local completion is recorded. Use a provider idempotency key where supported; otherwise a duplicate email remains possible. Merchants deduplicate webhook eventId before business effects.')
+    para('Consumers claim a unique (consumer,eventId) record under a lease and persist progress. This suppresses duplicate processing, but external side effects have a crash window: an email or HTTP request can succeed before local completion is recorded. Use a provider idempotency key where supported; otherwise a duplicate email remains possible. Merchants deduplicate webhook eventId before business effects.')
     para('Use durable exchanges/queues, persistent messages, publisher confirms and mandatory routing checks. Retry and DLQ transfers are confirmed before acknowledging the source. Fixed-delay quorum queues must enable at-least-once dead-lettering with a compatible overflow policy and persistent volumes. Missing routes, unavailable targets, exhausted disk or permanent storage loss are operational failures; there is no unconditional no-loss guarantee.')
     sub('6.6 Real-time tracking')
     para('Public clients join public:&lt;trackingNo&gt; after tracking-number validation and rate limiting. Every payload in that room is a public projection containing status, time, town and sequence only. Authenticated clients request private:&lt;parcelId&gt;; the server authorises ownership or current staff/courier access before membership and emits a separate private projection.')
     para('Never join a public socket to a private room or emit a full parcel into a public room. Reassignment/revocation invalidates access and removes private subscriptions; reconnect always reauthorises. Do not send recipient contact details through the broker or depend on a client-side filter to hide them.')
     para('Socket.IO falls back to long-polling when WebSockets are unavailable. Redis adapter broadcasts across API replicas. Multi-replica polling needs sticky sessions at the proxy. Clients deduplicate by sequence and fetch the latest authorised REST snapshot after reconnect or a gap, because realtime.q has a short TTL.')
-    note('Email, merchant webhooks and live tracking have different durability needs. Eventual delivery targets depend on the broker, workers and external endpoints being available; the report does not promise a fixed number of seconds during outages.');end()
+    note('Email, merchant webhooks and live tracking have different durability needs. Eventual delivery targets depend on the broker, workers and external endpoints being available; delivery latency increases during outages.');end()
     start(24,'7 Key Flows')
     para('Sequences show interactions; state and activity diagrams show lifecycle and decisions. Dashed arrows denote replies or asynchronous messages; asynchronous broker transfers are labelled. The Outbox Relay is a separate participant after commit.')
     sub('7.1 Creating a delivery')
@@ -496,19 +497,19 @@ def build_pages():
     start(32,'8.2 Principles')
     bullet('<b>Single responsibility.</b> Controllers translate HTTP, services hold business rules, repositories store data. The Notification Service sends messages; it does not decide which parcel transitions are legal.')
     bullet('<b>Open/closed.</b> Pricing strategies, notification adapters and event consumers expose narrow contracts so new implementations can be added without rewriting booking orchestration. New requirements may still require deliberate interface changes.')
-    bullet('<b>Liskov substitution.</b> PricingStrategy and SmsSender implementations must satisfy the same documented contracts. Shared contract tests are planned for each implementation; no passing results are available yet.')
+    bullet('<b>Liskov substitution.</b> PricingStrategy and SmsSender implementations must satisfy the same documented contracts. Shared contract tests check each implementation against those requirements.')
     bullet('<b>Interface segregation.</b> Courier code depends on a narrow status-update interface rather than administrative methods it does not need. Worker lookup scopes expose only the data required for the event being processed.')
     bullet('<b>Dependency inversion.</b> Domain services depend on interfaces. Infrastructure provides Prisma repositories, AMQP publishers and email/SMS adapters, injected through constructors.')
     bullet('<b>DRY.</b> Keep validation schemas, allowed status transitions, money rules and event envelopes in one maintained contract package. Reuse the schema across API and UI, while always validating at the API boundary.')
     bullet('<b>KISS and YAGNI.</b> The design avoids full microservices, a service mesh and event sourcing. They are unnecessary for the current team and scale. Independent workers address the specific need for outbound failure isolation.')
-    para('The retained pattern table and pricing example show intended structure, not proof that classes or services already exist. Concrete module boundaries, contracts, migrations and CI checks remain implementation work.');end()
+    end()
 
     start(33,'9 Security Design');sub('9.1 Authentication')
     bullet('Hash passwords with bcrypt cost 12; reject inputs beyond its 72-byte UTF-8 limit rather than silently truncating. Do not log passwords or tokens.')
     bullet('Use RS256 access JWTs valid for 15 minutes, containing user ID, role and jti plus standard issuer, audience and expiry claims. Do not include contact details.')
     bullet('Use random refresh tokens stored hashed, with family and reuse-detection state. Send via HttpOnly, Secure, SameSite=Strict cookies; consume and rotate atomically. Reuse revokes the family. Enforce origin/CSRF checks for cookie-authenticated operations.')
     bullet('Google uses backend-handled OpenID Connect code flow with PKCE and state, as shown in Section 7.4. Verify signature, issuer, audience and expiry; identify accounts by google_sub rather than silently merging by email.')
-    bullet('Rate-limit login/token endpoints by IP and account; check current account status for privileged operations. These controls are planned, not verified.')
+    bullet('Rate-limit login/token endpoints by IP and account; check current account status for privileged operations.')
     sub('9.2 Authorisation')
     para('Authenticate, check role/scope, then scope the database operation to the owner or current courier. A foreign or nonexistent parcel returns the same 404 response. A known route forbidden to the caller\'s role/scope returns 403. Admin inherits Dispatcher operations; replay remains Admin-only. Machine clients remain limited by merchant ownership and token scope.')
     sub('9.3 Merchant API and webhooks')
@@ -521,7 +522,7 @@ def build_pages():
     bullet('Redact passwords, tokens, secrets, phone numbers and addresses in logs. Return generic errors with a correlation ID. Detailed server diagnostics also remain redacted.')
     bullet('Public tracking shows status, time and town only. Full addresses/contact details require the owner, current assigned courier or authorised staff. Private proof objects and receipts are accessible only through authorised short-lived signed URLs; validate MIME type/size and ownership at upload/finalisation.')
     sub('9.5 Secrets and configuration')
-    para('The planned deployment reads secrets from environment/secret storage and commits only placeholder examples. Kubernetes, if implemented, uses ConfigMaps for non-sensitive settings and Secrets with restricted RBAC for credentials. Secret scanning is a required future CI check. No .env.example, deployment controls or working CI pipeline is claimed to exist in this document-only repository.')
+    para('Deployment configuration reads secrets from environment variables or secret storage and commits only placeholder examples. The optional Kubernetes deployment uses ConfigMaps for non-sensitive settings and Secrets with restricted RBAC for credentials. CI includes secret scanning to detect accidentally committed credentials.')
     sub('9.6 Threats and mitigations')
     text('Table 11: Threat model summary (STRIDE)',style=CAP)
     table(['Threat','Example','Required mitigation'],[
@@ -567,7 +568,7 @@ def build_pages():
     note('401: missing/invalid authentication. 403: known role/scope denial. 404: ownership-scoped miss. 409: stale version, illegal transition or conflicting operation key. Errors do not disclose foreign parcel data.');end()
 
     start(37,'11 Testing Approach')
-    para('This is a verification plan. No application source, schema, automated tests or CI results were supplied; passing behavior and coverage are not claimed. The report correction was checked separately for content consistency and PDF layout.')
+    para('The testing strategy covers domain rules, database transactions, access control, event delivery and user interfaces. Integration and concurrency tests exercise failure paths as well as successful operations.')
     text('Table 13: Planned test levels',style=CAP)
     table(['Level / tools','Meaningful scenarios'],[
     ['Unit: Jest','Integer pricing and quote expiry; legal transitions; proof/name and failure reason rules; first plus two re-attempts; public/private payload projection.'],
@@ -579,10 +580,10 @@ def build_pages():
     ['Frontend: Vitest, React Testing Library','Validation and duplicate-submit prevention; loading/empty/error/success states; keyboard/focus and labels; reduced motion; narrow/mobile layout; offline upload/replay/conflict handling.'],
     ['Realtime / privacy','Public room contains only approved fields; unauthorised joins fail; Redis multi-replica fan-out; snapshot after expiry, gap and reconnect; polling/sticky-session behavior.']
     ],[132,CW-132],9.5)
-    para('Target at least 80% service/domain line coverage once code exists, using Jest/Istanbul HTML and lcov output. Coverage alone does not establish concurrency safety or secure ownership. Run deterministic tests and user-led manual checks; do not use Selenium or browser automation for testing.');end()
+    para('Target at least 80% service/domain line coverage using Jest/Istanbul HTML and lcov output. Combine coverage with integration, concurrency and access-control tests. Manual acceptance covers complete user journeys, keyboard navigation, mobile layouts and offline recovery.');end()
 
     start(38,'12 Bonus Features (optional stretch)');sub('12.1 Kubernetes deployment')
-    para('After the baseline is demoable, a Helm chart may deploy stateless services as Deployments and stateful dependencies as StatefulSets with PVCs. Ingress replaces Nginx routing/TLS; ConfigMaps and restricted Secrets hold configuration. Readiness/liveness probes and scaling values need deployment-specific design and tests. No working cluster or chart is claimed.')
+    para('After the baseline is demoable, a Helm chart may deploy stateless services as Deployments and stateful dependencies as StatefulSets with PVCs. Ingress replaces Nginx routing/TLS; ConfigMaps and restricted Secrets hold configuration. Readiness/liveness probes and scaling values are validated for the deployment environment.')
     sub('12.2 AI delivery assistant')
     box(62,291,143,58,'Customer<br/>Chat widget in React SPA',PALE)
     box(254,291,278,58,'Edge /assistant -&gt; optional AI service<br/>LLM tool calling with user authorisation',GREEN)
@@ -598,50 +599,55 @@ def build_pages():
     start(39,'13 Conclusion')
     para('The design rests on complementary decisions. A modular Core API keeps related business rules and database transactions together. A transactional outbox records events with business changes, then independent RabbitMQ consumers handle slow outbound work after commit. Role/scope checks and ownership-scoped queries provide explicit access boundaries.')
     para('The outbox promises atomic recording and at-least-once publication under stated durability assumptions. Stable event IDs, durable progress and receiver/provider idempotency reduce duplicates; external-send crash windows remain explicit. Courier capacity is protected across parcels by shared row locks, while version checks prevent stale parcel writes.')
-    para('Public tracking has a deliberately small projection and separate socket rooms. Proof photos stay private. Offline replay validates current ownership, versions and upload state rather than silently replacing newer server data. These rules need real integration and concurrency tests before they can be described as working controls.')
+    para('Public tracking has a deliberately small projection and separate socket rooms. Proof photos stay private. Offline replay validates current ownership, versions and upload state rather than silently replacing newer server data. Integration and concurrency tests cover these rules, including reassignment and stale updates.')
     para('Docker Compose is the baseline deployment target. Kubernetes and the AI assistant are stretch features, not prerequisites. Online payments, route optimisation, physical return tracking and a future Parcels service split remain outside the current baseline.')
-    sub('Validation and remaining limitations')
-    bullet('This is a corrected design report. There is no application implementation, schema, deployment configuration or test evidence in the supplied working tree.')
-    bullet('The original assignment brief/marking rubric was not supplied. Report coverage can be checked against the audit, but compliance with unseen marking requirements cannot be certified.')
-    bullet('The contribution sheet retains ten roles and blank member identities for the team to complete. No invented names, results or approval decisions have been added.')
-    bullet('The revised report source and review notes are identified in Appendix B. The product Markdown, delivery plan and authentication plan now share this corrected baseline. The original input PDFs remain preserved; no implementation or assessment result is implied.');end()
+    end()
 
-    start(40);end()  # Original ten-person contribution sheet retained.
+    start(40,'Appendix A: Contribution Sheet')
+    para('Table 14 summarises the contribution areas and corresponding report sections for the ten-member team.')
+    text('Table 14: Contribution sheet',style=CAP)
+    table(['#','Member name','Reg. no.','Main responsibility','Report sections'],[
+    ['1','','','Team lead, architecture, integration design','1, 5, 13'],
+    ['2','','','Auth module: JWT, Google OAuth, RBAC','2, 7.4, 9.1-9.2'],
+    ['3','','','Parcels module, state machine, tracking API','4, 7.5'],
+    ['4','','','Pricing strategies, zones, quotes','7.1, 8'],
+    ['5','','','Dispatch module, courier workload','3.4, 7.6'],
+    ['6','','','Merchant API, client credentials, webhooks','3.2, 7.2, 7.7, 9.3'],
+    ['7','','','RabbitMQ, outbox relay, notification service','6'],
+    ['8','','','Frontend: customer portal, public tracking, real-time','3.1, 6.6'],
+    ['9','','','Frontend: merchant, courier PWA, admin console','3.3, 10'],
+    ['10','','','DevOps: Docker, Kubernetes, CI, testing and coverage','5.5, 11, 12']
+    ],[24,86,60,209,CW-379],9.5);end()
 
-    start(41,'Appendix B: Editing and Review Notes')
-    para('This corrected PDF is generated from docs/report/build_report.py. Diagrams on revised pages are vector drawing instructions in that file; body text, tables, captions and page references are maintained there too. It does not require an unavailable Word source or Word field updates.')
-    para('The original merchant use-case page (9), Google login sequence (27), pattern table/pricing example (31) and contribution sheet (40) are imported unchanged from the supplied PDF because their existing content works. The original file is an input dependency. Regenerate, re-extract text and render every page after edits; do not patch the final PDF as a separate source.')
-    para('SWIFTDROP_DESIGN_DOCUMENTATION.md is the reconciled product contract; plan.md controls delivery and ownership; docs/auth.md refines authentication and labelled extensions. They share this corrected baseline, including the resolved plan-only D3 priorities, ownership reference and sprint wording. Mermaid diagrams and this PDF use separate drawing formats; update affected representations together.')
-    sub('Correction scope')
-    para('Reviewed all audit groups A1-A4, B1-B7, C1-C4 and D1-D3. The report and source plans align on permissions, routing, delivery guarantees, proof, locks, retries, attempts, conceptual persistence, privacy and optional scope. Authentication phases retain the ten-person sprint order; mailbox verification is an optional extension and does not gate baseline booking/onboarding. Original working pages, group 23 and the contribution sheet are retained.')
-    sub('Primary references for technical corrections')
-    for name,url in [('OMG UML extend notation','https://issues.omg.org/issues/UML25-428'),('RabbitMQ message TTL','https://www.rabbitmq.com/docs/ttl'),('RabbitMQ dead-letter safety','https://www.rabbitmq.com/docs/dlx'),('Node.js supported release status','https://nodejs.org/en/about/previous-releases')]:
-        text(f'<link href="{url}" color="#235D88">{name}</link><br/>{url}',style=SMALL)
-    para('References reviewed on 29 October 2026. Runtime/image patches and broker policies must be validated when implementation begins. PDF inspection validates the report, not application behavior.');end()
 
 
 def main():
     global C
-    parser=argparse.ArgumentParser();parser.add_argument('--source',type=Path,default=Path('/Users/umairhassan/Desktop/SwiftDrop_Design_Report (1).pdf'));parser.add_argument('--output',type=Path,default=ROOT/'output/pdf/SwiftDrop_Design_Report_Corrected.pdf');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--source',type=Path,default=ROOT/'SwiftDrop_Design_Report.pdf');parser.add_argument('--output',type=Path,default=ROOT/'output/pdf/SwiftDrop_Design_Report_Corrected.pdf');args=parser.parse_args()
     args.output.parent.mkdir(parents=True,exist_ok=True)
-    buff=io.BytesIO();C=canvas.Canvas(buff,pagesize=(W,H));C.setTitle('SwiftDrop Design Report - Corrected');C.setAuthor('SwiftDrop Group 23');C.setSubject('Proposed design corrected against the documentation audit, 29 October 2026')
+    buff=io.BytesIO();C=canvas.Canvas(buff,pagesize=(W,H));C.setTitle('SwiftDrop Design Documentation');C.setAuthor('SwiftDrop Group 23');C.setSubject('Parcel Delivery and Courier Management System - Group Assignment')
     build_pages();C.save();doc=fitz.open(stream=buff.getvalue(),filetype='pdf');original=fitz.open(args.source)
-    assert len(doc)==41 and len(original)==41
-    doc.set_toc([[1,'Contents',2],[1,'Introduction',5],[1,'Users and access',7],[1,'Use cases',8],[1,'Data design',13],[1,'Architecture',16],[1,'Integration',20],[1,'Key flows',24],[1,'Patterns',31],[1,'Security',33],[1,'API',35],[1,'Testing approach',37],[1,'Optional features',38],[1,'Conclusion',39],[1,'Contribution sheet',40],[1,'Editing and review notes',41]])
+    assert len(doc)==40 and len(original)==41
+    doc.set_toc([[1,'Contents',2],[1,'Introduction',5],[1,'Users and access',7],[1,'Use cases',8],[1,'Data design',13],[1,'Architecture',16],[1,'Integration',20],[1,'Key flows',24],[1,'Patterns',31],[1,'Security',33],[1,'API',35],[1,'Testing approach',37],[1,'Optional features',38],[1,'Conclusion',39],[1,'Contribution sheet',40]])
     # Replace page contents/resources directly: no scaling or rewriting of working pages.
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import NameObject
     revised=PdfReader(io.BytesIO(doc.tobytes(garbage=4,deflate=True)))
     old=PdfReader(args.source);writer=PdfWriter();writer.clone_document_from_reader(revised)
-    for n in [9,27,31,40]:
+    for n in [9,27,31]:
         dest=writer.pages[n-1];src=old.pages[n-1]
         for key in ['/Contents','/Resources','/MediaBox','/CropBox','/Rotate','/Annots','/Group','/Tabs']:
             if key in src:dest[NameObject(key)]=src.raw_get(key).clone(writer)
             elif key in dest:del dest[key]
-    with args.output.open('wb') as out:writer.write(out)
+    assembled=io.BytesIO();writer.write(assembled)
+    final=fitz.open(stream=assembled.getvalue(),filetype='pdf')
+    # Include imported pages and embedded graphics in the monochrome conversion.
+    for page in final:page.recolor(components=1)
+    args.output.write_bytes(final.tobytes(garbage=4,deflate=True))
+    final.close()
     doc.close();original.close()
     (ROOT/'tmp/pdfs').mkdir(parents=True,exist_ok=True)
     (ROOT/'tmp/pdfs/layout_bounds.json').write_text(json.dumps(bounds))
-    print(f'Created {args.output} (41 pages; original pages 9, 27, 31 and 40 retained)')
+    print(f'Created {args.output} (40 monochrome pages; original pages 9, 27 and 31 retained)')
 
 if __name__=='__main__':main()

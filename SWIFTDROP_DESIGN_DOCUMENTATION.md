@@ -1257,7 +1257,7 @@ Fill in names and registration numbers. The suggested areas match the module bou
 | :-: | :--- | :--- | :--- | :--- |
 | **1** | | | Team lead, architecture, integration design | 1, 5, 13 |
 | **2** | | | Auth module: JWT, Google OAuth, RBAC | 2, 7.4, 9.1–9.2 |
-| **3** | | | Parcels module, state machine, tracking API | 4, 7.5 |
+| **3** | Umar Yusuf (`UmarYusuf03`) | umarali | Pricing, zones and reports (FR-P1, FR-P2, FR-I7, FR-F5, NFR-8, FR-B2, FR-F9) | 7.1, 8, 12.2 |
 | **4** | | | Pricing strategies, zones, quotes | 7.1, 8 |
 | **5** | | | Dispatch module, courier workload | 3.4, 7.6 |
 | **6** | | | Merchant API, client credentials, webhooks | 3.2, 7.2, 7.7, 9.3 |

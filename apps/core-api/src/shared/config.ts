@@ -18,10 +18,19 @@ export function loadConfig() {
         .enum(["development", "test", "production"])
         .default("development"),
       PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+      INTERNAL_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
       APP_ORIGIN: z.url(),
       API_ISSUER: z.url(),
       HUMAN_AUDIENCE: z.string().min(1),
+      SERVICE_ISSUER: z.url().default("http://127.0.0.1:3001"),
       DATABASE_URL: z.url(),
+      MINIO_ENDPOINT: z.url().default("http://localhost:9000"),
+      MINIO_ACCESS_KEY: z.string().min(1).default("swiftdrop"),
+      MINIO_SECRET_KEY: z.string().min(1).default("local-development-only"),
+      MINIO_BUCKET: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/)
+        .default("swiftdrop-receipts"),
       REDIS_URL: z.url(),
       RABBITMQ_URL: z.url().default("amqp://guest:guest@localhost:5672"),
       AUTH_PRIVATE_KEY_FILE: z.string().min(1),
@@ -63,6 +72,12 @@ export function loadConfig() {
       STAFF_ABSOLUTE_SECONDS: z.coerce.number().int().positive().default(86400),
     })
     .superRefine((value, context) => {
+      if (value.PORT === value.INTERNAL_PORT)
+        context.addIssue({
+          code: "custom",
+          path: ["INTERNAL_PORT"],
+          message: "Internal and browser-facing ports must be different.",
+        });
       const configured = [
         value.GOOGLE_CLIENT_ID,
         value.GOOGLE_CLIENT_SECRET,
@@ -106,9 +121,10 @@ export function loadConfig() {
   if (
     env.NODE_ENV === "production" &&
     (origin.protocol !== "https:" ||
-      new URL(env.API_ISSUER).protocol !== "https:")
+      new URL(env.API_ISSUER).protocol !== "https:" ||
+      new URL(env.SERVICE_ISSUER).protocol !== "https:")
   )
-    throw new Error("Production requires HTTPS.");
+    throw new Error("Production requires HTTPS for all token issuers.");
   const read = (path: string) => readFileSync(resolve(root, path), "utf8");
   const csrfSecret = read(env.CSRF_SECRET_FILE).trim();
   const rateSecret = read(env.RATE_LIMIT_SECRET_FILE).trim();
@@ -137,6 +153,15 @@ export function loadConfig() {
     env.RABBITMQ_URL === "amqp://guest:guest@localhost:5672"
   )
     throw new Error("Production requires a dedicated RabbitMQ credential.");
+  if (
+    env.NODE_ENV === "production" &&
+    (env.MINIO_ENDPOINT.startsWith("http://localhost") ||
+      env.MINIO_ACCESS_KEY === "swiftdrop" ||
+      env.MINIO_SECRET_KEY === "local-development-only")
+  )
+    throw new Error(
+      "Production requires dedicated MinIO credentials and endpoint.",
+    );
   return {
     ...env,
     root,

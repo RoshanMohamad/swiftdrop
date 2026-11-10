@@ -1,34 +1,32 @@
 import { randomBytes } from "node:crypto";
 import { Prisma, type Database, type User } from "@swiftdrop/db";
-import type { CreateStaff, Role } from "@swiftdrop/contracts";
-import { HttpError } from "../../shared/problem.js";
+import {
+  staffUserSchema,
+  type AdminUser,
+  type CreateStaff,
+  type Role,
+  type UserStatusChange,
+} from "@swiftdrop/contracts";
+
+import { HttpError, unauthorised } from "../../shared/problem.js";
 import { hashPassword } from "../auth/password.js";
 import { tokenHash } from "../auth/service.js";
 import type { AuthMailer } from "../auth/mail.js";
+import { revokeUserSessions } from "../auth/transactions.js";
+import { lockAdministration } from "./admin.js";
+
+export type AdminActor = { id: number; familyId: string; jti: string };
 
 const invitationLifetime = 24 * 60 * 60 * 1000;
 const resendCooldown = 60 * 1000;
 const pageDefault = 25;
 const pageMax = 100;
-type UserSummary = {
-  id: number;
-  email: string;
-  fullName: string;
-  phone: string;
-  role: "COURIER" | "DISPATCHER";
-  status: "INVITED" | "ACTIVE" | "SUSPENDED";
-  createdAt: string;
-  invitationExpiresAt: string | null;
-};
-const summary = (
-  user: User,
-  invitationExpiresAt: Date | null,
-): UserSummary => ({
+const summary = (user: User, invitationExpiresAt: Date | null): AdminUser => ({
   id: user.id,
   email: user.email,
-  fullName: user.fullName!,
-  phone: user.phone!,
-  role: user.roleId as UserSummary["role"],
+  fullName: user.fullName,
+  phone: user.phone,
+  role: user.roleId,
   status: user.status,
   createdAt: user.createdAt.toISOString(),
   invitationExpiresAt: invitationExpiresAt?.toISOString() ?? null,
@@ -48,9 +46,25 @@ export class UsersService {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
   }
 
-  private async assertAdmin(tx: Prisma.TransactionClient, actorId: number) {
-    const actor = await tx.user.findUnique({ where: { id: actorId } });
-    if (!actor || actor.status !== "ACTIVE" || actor.roleId !== "ADMIN")
+  private async assertAdmin(tx: Prisma.TransactionClient, context: AdminActor) {
+    const grant = await tx.accessGrant.findUnique({
+      where: { jti: context.jti },
+      include: { family: { include: { user: true } } },
+    });
+    const now = new Date();
+    if (
+      !grant ||
+      grant.familyId !== context.familyId ||
+      grant.family.userId !== context.id ||
+      grant.expiresAt <= now ||
+      grant.family.revokedAt ||
+      grant.family.idleExpiresAt <= now ||
+      grant.family.absoluteExpiresAt <= now ||
+      grant.family.user.status !== "ACTIVE" ||
+      grant.family.roleAtAuthentication !== grant.family.user.roleId
+    )
+      throw unauthorised();
+    if (grant.family.user.roleId !== "ADMIN")
       throw new HttpError(
         403,
         "FORBIDDEN",
@@ -73,8 +87,8 @@ export class UsersService {
   async list(
     actorId: number,
     filters: {
-      role?: string;
-      status?: string;
+      role?: Role;
+      status?: User["status"];
       cursor?: string;
       limit?: number;
     },
@@ -105,11 +119,8 @@ export class UsersService {
       );
     const users = await this.db.user.findMany({
       where: {
-        roleId: (filters.role as "COURIER" | "DISPATCHER" | undefined) ?? {
-          in: ["COURIER", "DISPATCHER"],
-        },
-        status: filters.status as
-          "INVITED" | "ACTIVE" | "SUSPENDED" | undefined,
+        roleId: filters.role,
+        status: filters.status,
         ...(cursorId ? { id: { gt: cursorId } } : {}),
       },
       orderBy: { id: "asc" },
@@ -142,7 +153,7 @@ export class UsersService {
     };
   }
 
-  async create(actorId: number, input: CreateStaff) {
+  async create(actor: AdminActor, input: CreateStaff) {
     if (!staffRole(input.role))
       throw new HttpError(400, "ROLE", "Choose a courier or dispatcher role.");
     const rawToken = randomBytes(32).toString("base64url");
@@ -150,8 +161,8 @@ export class UsersService {
     let user: User;
     try {
       user = await this.db.$transaction(async (tx) => {
-        await this.lockUsers(tx, [actorId]);
-        await this.assertAdmin(tx, actorId);
+        await this.lockUsers(tx, [actor.id]);
+        await this.assertAdmin(tx, actor);
         const created = await tx.user.create({
           data: {
             email: input.email,
@@ -185,13 +196,15 @@ export class UsersService {
     }
     const delivery = await this.deliver(user.email, rawToken);
     return {
-      user: summary(user, new Date(now.getTime() + invitationLifetime)),
+      user: staffUserSchema.parse(
+        summary(user, new Date(now.getTime() + invitationLifetime)),
+      ),
       delivery,
     };
   }
 
   async invitationAction(
-    actorId: number,
+    actor: AdminActor,
     targetId: number,
     action: "resend" | "revoke",
   ) {
@@ -199,8 +212,8 @@ export class UsersService {
     const rawToken =
       action === "resend" ? randomBytes(32).toString("base64url") : null;
     const result = await this.db.$transaction(async (tx) => {
-      await this.lockUsers(tx, [actorId, targetId]);
-      await this.assertAdmin(tx, actorId);
+      await this.lockUsers(tx, [actor.id, targetId]);
+      await this.assertAdmin(tx, actor);
       const user = await tx.user.findUnique({ where: { id: targetId } });
       if (!user)
         throw new HttpError(404, "NOT_FOUND", "This user does not exist.");
@@ -263,7 +276,84 @@ export class UsersService {
     const delivery = result.rawToken
       ? await this.deliver(result.user.email, result.rawToken)
       : result.delivery!;
-    return { user: summary(result.user, result.expiresAt), delivery };
+    return {
+      user: staffUserSchema.parse(summary(result.user, result.expiresAt)),
+      delivery,
+    };
+  }
+
+  async changeStatus(
+    actor: AdminActor,
+    targetId: number,
+    status: UserStatusChange["status"],
+  ) {
+    return this.db.$transaction(async (tx) => {
+      await lockAdministration(tx);
+      await this.lockUsers(tx, [actor.id, targetId]);
+      await this.assertAdmin(tx, actor);
+      const target = await tx.user.findUnique({ where: { id: targetId } });
+      if (!target)
+        throw new HttpError(404, "NOT_FOUND", "This user does not exist.");
+      if (target.status === "INVITED")
+        throw new HttpError(
+          409,
+          "INVITATION_REQUIRED",
+          "Invited users must accept their invitation to activate. Revoke an invitation to prevent acceptance.",
+        );
+      if (status === "SUSPENDED" && targetId === actor.id)
+        throw new HttpError(
+          409,
+          "SELF_SUSPENSION",
+          "You cannot suspend your own account.",
+        );
+      if (target.status === status) return summary(target, null);
+      if (
+        status === "SUSPENDED" &&
+        target.roleId === "ADMIN" &&
+        (await tx.user.count({
+          where: { roleId: "ADMIN", status: "ACTIVE" },
+        })) <= 1
+      )
+        throw new HttpError(
+          409,
+          "LAST_ADMIN",
+          "The final active administrator cannot be suspended.",
+        );
+      if (
+        status === "ACTIVE" &&
+        !target.passwordHash &&
+        !(target.roleId === "CUSTOMER" && target.googleSub)
+      )
+        throw new HttpError(
+          409,
+          "CREDENTIALS_REQUIRED",
+          "This account has no usable sign-in credentials.",
+        );
+      const now = new Date();
+      const updated = await tx.user.update({
+        where: { id: targetId },
+        data: { status },
+      });
+      await revokeUserSessions(
+        tx,
+        targetId,
+        status === "SUSPENDED" ? "suspension" : "reactivation",
+        now,
+      );
+      await tx.verificationToken.updateMany({
+        where: { userId: targetId, consumedAt: null, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await tx.staffInvitation.updateMany({
+        where: { userId: targetId, consumedAt: null, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await tx.oAuthTransaction.updateMany({
+        where: { userId: targetId, consumedAt: null },
+        data: { consumedAt: now },
+      });
+      return summary(updated, null);
+    });
   }
 
   async accept(rawToken: string, password: string) {

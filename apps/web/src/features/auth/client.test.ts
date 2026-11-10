@@ -83,3 +83,103 @@ describe("session transport", () => {
     expect(fetcher).toHaveBeenCalledTimes(count);
   });
 });
+
+it("refreshes a protected read once and validates the all-role nullable user list", async () => {
+  const client = await import("./client.js");
+  await client.refreshSession();
+  let reads = 0;
+  fetcher.mockImplementation(async (req: Request) => {
+    if (req.url.includes("/admin/users")) {
+      reads++;
+      return Response.json(
+        reads === 1
+          ? { detail: "Expired" }
+          : {
+              items: [
+                {
+                  id: 3,
+                  email: "google@example.test",
+                  fullName: null,
+                  phone: null,
+                  role: "CUSTOMER",
+                  status: "ACTIVE",
+                  createdAt: "2026-11-06T00:00:00.000Z",
+                  invitationExpiresAt: null,
+                },
+              ],
+              nextCursor: null,
+            },
+        { status: reads === 1 ? 401 : 200 },
+      );
+    }
+    return Response.json(
+      req.url.endsWith("/csrf") ? { csrfToken: "csrf" } : session,
+    );
+  });
+  expect((await client.listUsers({ role: "CUSTOMER" })).items[0]).toMatchObject(
+    { role: "CUSTOMER", fullName: null },
+  );
+  expect(reads).toBe(2);
+});
+
+it("never replays a status mutation even when refresh succeeds", async () => {
+  const client = await import("./client.js");
+  await client.refreshSession();
+  let patches = 0;
+  fetcher.mockImplementation(async (req: Request) => {
+    if (req.method === "PATCH") {
+      patches++;
+      expect(await req.json()).toEqual({ status: "SUSPENDED" });
+      expect(req.headers.get("X-CSRF-Token")).toBe("csrf");
+      return Response.json({ detail: "Expired" }, { status: 401 });
+    }
+    return Response.json(
+      req.url.endsWith("/csrf") ? { csrfToken: "csrf" } : session,
+    );
+  });
+  await expect(client.updateUserStatus(3, "SUSPENDED")).rejects.toMatchObject({
+    problem: { status: 401 },
+  });
+  expect(patches).toBe(1);
+  expect(client.isLogoutPending()).toBe(false);
+});
+
+it("announces terminal expiry in the same tab, blocks bootstrap and clears suspended sessions", async () => {
+  const client = await import("./client.js");
+  await client.refreshSession();
+  const expired = vi.fn();
+  client.sessionExpiredEvents.addEventListener("expired", expired);
+  fetcher.mockImplementation(async (req: Request) =>
+    Response.json(
+      req.url.endsWith("/csrf")
+        ? { csrfToken: "csrf" }
+        : { detail: "Sign in again" },
+      { status: req.url.endsWith("/csrf") ? 200 : 401 },
+    ),
+  );
+  await expect(client.listUsers({})).rejects.toMatchObject({
+    problem: { status: 401 },
+  });
+  expect(expired).toHaveBeenCalledTimes(1);
+  const count = fetcher.mock.calls.length;
+  await expect(client.listUsers({})).rejects.toThrow("Sign-out is pending");
+  expect(fetcher).toHaveBeenCalledTimes(count);
+});
+
+it("does not refresh or discard the session on permission and offline errors", async () => {
+  const client = await import("./client.js");
+  await client.refreshSession();
+  const expired = vi.fn();
+  client.sessionExpiredEvents.addEventListener("expired", expired);
+  fetcher.mockResolvedValue(
+    Response.json({ detail: "Forbidden" }, { status: 403 }),
+  );
+  const count = fetcher.mock.calls.length;
+  await expect(client.listUsers({})).rejects.toMatchObject({
+    problem: { status: 403 },
+  });
+  expect(fetcher).toHaveBeenCalledTimes(count + 1);
+  fetcher.mockRejectedValue(new TypeError("offline"));
+  await expect(client.listUsers({})).rejects.toThrow("offline");
+  expect(expired).not.toHaveBeenCalled();
+});
