@@ -268,7 +268,9 @@ export function AuthForm({ registering = false }: { registering?: boolean }) {
       )}
       {registering && (
         <p className="fine">
-          Business registration will be available in a later phase.
+          Registering a business?{" "}
+          <Link to="/auth/merchant-register">Apply for a merchant account</Link>
+          .
         </p>
       )}
     </section>

@@ -40,6 +40,11 @@ import {
   dailyReportSummarySchema,
   assistantChatInputSchema,
   assistantChatOutputSchema,
+  merchantRegistrationSchema,
+  merchantReviewSchema,
+  merchantSchema,
+  merchantPageSchema,
+  merchantRegistrationResultSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -139,6 +144,23 @@ for (const [method, suffix, input, output, status, bearer] of [
   });
 }
 for (const [method, path, input, output, status, bearer] of [
+  [
+    "post",
+    "/api/v1/merchant/register",
+    merchantRegistrationSchema,
+    merchantRegistrationResultSchema,
+    202,
+    false,
+  ],
+  ["get", "/api/v1/admin/merchants", null, merchantPageSchema, 200, true],
+  [
+    "patch",
+    "/api/v1/admin/merchants/{id}/review",
+    merchantReviewSchema,
+    merchantSchema,
+    200,
+    true,
+  ],
   ["post", "/api/v1/quotes", quoteRequestSchema, quoteSchema, 201, true],
   ["post", "/api/v1/parcels", bookingRequestSchema, parcelSchema, 201, true],
   ["get", "/api/v1/parcels", null, parcelPageSchema, 200, true],

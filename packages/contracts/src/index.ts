@@ -62,6 +62,41 @@ export const registrationSchema = z
   })
   .strict();
 export type Registration = z.infer<typeof registrationSchema>;
+export const merchantRegistrationSchema = registrationSchema
+  .extend({
+    businessName: z
+      .string()
+      .trim()
+      .min(2)
+      .max(160)
+      .regex(/^[^\p{Cc}]+$/u),
+  })
+  .strict();
+export type MerchantRegistration = z.infer<typeof merchantRegistrationSchema>;
+export const merchantStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+export const merchantReviewSchema = z
+  .object({
+    status: z.enum(["APPROVED", "REJECTED"]),
+  })
+  .strict();
+export type MerchantReview = z.infer<typeof merchantReviewSchema>;
+export const merchantSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.number().int().positive(),
+  email: emailSchema,
+  fullName: z.string(),
+  phone: z.string(),
+  businessName: z.string(),
+  status: merchantStatusSchema,
+  createdAt: z.string().datetime(),
+  reviewedAt: z.string().datetime().nullable(),
+});
+export const merchantPageSchema = z.object({
+  items: z.array(merchantSchema).max(100),
+});
+export const merchantRegistrationResultSchema = z.object({
+  message: z.string(),
+});
 export const loginSchema = z
   .object({
     email: emailSchema,

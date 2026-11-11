@@ -31,6 +31,12 @@ import {
   acceptInvitationSchema,
   type CreateStaff,
   type DailyReportSummary,
+  merchantRegistrationSchema,
+  merchantReviewSchema,
+  merchantPageSchema,
+  merchantSchema,
+  merchantRegistrationResultSchema,
+  type MerchantRegistration,
 } from "@swiftdrop/contracts";
 const api = createClient<paths>({
   baseUrl: window.location.origin,
@@ -306,7 +312,10 @@ export async function addPrice(input: PriceInput) {
     );
   });
 }
-export async function getDailyReport(from?: string, to?: string): Promise<DailyReportSummary> {
+export async function getDailyReport(
+  from?: string,
+  to?: string,
+): Promise<DailyReportSummary> {
   return authenticated(async (session) => {
     return checked(
       await api.GET("/api/v1/admin/reports/daily", {
@@ -409,6 +418,52 @@ export async function updateUserStatus(
         await api.PATCH("/api/v1/admin/users/{id}/status", {
           params: { path: { id: String(id) } },
           body: userStatusChangeSchema.parse({ status }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function registerMerchant(input: MerchantRegistration) {
+  return authLock(async () => {
+    const context = await csrf();
+    return merchantRegistrationResultSchema.parse(
+      await checked(
+        await api.POST("/api/v1/merchant/register", {
+          body: merchantRegistrationSchema.parse(input),
+          headers: { "X-CSRF-Token": context.csrfToken },
+        }),
+      ),
+    );
+  });
+}
+export async function listMerchants() {
+  return authenticated(
+    async (session) =>
+      merchantPageSchema.parse(
+        await checked(
+          await api.GET("/api/v1/admin/merchants", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function reviewMerchant(
+  id: string,
+  status: "APPROVED" | "REJECTED",
+) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return merchantSchema.parse(
+      await checked(
+        await api.PATCH("/api/v1/admin/merchants/{id}/review", {
+          params: { path: { id } },
+          body: merchantReviewSchema.parse({ status }),
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
             "X-CSRF-Token": context.csrfToken,
