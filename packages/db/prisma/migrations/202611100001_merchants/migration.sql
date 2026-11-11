@@ -1,7 +1,7 @@
 CREATE TYPE "MerchantStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 CREATE TABLE "merchants" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "id" UUID NOT NULL,
   "user_id" INTEGER NOT NULL,
   "business_name" VARCHAR(160) NOT NULL,
   "status" "MerchantStatus" NOT NULL DEFAULT 'PENDING',
