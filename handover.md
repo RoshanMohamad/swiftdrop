@@ -706,6 +706,13 @@ From the repository root, with `.env` configured and a database available, run `
 4. Register a second application and reject it. Confirm the browser prompt; expect rejected status. Verify a non-Admin receives 403 and an unauthenticated request receives 401 on Admin endpoints.
 5. Send concurrent decisions for one pending application. Expect exactly one to succeed and the other to receive a conflict.
 
+### M02 support: Windows integration test launcher (11 November 2026)
+
+- Starting Docker Desktop resolved the initial Testcontainers runtime error. The next run exposed `spawnSync pnpm ENOENT`: Node's `execFileSync` could not launch the Windows `pnpm.cmd` shim directly from the integration setup.
+- Added a Windows `cmd.exe`/`pnpm.cmd` launcher helper for the two migration commands in `apps/core-api/test/auth.integration.test.ts`; non-Windows continues to invoke `pnpm` directly. This is a narrow cross-slice test-harness fix from the M02 task, not a transfer of M01 auth ownership; M01 review remains appropriate before merge.
+- `pnpm test:integration` then passed: 9 suites, 131 tests, and 89.42% line coverage. Docker Desktop was running. Node v22.18.0 still emits the repository's unsupported-engine warning (requires Node >=24.11 and <25); the suite passed under this local version. A pg client-query deprecation warning was also emitted.
+- This suite does not yet cover the new M02 registration/approval behavior. Merchant migration/model/client behavior remains outside this test suite; browser/manual acceptance and applying the migration to the development database remain pending.
+
 <a id="m03"></a>
 ## M03 — UmarYusuf03 (`umarali`)
 
