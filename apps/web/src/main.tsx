@@ -39,7 +39,11 @@ import {
   PublicTracking,
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
-import { AdminMerchants, MerchantSignup } from "./features/merchant/pages.js";
+import {
+  AdminMerchants,
+  MerchantClients,
+  MerchantSignup,
+} from "./features/merchant/pages.js";
 import "./styles.css";
 function Guard({
   role,
@@ -126,6 +130,10 @@ function Account() {
         <div className="notice account-links">
           <Link to="/parcels/new">Book a delivery</Link>
           <Link to="/parcels">Booking history</Link>
+        </div>
+      ) : state.user?.role === "MERCHANT" ? (
+        <div className="notice account-links">
+          <Link to="/merchant/clients">Manage API clients</Link>
         </div>
       ) : (
         <div className="notice">
@@ -317,6 +325,14 @@ function App() {
                 element={
                   <Guard role="ADMIN">
                     <AdminMerchants />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/merchant/clients"
+                element={
+                  <Guard role="MERCHANT">
+                    <MerchantClients />
                   </Guard>
                 }
               />

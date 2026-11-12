@@ -37,6 +37,10 @@ import {
   merchantSchema,
   merchantRegistrationResultSchema,
   type MerchantRegistration,
+  createMerchantApiClientSchema,
+  merchantApiClientPageSchema,
+  merchantApiClientSecretSchema,
+  type CreateMerchantApiClient,
 } from "@swiftdrop/contracts";
 const api = createClient<paths>({
   baseUrl: window.location.origin,
@@ -470,6 +474,65 @@ export async function reviewMerchant(
           },
         }),
       ),
+    );
+  });
+}
+export async function listMerchantApiClients() {
+  return authenticated(
+    async (session) =>
+      merchantApiClientPageSchema.parse(
+        await checked(
+          await api.GET("/api/v1/merchant/clients", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function createMerchantApiClient(input: CreateMerchantApiClient) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return merchantApiClientSecretSchema.parse(
+      await checked(
+        await api.POST("/api/v1/merchant/clients", {
+          body: createMerchantApiClientSchema.parse(input),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function rotateMerchantApiClient(id: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return merchantApiClientSecretSchema.parse(
+      await checked(
+        await api.POST("/api/v1/merchant/clients/{id}/rotate", {
+          params: { path: { id } },
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function revokeMerchantApiClient(id: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    await checked(
+      await api.POST("/api/v1/merchant/clients/{id}/revoke", {
+        params: { path: { id } },
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "X-CSRF-Token": context.csrfToken,
+        },
+      }),
     );
   });
 }

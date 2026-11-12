@@ -2,13 +2,289 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { merchantRegistrationSchema } from "@swiftdrop/contracts";
 import {
+  createMerchantApiClientSchema,
+  type MerchantApiClientScope,
+} from "@swiftdrop/contracts";
+import {
+  createMerchantApiClient,
   errorMessage,
+  listMerchantApiClients,
   listMerchants,
   registerMerchant,
   reviewMerchant,
+  revokeMerchantApiClient,
+  rotateMerchantApiClient,
 } from "../auth/client.js";
 
 type Merchant = Awaited<ReturnType<typeof listMerchants>>["items"][number];
+type MerchantApiClient = Awaited<
+  ReturnType<typeof listMerchantApiClients>
+>["items"][number];
+
+export function MerchantClients() {
+  const [clients, setClients] = useState<MerchantApiClient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [secretResult, setSecretResult] = useState<Awaited<
+    ReturnType<typeof createMerchantApiClient>
+  > | null>(null);
+  const [refresh, setRefresh] = useState(0);
+  const actionLock = useRef(false);
+
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setError("");
+    void listMerchantApiClients()
+      .then(({ items }) => {
+        if (live) setClients(items);
+      })
+      .catch((cause) => {
+        if (live) setError(errorMessage(cause));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [refresh]);
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (actionLock.current) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const values = {
+      name: data.get("name"),
+      scopes: data.getAll("scopes"),
+    };
+    const parsed = createMerchantApiClientSchema.safeParse(values);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Check the client details.");
+      return;
+    }
+    actionLock.current = true;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await createMerchantApiClient(parsed.data);
+      setSecretResult(result);
+      form.reset();
+      setRefresh((value) => value + 1);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function rotate(client: MerchantApiClient) {
+    if (actionLock.current || client.revokedAt) return;
+    if (
+      !window.confirm(
+        `Rotate credentials for “${client.name}”? The old secret stops working immediately.`,
+      )
+    )
+      return;
+    actionLock.current = true;
+    setBusy(true);
+    setError("");
+    setSecretResult(null);
+    try {
+      setSecretResult(await rotateMerchantApiClient(client.id));
+      setRefresh((value) => value + 1);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function revoke(client: MerchantApiClient) {
+    if (actionLock.current || client.revokedAt) return;
+    if (!window.confirm(`Revoke “${client.name}”? This cannot be undone.`))
+      return;
+    actionLock.current = true;
+    setBusy(true);
+    setError("");
+    setSecretResult(null);
+    try {
+      await revokeMerchantApiClient(client.id);
+      setMessage(`${client.name} was revoked.`);
+      setRefresh((value) => value + 1);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function copySecret() {
+    if (!secretResult) return;
+    try {
+      await navigator.clipboard.writeText(secretResult.clientSecret);
+      setMessage(
+        "Secret copied. Store it in your password manager; it cannot be viewed again.",
+      );
+    } catch {
+      setMessage(
+        "Copy was unavailable. Select and copy the secret now; it cannot be viewed again.",
+      );
+    }
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-heading">
+        <div>
+          <span className="eyebrow">Merchant platform</span>
+          <h1>API clients</h1>
+          <p className="muted">
+            Create credentials for your integration. Secrets are shown once and
+            stored as hashes.
+          </p>
+        </div>
+      </div>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="notice success" role="status">
+          {message}
+        </p>
+      )}
+      {secretResult && (
+        <div className="notice secret-panel" role="alert">
+          <h2>Copy this secret now</h2>
+          <p>
+            This secret is shown once. Closing or refreshing this page loses it.
+          </p>
+          <label>
+            Client ID
+            <input
+              readOnly
+              autoComplete="off"
+              value={secretResult.client.clientId}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </label>
+          <label>
+            Client secret
+            <input
+              readOnly
+              autoComplete="off"
+              value={secretResult.clientSecret}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </label>
+          <button className="secondary" onClick={() => void copySecret()}>
+            Copy secret
+          </button>
+          <button className="secondary" onClick={() => setSecretResult(null)}>
+            I’ve saved it
+          </button>
+        </div>
+      )}
+      <form
+        className="merchant-client-form"
+        onSubmit={(event) => void create(event)}
+      >
+        <h2>Create API client</h2>
+        <label htmlFor="merchant-client-name">Client name</label>
+        <input
+          id="merchant-client-name"
+          name="name"
+          required
+          minLength={2}
+          maxLength={80}
+          disabled={busy}
+        />
+        <fieldset>
+          <legend>Scopes</legend>
+          {(
+            [
+              "orders:read",
+              "orders:write",
+            ] as const satisfies readonly MerchantApiClientScope[]
+          ).map((scope) => (
+            <label key={scope}>
+              <input
+                type="checkbox"
+                name="scopes"
+                value={scope}
+                disabled={busy}
+              />{" "}
+              {scope}
+            </label>
+          ))}
+        </fieldset>
+        <button className="primary" disabled={busy}>
+          {busy ? "Working…" : "Create client"}
+        </button>
+      </form>
+      <h2>Existing clients</h2>
+      {loading ? (
+        <p role="status">Loading API clients…</p>
+      ) : clients.length === 0 ? (
+        <p className="notice">
+          No API clients yet. Create one after your merchant account is
+          approved.
+        </p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Client ID</th>
+                <th scope="col">Scopes</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map((client) => (
+                <tr key={client.id}>
+                  <td>{client.name}</td>
+                  <td>{client.clientId}</td>
+                  <td>{client.scopes.join(", ")}</td>
+                  <td>{client.revokedAt ? "Revoked" : "Active"}</td>
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        className="secondary"
+                        disabled={busy || Boolean(client.revokedAt)}
+                        onClick={() => void rotate(client)}
+                      >
+                        Rotate
+                      </button>
+                      <button
+                        className="secondary"
+                        disabled={busy || Boolean(client.revokedAt)}
+                        onClick={() => void revoke(client)}
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function MerchantSignup() {
   const form = useRef<HTMLFormElement>(null);
