@@ -17,8 +17,7 @@ import {
 import type { TokenService } from "./modules/auth/jwt.js";
 import type { AuthMailer } from "./modules/auth/mail.js";
 import type { GoogleOidc } from "./modules/auth/google.js";
-import { ParcelService } from "./modules/parcels/service.js";
-import { createParcelRouter } from "./modules/parcels/routes.js";
+import { ParcelService, createParcelRouter } from "./modules/parcels/index.js";
 import {
   PricingService,
   createPricingRouter,
@@ -96,6 +95,8 @@ export function createApp(deps: {
   );
   const users = new UsersService(db, config.APP_ORIGIN, deps.mailer);
   const limiter = new RateLimiter(redis, config.rateSecret);
+  const pricing = new PricingService(db);
+  const parcels = new ParcelService(db, pricing);
   const merchants = new MerchantsService(db, tokens);
   app.use(createMerchantOAuthRouter(merchants, limiter, logger));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
@@ -135,13 +136,11 @@ export function createApp(deps: {
   app.use("/api/v1/admin/users", createUsersRouter(users, service, config));
   app.use(
     "/api/v1",
-    createMerchantsRouter(merchants, service, limiter, config),
+    createMerchantsRouter(merchants, parcels, service, limiter, config),
   );
-  const pricing = new PricingService(db);
   app.use("/api/v1", createPricingRouter(pricing, service, limiter, config));
   const reports = new ReportsService(db);
   app.use("/api/v1", createReportsRouter(reports, service, limiter, config));
-  const parcels = new ParcelService(db, pricing);
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
   const lifecycle = new LifecycleService(db);
   app.use(

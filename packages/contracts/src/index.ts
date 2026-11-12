@@ -104,6 +104,36 @@ export const merchantApiClientScopeSchema = z.enum([
 export type MerchantApiClientScope = z.infer<
   typeof merchantApiClientScopeSchema
 >;
+export const merchantOrderRequestSchema = z
+  .object({
+    originDistrict: z.string().trim().min(1).max(80),
+    destinationDistrict: z.string().trim().min(1).max(80),
+    weightGrams: z.number().int().min(1).max(30000),
+    lengthMm: z.number().int().min(1).max(1500),
+    widthMm: z.number().int().min(1).max(1500),
+    heightMm: z.number().int().min(1).max(1500),
+    recipientName: z
+      .string()
+      .trim()
+      .min(2)
+      .max(120)
+      .regex(/^[^\p{Cc}]+$/u),
+    recipientPhone: z
+      .string()
+      .trim()
+      .regex(/^(?:0|\+94)[1-9]\d{8}$/)
+      .transform((value) =>
+        value.startsWith("0") ? `+94${value.slice(1)}` : value,
+      ),
+    recipientAddress: z
+      .string()
+      .trim()
+      .min(5)
+      .max(300)
+      .regex(/^[^\p{Cc}]+$/u),
+  })
+  .strict();
+export type MerchantOrderRequest = z.infer<typeof merchantOrderRequestSchema>;
 export const createMerchantApiClientSchema = z
   .object({
     name: z

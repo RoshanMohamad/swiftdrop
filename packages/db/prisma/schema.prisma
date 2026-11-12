@@ -73,6 +73,7 @@ model Merchant {
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   apiClients   MerchantApiClient[]
+  parcels      Parcel[]             @relation("MerchantOrders")
   @@index([status, createdAt, id])
   @@map("merchants")
 }
@@ -168,6 +169,8 @@ model Parcel {
   trackingNumber String @unique @map("tracking_number") @db.VarChar(16)
   userId Int @map("user_id")
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  merchantId String? @map("merchant_id") @db.Uuid
+  merchant Merchant? @relation("MerchantOrders", fields: [merchantId], references: [id], onDelete: Restrict)
   quoteId String @unique @map("quote_id") @db.Uuid
   quote Quote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   originZoneId Int @map("origin_zone_id")
@@ -185,6 +188,7 @@ model Parcel {
   history ParcelHistory[]
   receipt Receipt?
   @@index([userId, createdAt, id])
+  @@index([merchantId, createdAt, id])
   @@map("parcels")
 }
 

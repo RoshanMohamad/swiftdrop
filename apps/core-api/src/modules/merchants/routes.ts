@@ -3,6 +3,7 @@ import {
   createMerchantApiClientSchema,
   merchantRegistrationSchema,
   merchantReviewSchema,
+  merchantOrderRequestSchema,
 } from "@swiftdrop/contracts";
 import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
@@ -11,9 +12,12 @@ import type { RateLimiter } from "../../shared/rate-limit.js";
 import { authenticate, requireRole } from "../auth/index.js";
 import type { AuthService } from "../auth/service.js";
 import { MerchantsService } from "./service.js";
+import { authenticateMerchantClient, requireMerchantScope } from "./machine-auth.js";
+import type { ParcelService } from "../parcels/index.js";
 
 export function createMerchantsRouter(
   merchants: MerchantsService,
+  parcels: ParcelService,
   auth: AuthService,
   limiter: RateLimiter,
   config: Config,
@@ -33,6 +37,27 @@ export function createMerchantsRouter(
         .json(
           await merchants.register(merchantRegistrationSchema.parse(req.body)),
         );
+    },
+  );
+  router.post(
+    "/merchant/orders",
+    authenticateMerchantClient(merchants),
+    requireMerchantScope("orders:write"),
+    async (req, res) => {
+      const principal = res.locals.principal;
+      if (principal?.kind !== "merchant-client")
+        throw new HttpError(
+          403,
+          "FORBIDDEN",
+          "This action requires a merchant API client.",
+        );
+      res.status(201).json(
+        await parcels.createMerchantOrder(
+          principal.merchantId,
+          req.get("Idempotency-Key") ?? "",
+          merchantOrderRequestSchema.parse(req.body),
+        ),
+      );
     },
   );
   router.get(

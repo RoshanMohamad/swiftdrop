@@ -51,6 +51,7 @@ import {
   merchantOAuthTokenRequestSchema,
   merchantOAuthTokenResponseSchema,
   merchantOAuthErrorSchema,
+  merchantOrderRequestSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -67,6 +68,11 @@ registry.registerComponent("securitySchemes", "serviceBearerAuth", {
 registry.registerComponent("securitySchemes", "merchantClientBasicAuth", {
   type: "http",
   scheme: "basic",
+});
+registry.registerComponent("securitySchemes", "merchantClientBearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
 });
 registry.registerComponent("securitySchemes", "csrfHeader", {
   type: "apiKey",
@@ -109,6 +115,48 @@ registry.registerPath({
     503: {
       description: "Token service temporarily unavailable",
       content: json(merchantOAuthErrorSchema),
+    },
+  },
+});
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/merchant/orders",
+  summary: "Create an order for the authenticated merchant",
+  security: [{ merchantClientBearerAuth: [] }],
+  request: {
+    headers: z.object({
+      "Idempotency-Key": z.string().regex(/^[A-Za-z0-9._~-]{16,128}$/),
+    }),
+    body: {
+      required: true,
+      content: json(merchantOrderRequestSchema),
+    },
+  },
+  responses: {
+    201: { description: "Order created", content: json(parcelSchema) },
+    400: {
+      description: "Invalid order or idempotency key",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    401: {
+      description: "Invalid or expired merchant token",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    403: {
+      description: "Merchant approval or orders:write scope required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    409: {
+      description: "Idempotency key reused with different order details",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    422: {
+      description: "Route is unserved or pricing is unavailable",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    503: {
+      description: "Order service unavailable",
+      content: { "application/problem+json": { schema: problemSchema } },
     },
   },
 });
