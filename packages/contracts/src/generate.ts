@@ -45,6 +45,9 @@ import {
   merchantSchema,
   merchantPageSchema,
   merchantRegistrationResultSchema,
+  createMerchantApiClientSchema,
+  merchantApiClientPageSchema,
+  merchantApiClientSecretSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -161,6 +164,31 @@ for (const [method, path, input, output, status, bearer] of [
     200,
     true,
   ],
+  [
+    "get",
+    "/api/v1/merchant/clients",
+    null,
+    merchantApiClientPageSchema,
+    200,
+    true,
+  ],
+  [
+    "post",
+    "/api/v1/merchant/clients",
+    createMerchantApiClientSchema,
+    merchantApiClientSecretSchema,
+    201,
+    true,
+  ],
+  [
+    "post",
+    "/api/v1/merchant/clients/{id}/rotate",
+    null,
+    merchantApiClientSecretSchema,
+    200,
+    true,
+  ],
+  ["post", "/api/v1/merchant/clients/{id}/revoke", null, null, 204, true],
   ["post", "/api/v1/quotes", quoteRequestSchema, quoteSchema, 201, true],
   ["post", "/api/v1/parcels", bookingRequestSchema, parcelSchema, 201, true],
   ["get", "/api/v1/parcels", null, parcelPageSchema, 200, true],

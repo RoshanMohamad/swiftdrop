@@ -97,6 +97,47 @@ export const merchantPageSchema = z.object({
 export const merchantRegistrationResultSchema = z.object({
   message: z.string(),
 });
+export const merchantApiClientScopeSchema = z.enum([
+  "orders:read",
+  "orders:write",
+]);
+export type MerchantApiClientScope = z.infer<
+  typeof merchantApiClientScopeSchema
+>;
+export const createMerchantApiClientSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2)
+      .max(80)
+      .regex(/^[^\p{Cc}]+$/u),
+    scopes: z
+      .array(merchantApiClientScopeSchema)
+      .min(1)
+      .max(2)
+      .refine((scopes) => new Set(scopes).size === scopes.length),
+  })
+  .strict();
+export type CreateMerchantApiClient = z.infer<
+  typeof createMerchantApiClientSchema
+>;
+export const merchantApiClientSchema = z.object({
+  id: z.string().uuid(),
+  clientId: z.string().regex(/^sd_cli_[A-Za-z0-9_-]{24}$/),
+  name: z.string(),
+  scopes: z.array(merchantApiClientScopeSchema),
+  createdAt: z.string().datetime(),
+  rotatedAt: z.string().datetime().nullable(),
+  revokedAt: z.string().datetime().nullable(),
+});
+export const merchantApiClientPageSchema = z.object({
+  items: z.array(merchantApiClientSchema).max(100),
+});
+export const merchantApiClientSecretSchema = z.object({
+  client: merchantApiClientSchema,
+  clientSecret: z.string().regex(/^sd_sec_[A-Za-z0-9_-]{43}$/),
+});
 export const loginSchema = z
   .object({
     email: emailSchema,
