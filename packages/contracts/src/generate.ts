@@ -48,6 +48,9 @@ import {
   createMerchantApiClientSchema,
   merchantApiClientPageSchema,
   merchantApiClientSecretSchema,
+  merchantOAuthTokenRequestSchema,
+  merchantOAuthTokenResponseSchema,
+  merchantOAuthErrorSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -61,12 +64,54 @@ registry.registerComponent("securitySchemes", "serviceBearerAuth", {
   scheme: "bearer",
   bearerFormat: "JWT",
 });
+registry.registerComponent("securitySchemes", "merchantClientBasicAuth", {
+  type: "http",
+  scheme: "basic",
+});
 registry.registerComponent("securitySchemes", "csrfHeader", {
   type: "apiKey",
   in: "header",
   name: "X-CSRF-Token",
 });
 const json = (schema: z.ZodType) => ({ "application/json": { schema } });
+registry.registerPath({
+  method: "post",
+  path: "/oauth/token",
+  summary: "Issue a merchant client-credentials token",
+  security: [{ merchantClientBasicAuth: [] }],
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/x-www-form-urlencoded": {
+          schema: merchantOAuthTokenRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Bearer access token",
+      content: json(merchantOAuthTokenResponseSchema),
+    },
+    400: {
+      description: "Invalid OAuth request",
+      content: json(merchantOAuthErrorSchema),
+    },
+    401: {
+      description: "Invalid client authentication",
+      content: json(merchantOAuthErrorSchema),
+    },
+    429: {
+      description: "Token request limit exceeded",
+      content: json(merchantOAuthErrorSchema),
+    },
+    503: {
+      description: "Token service temporarily unavailable",
+      content: json(merchantOAuthErrorSchema),
+    },
+  },
+});
 for (const [method, suffix, input, output, status, bearer] of [
   ["get", "csrf", null, z.object({ csrfToken: z.string() }), 200, false],
   [

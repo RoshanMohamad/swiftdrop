@@ -54,6 +54,8 @@ export class UsersService {
     const now = new Date();
     if (
       !grant ||
+      !grant.familyId ||
+      !grant.family ||
       grant.familyId !== context.familyId ||
       grant.family.userId !== context.id ||
       grant.expiresAt <= now ||

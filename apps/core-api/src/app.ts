@@ -42,6 +42,7 @@ import {
   MerchantsService,
   createMerchantsRouter,
 } from "./modules/merchants/index.js";
+import { createMerchantOAuthRouter } from "./modules/merchants/oauth-routes.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -85,6 +86,18 @@ export function createApp(deps: {
     res.setHeader("Cache-Control", "no-store");
     next();
   });
+  const service = new AuthService(
+    db,
+    tokens,
+    config,
+    deps.mailer,
+    deps.google,
+    logger,
+  );
+  const users = new UsersService(db, config.APP_ORIGIN, deps.mailer);
+  const limiter = new RateLimiter(redis, config.rateSecret);
+  const merchants = new MerchantsService(db, tokens);
+  app.use(createMerchantOAuthRouter(merchants, limiter, logger));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/ready", async (_req, res) => {
@@ -115,22 +128,11 @@ export function createApp(deps: {
         ),
     );
   }
-  const service = new AuthService(
-    db,
-    tokens,
-    config,
-    deps.mailer,
-    deps.google,
-    logger,
-  );
-  const users = new UsersService(db, config.APP_ORIGIN, deps.mailer);
-  const limiter = new RateLimiter(redis, config.rateSecret);
   app.get("/api/v1/auth/me", authenticate(service), (_req, res) =>
     res.json(res.locals.user),
   );
   app.use("/api/v1/auth", createAuthRouter(service, limiter, config, users));
   app.use("/api/v1/admin/users", createUsersRouter(users, service, config));
-  const merchants = new MerchantsService(db);
   app.use(
     "/api/v1",
     createMerchantsRouter(merchants, service, limiter, config),

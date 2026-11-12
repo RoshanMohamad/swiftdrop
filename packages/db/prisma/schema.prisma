@@ -88,6 +88,7 @@ model MerchantApiClient {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   rotatedAt    DateTime? @map("rotated_at") @db.Timestamptz(3)
   revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
+  accessGrants AccessGrant[]
   @@index([merchantId, createdAt, id])
   @@map("merchant_api_clients")
 }
@@ -329,10 +330,13 @@ model RefreshToken {
 }
 model AccessGrant {
   jti       String @id @db.Uuid
-  familyId  String @map("family_id") @db.Uuid
-  family    AuthSession @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  familyId  String? @map("family_id") @db.Uuid
+  family    AuthSession? @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  clientId  String? @map("client_id") @db.Uuid
+  client    MerchantApiClient? @relation(fields: [clientId], references: [id], onDelete: Cascade)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   @@index([familyId])
+  @@index([clientId])
   @@index([expiresAt])
   @@map("access_grants")
 }

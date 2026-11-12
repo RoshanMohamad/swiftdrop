@@ -1,19 +1,23 @@
 import { Prisma, type Database } from "@swiftdrop/db";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   createMerchantApiClientSchema,
   merchantApiClientPageSchema,
   merchantApiClientSchema,
   merchantApiClientSecretSchema,
+  merchantOAuthTokenResponseSchema,
   merchantPageSchema,
   merchantRegistrationResultSchema,
   merchantSchema,
   type MerchantRegistration,
   type MerchantReview,
   type CreateMerchantApiClient,
+  type MerchantApiClientScope,
 } from "@swiftdrop/contracts";
+import type { TokenService } from "../auth/jwt.js";
 import { hashPassword } from "../auth/password.js";
 import { HttpError } from "../../shared/problem.js";
+import { OAuthProtocolError } from "./oauth-error.js";
 
 const merchantSummary = (merchant: {
   id: string;
@@ -62,7 +66,10 @@ const clientSummary = (client: {
   });
 
 export class MerchantsService {
-  constructor(private db: Database) {}
+  constructor(
+    private db: Database,
+    private tokens: TokenService,
+  ) {}
 
   async register(input: MerchantRegistration) {
     const passwordHash = await hashPassword(input.password);
@@ -240,6 +247,7 @@ export class MerchantsService {
           rotatedAt: new Date(),
         },
       });
+      await tx.accessGrant.deleteMany({ where: { clientId: id } });
       return merchantApiClientSecretSchema.parse({
         client: clientSummary(updated),
         clientSecret: credential.clientSecret,
@@ -249,21 +257,131 @@ export class MerchantsService {
 
   async revokeApiClient(userId: number, id: string) {
     const merchant = await this.approvedMerchant(userId);
-    const changed = await this.db.merchantApiClient.updateMany({
-      where: { id, merchantId: merchant.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    if (changed.count !== 1) {
-      const exists = await this.db.merchantApiClient.findFirst({
-        where: { id, merchantId: merchant.id },
-        select: { id: true },
+    await this.db.$transaction(async (tx) => {
+      const changed = await tx.merchantApiClient.updateMany({
+        where: { id, merchantId: merchant.id, revokedAt: null },
+        data: { revokedAt: new Date() },
       });
-      if (!exists)
-        throw new HttpError(
-          404,
-          "CLIENT_NOT_FOUND",
-          "API client was not found.",
+      if (changed.count === 1)
+        await tx.accessGrant.deleteMany({ where: { clientId: id } });
+      else {
+        const exists = await tx.merchantApiClient.findFirst({
+          where: { id, merchantId: merchant.id },
+          select: { id: true },
+        });
+        if (!exists)
+          throw new HttpError(
+            404,
+            "CLIENT_NOT_FOUND",
+            "API client was not found.",
+          );
+      }
+    });
+  }
+
+  async issueOAuthToken(
+    clientId: string,
+    secret: string,
+    requestedScopes?: MerchantApiClientScope[],
+  ) {
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM merchant_api_clients WHERE client_id = ${clientId} FOR UPDATE`;
+      const client = await tx.merchantApiClient.findUnique({
+        where: { clientId },
+        include: { merchant: { include: { user: true } } },
+      });
+      const suppliedHash = createHash("sha256").update(secret).digest();
+      const storedHash = client
+        ? Buffer.from(client.secretHash, "hex")
+        : Buffer.alloc(suppliedHash.length);
+      const secretMatches =
+        storedHash.length === suppliedHash.length &&
+        timingSafeEqual(suppliedHash, storedHash);
+      if (
+        !client ||
+        !secretMatches ||
+        client.revokedAt ||
+        client.merchant.status !== "APPROVED" ||
+        client.merchant.user.status !== "ACTIVE"
+      )
+        throw new OAuthProtocolError(
+          "invalid_client",
+          401,
+          "Client authentication failed.",
         );
-    }
+
+      const allowed = client.scopes as MerchantApiClientScope[];
+      const granted = requestedScopes ?? allowed;
+      if (
+        granted.length === 0 ||
+        new Set(granted).size !== granted.length ||
+        granted.some((scope) => !allowed.includes(scope))
+      )
+        throw new OAuthProtocolError(
+          "invalid_scope",
+          400,
+          "The requested scope is not allowed for this client.",
+        );
+      const scopes = [...granted].sort();
+      const token = await this.tokens.issueMerchantClient(clientId, scopes);
+      await tx.accessGrant.create({
+        data: {
+          jti: token.jti,
+          clientId: client.id,
+          expiresAt: token.expiresAt,
+        },
+      });
+      return merchantOAuthTokenResponseSchema.parse({
+        access_token: token.accessToken,
+        token_type: "Bearer",
+        expires_in: 900,
+        scope: scopes.join(" "),
+      });
+    });
+  }
+
+  async hasOAuthClient(clientId: string) {
+    return Boolean(
+      await this.db.merchantApiClient.findUnique({
+        where: { clientId },
+        select: { id: true },
+      }),
+    );
+  }
+
+  async authenticateOAuthToken(token: string) {
+    const claims = await this.tokens.verifyMerchantClient(token);
+    const grant = await this.db.accessGrant.findUnique({
+      where: { jti: claims.jti },
+      include: {
+        client: { include: { merchant: { include: { user: true } } } },
+      },
+    });
+    const now = new Date();
+    const client = grant?.client;
+    if (
+      !grant ||
+      grant.expiresAt <= now ||
+      grant.familyId !== null ||
+      !client ||
+      grant.clientId !== client.id ||
+      client.clientId !== claims.clientId ||
+      client.revokedAt ||
+      client.merchant.status !== "APPROVED" ||
+      client.merchant.user.status !== "ACTIVE" ||
+      claims.scopes.some((scope) => !client.scopes.includes(scope))
+    )
+      throw new OAuthProtocolError(
+        "invalid_client",
+        401,
+        "The access token is no longer valid.",
+      );
+    return {
+      kind: "merchant-client" as const,
+      clientId: client.clientId,
+      merchantId: client.merchantId,
+      scopes: claims.scopes,
+      jti: claims.jti,
+    };
   }
 }

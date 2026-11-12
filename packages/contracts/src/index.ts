@@ -138,6 +138,35 @@ export const merchantApiClientSecretSchema = z.object({
   client: merchantApiClientSchema,
   clientSecret: z.string().regex(/^sd_sec_[A-Za-z0-9_-]{43}$/),
 });
+export const merchantOAuthTokenRequestSchema = z
+  .object({
+    grant_type: z.literal("client_credentials"),
+    scope: z.string().max(200).optional(),
+  })
+  .strict();
+export const merchantOAuthTokenResponseSchema = z
+  .object({
+    access_token: z.string().min(1),
+    token_type: z.literal("Bearer"),
+    expires_in: z.literal(900),
+    scope: z.string().min(1),
+  })
+  .strict();
+export const merchantOAuthErrorSchema = z
+  .object({
+    error: z.enum([
+      "invalid_request",
+      "invalid_client",
+      "invalid_grant",
+      "unauthorized_client",
+      "unsupported_grant_type",
+      "invalid_scope",
+      "server_error",
+      "temporarily_unavailable",
+    ]),
+    error_description: z.string().optional(),
+  })
+  .strict();
 export const loginSchema = z
   .object({
     email: emailSchema,
@@ -481,7 +510,7 @@ export type Principal =
   | {
       kind: "merchant-client";
       clientId: string;
-      merchantId: number;
+      merchantId: string;
       scopes: string[];
     }
   | { kind: "service"; serviceId: string; scopes: string[] };
