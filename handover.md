@@ -14,7 +14,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | Member | Name | Branch | Planned slice (plan.md §4.1) | Delivered vs merged | Depends on | Next step |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
-| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local, uncommitted M02 checkpoint: merchant schema, registration, Admin review API and initial screens; not merged | X-05 (orders, later), X-11 (webhook config, later), X-03 boundary review (R-02) | Complete API clients/OAuth/orders/webhooks/dashboard; review X-03 boundary with M01/M08/M09 |
+| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local, uncommitted M02 checkpoints: merchant registration/approval and API-client CRUD with credentials screen; not merged | X-05 (orders, later), X-10/X-11 (delivery logs/webhook config), X-13 (shared route composition review) | Implement OAuth and merchant orders; coordinate webhook work with M08 and review shared boundaries |
 | [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Core deliverables merged into main (PR #10); Milestone 2 completed: FR-B2 AI Assistant Service (MCP read-only tools) & FR-F9 Chat Widget delivered with 100% test coverage | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | Lifecycle transition contract and `LifecycleService` merged into `origin/main` via PR #7 (`497fdb9`, `c366ef7`, `5460dc3`); source branch `shazan-dev`, member identity/history not confirmed. Public tracking baseline exists in M01's local code (C-02). | X-05, X-07; parcel ownership handoff (R-04) | Confirm contributor registry mapping and record attributed checkpoint; continue lifecycle/public-tracking work and coordinate C-02 extraction |
@@ -64,6 +64,7 @@ Contract definitions are in [plan.md §10](plan.md#10-integration-contracts-betw
 | X-15 | M06 ↔ M01 | Proposed courier profile/readiness contract before invitation activation; `docs/auth.md` §4.5 | `modules/users`, future M06 courier profile module/schema | Unagreed; dispatcher onboarding proceeds independently; courier acceptance returns setup-pending without consuming its invitation until required fields, writer and atomicity are agreed | M01 Sprint 1 implementation checkpoint, 30 October 2026; C-04; no M06 branch inspected |
 
 | X-16 | M02 → Admin web and merchant account | `POST /api/v1/merchant/register`, `GET /api/v1/admin/merchants`, `PATCH /api/v1/admin/merchants/{id}/review`; merchant states `PENDING` → `APPROVED` or `REJECTED` | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611100001_merchants}`, `apps/core-api/src/modules/merchants`, `apps/web/src/features/merchant` | Implemented locally; schema, contract and type checks passed; not merged. Registration atomically creates the account and pending application; review is Admin-guarded and row-locked. API-client unlock and OAuth are future M02 work. | M02 checkpoint 10 November 2026; manual acceptance pending |
+| X-17 | M02 → merchant account and API | `GET/POST /api/v1/merchant/clients`, `POST /api/v1/merchant/clients/{id}/rotate`, `POST /api/v1/merchant/clients/{id}/revoke`; only approved merchants; secret returned once and stored hashed | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611110001_merchant_api_clients}`, `apps/core-api/src/modules/merchants`, `apps/web/src/features/merchant` | Implemented locally; generated contracts/Prisma client and four package type checks passed; not merged. OAuth consumption of these client credentials is future M02 work. | M02 checkpoint 11 November 2026; manual acceptance pending |
 
 ### Contradictions and overlaps
 
@@ -712,6 +713,26 @@ From the repository root, with `.env` configured and a database available, run `
 - Added a Windows `cmd.exe`/`pnpm.cmd` launcher helper for the two migration commands in `apps/core-api/test/auth.integration.test.ts`; non-Windows continues to invoke `pnpm` directly. This is a narrow cross-slice test-harness fix from the M02 task, not a transfer of M01 auth ownership; M01 review remains appropriate before merge.
 - `pnpm test:integration` then passed: 9 suites, 131 tests, and 89.42% line coverage. Docker Desktop was running. Node v22.18.0 still emits the repository's unsupported-engine warning (requires Node >=24.11 and <25); the suite passed under this local version. A pg client-query deprecation warning was also emitted.
 - This suite does not yet cover the new M02 registration/approval behavior. Merchant migration/model/client behavior remains outside this test suite; browser/manual acceptance and applying the migration to the development database remain pending.
+
+### M02 checkpoint: Merchant API-client management (11 November 2026)
+
+#### Summary
+- Added an additive `merchant_api_clients` table/model with merchant ownership, stable client ID, name, scope list, secret hash and rotation/revocation timestamps.
+- Added create/list/rotate/revoke contracts and generated OpenAPI/client operations. API routes require an authenticated MERCHANT user and an APPROVED merchant; data lookups are scoped to the owning merchant. Creation is limited to 10 active clients.
+- Generated cryptographically random client IDs and 256-bit secrets. Only SHA-256 secret hashes are stored. The client secret appears only in the create/rotate response; rotation invalidates the previous secret while keeping client ID stable.
+- Added `/merchant/clients` with create, reveal-once/copy, rotate and revoke controls; added a merchant-account link and responsive form/table styling.
+
+#### Checks and boundaries
+- Contract generation and drift check, Prisma validation/client generation, ESLint, TypeScript checks for core-api/web/db/contracts and `git diff --check` passed. Node v22.18.0 emitted the engine warning (required `>=24.11 <25`). No tests were added/run; migration was not applied and browser acceptance was not performed.
+- OAuth `/oauth/token`, merchant order creation through M04's X-05, webhook configuration X-11 and delivery log X-10 remain future work. Shared web route composition touches X-13; no M10 review is claimed.
+
+#### Manual acceptance
+From the repository root, with `.env` configured and a database available, run `pnpm db:generate`, `pnpm db:migrate`, then `pnpm dev`.
+
+1. Sign in as a pending merchant and open `/merchant/clients`; expect an approval-required message and no client data. A non-merchant must be denied.
+2. Approve that merchant in `/admin/merchants`, sign in again and open `/merchant/clients`. Create a client with one or both scopes; expect client ID and secret to appear once. Copy it, dismiss the one-time panel and confirm reload/list does not reveal the secret.
+3. Rotate the client; expect the client ID to remain stable and a new secret to appear once. Revoke it and expect revoked status and disabled actions. Try another merchant's client UUID; expect 404.
+4. Create up to 10 active clients; the next create should return a limit conflict. Revoke one and create another. Repeat at mobile width, keyboard-only and with clipboard access denied.
 
 <a id="m03"></a>
 ## M03 — UmarYusuf03 (`umarali`)
