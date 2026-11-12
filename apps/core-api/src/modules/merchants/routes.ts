@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  createMerchantApiClientSchema,
   merchantRegistrationSchema,
   merchantReviewSchema,
 } from "@swiftdrop/contracts";
@@ -40,6 +41,53 @@ export function createMerchantsRouter(
     requireRole("ADMIN"),
     async (_req, res) => res.json(await merchants.listForAdmin()),
   );
+  router.get(
+    "/merchant/clients",
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (_req, res) =>
+      res.json(await merchants.listApiClients(res.locals.user.id)),
+  );
+  router.post(
+    "/merchant/clients",
+    protectMutations(config),
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) =>
+      res
+        .status(201)
+        .json(
+          await merchants.createApiClient(
+            res.locals.user.id,
+            createMerchantApiClientSchema.parse(req.body),
+          ),
+        ),
+  );
+  router.post(
+    "/merchant/clients/:id/rotate",
+    protectMutations(config),
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) => {
+      const id = String(req.params.id);
+      if (!isUuid(id))
+        throw new HttpError(400, "INVALID_CLIENT", "API client id is invalid.");
+      res.json(await merchants.rotateApiClient(res.locals.user.id, id));
+    },
+  );
+  router.post(
+    "/merchant/clients/:id/revoke",
+    protectMutations(config),
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) => {
+      const id = String(req.params.id);
+      if (!isUuid(id))
+        throw new HttpError(400, "INVALID_CLIENT", "API client id is invalid.");
+      await merchants.revokeApiClient(res.locals.user.id, id);
+      res.status(204).end();
+    },
+  );
   router.patch(
     "/admin/merchants/:id/review",
     protectMutations(config),
@@ -59,3 +107,8 @@ export function createMerchantsRouter(
   );
   return router;
 }
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
