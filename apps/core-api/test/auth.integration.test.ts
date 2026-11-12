@@ -20,6 +20,7 @@ import request from "supertest";
 import { Redis } from "ioredis";
 import pino from "pino";
 import { createDatabase, type Database, RoleName } from "@swiftdrop/db";
+import { isSwiftDropEvent, ROUTING_KEYS } from "@swiftdrop/contracts";
 import { createApp } from "../src/app.js";
 import { createInternalApp } from "../src/internal-app.js";
 import { signServiceEventToken } from "../src/modules/services/signing.js";
@@ -255,7 +256,22 @@ describe("customer HTTP boundary", () => {
         eventId,
         eventType: "parcel.created",
         aggregateId: parcelId,
-        payload: { eventId, eventType: "parcel.created", parcelId },
+        payload: {
+          eventId,
+          type: "parcel.created",
+          version: 1,
+          occurredAt: "2026-11-13T10:30:00.000Z",
+          sequence: 1,
+          data: {
+            parcelId,
+            trackingNo: "SD1234567A",
+            customerId: "1",
+            originZone: "Colombo",
+            destZone: "Kandy",
+            feeCents: 1500,
+            scheduledDate: "2026-11-13T10:30:00.000Z",
+          },
+        },
       },
     });
     const token = await signServiceEventToken({
@@ -1166,7 +1182,14 @@ describe("customer quote and booking workflow", () => {
     expect(await db.parcel.count()).toBe(2);
     expect(await db.parcelHistory.count()).toBe(2);
     const event = await db.outboxEvent.findFirstOrThrow();
-    expect(event.eventType).toBe("parcel.created");
+    expect(event.eventType).toBe(ROUTING_KEYS.PARCEL_CREATED);
+    expect(isSwiftDropEvent(event.payload)).toBe(true);
+    expect(event.payload).toMatchObject({
+      type: ROUTING_KEYS.PARCEL_CREATED,
+      version: 1,
+      sequence: 1,
+      data: { parcelId: booked.body.id },
+    });
     expect(JSON.stringify(event.payload)).not.toContain("Receiver Name");
     expect(JSON.stringify(event.payload)).not.toContain("+94771234567");
     const publicPage = await agent

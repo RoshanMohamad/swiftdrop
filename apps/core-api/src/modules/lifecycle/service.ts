@@ -4,6 +4,8 @@ import {
   canTransition,
   canReattemptDelivery,
   attemptCountAfter,
+  ROUTING_KEYS,
+  type ParcelStatusChangedEvent,
   type ParcelStatus,
 } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
@@ -26,7 +28,12 @@ export class LifecycleService {
         async (tx) => {
           const parcel = await tx.parcel.findUnique({
             where: { id: parcelId },
-            select: { status: true, version: true, attemptCount: true },
+            select: {
+              status: true,
+              version: true,
+              attemptCount: true,
+              trackingNumber: true,
+            },
           });
           if (!parcel)
             throw new HttpError(404, "PARCEL_NOT_FOUND", "Parcel not found.");
@@ -73,24 +80,31 @@ export class LifecycleService {
           const history = await tx.parcelHistory.create({
             data: { parcelId, status: to, town },
           });
-          if (to === "DELIVERED") {
-            const eventId = randomUUID();
-            await tx.outboxEvent.create({
-              data: {
-                eventId,
-                eventType: "parcel.delivered",
-                aggregateId: parcelId,
-                payload: {
-                  eventId,
-                  eventType: "parcel.delivered",
-                  parcelId,
-                  status: to,
-                  town,
-                  createdAt: history.createdAt.toISOString(),
-                },
-              },
-            });
-          }
+          const eventId = randomUUID();
+          const occurredAt = history.createdAt.toISOString();
+          const event = {
+            eventId,
+            type: ROUTING_KEYS.PARCEL_STATUS_CHANGED,
+            version: 1,
+            occurredAt,
+            sequence: expectedVersion + 1,
+            data: {
+              parcelId,
+              trackingNo: parcel.trackingNumber,
+              from,
+              to,
+              town,
+              occurredAt,
+            },
+          } satisfies ParcelStatusChangedEvent;
+          await tx.outboxEvent.create({
+            data: {
+              eventId,
+              eventType: event.type,
+              aggregateId: parcelId,
+              payload: event,
+            },
+          });
 
           return {
             status: to,
@@ -136,11 +150,7 @@ export class LifecycleService {
             throw new HttpError(404, "PARCEL_NOT_FOUND", "Parcel not found.");
 
           if (requesterRole === "CUSTOMER" && parcel.userId !== requesterId)
-            throw new HttpError(
-              404,
-              "PARCEL_NOT_FOUND",
-              "Parcel not found.",
-            );
+            throw new HttpError(404, "PARCEL_NOT_FOUND", "Parcel not found.");
 
           const from = parcel.status as ParcelStatus;
           if (!canTransition(from, "CANCELLED"))
@@ -162,11 +172,37 @@ export class LifecycleService {
               "This parcel was modified by someone else. Reload and retry.",
             );
 
-          await tx.parcelHistory.create({
+          const history = await tx.parcelHistory.create({
             data: {
               parcelId,
               status: "CANCELLED",
               town: parcel.originZone.town,
+            },
+          });
+
+          const eventId = randomUUID();
+          const occurredAt = history.createdAt.toISOString();
+          const event = {
+            eventId,
+            type: ROUTING_KEYS.PARCEL_STATUS_CHANGED,
+            version: 1,
+            occurredAt,
+            sequence: expectedVersion + 1,
+            data: {
+              parcelId,
+              trackingNo: parcel.trackingNumber,
+              from,
+              to: "CANCELLED",
+              town: parcel.originZone.town,
+              occurredAt,
+            },
+          } satisfies ParcelStatusChangedEvent;
+          await tx.outboxEvent.create({
+            data: {
+              eventId,
+              eventType: event.type,
+              aggregateId: parcelId,
+              payload: event,
             },
           });
 

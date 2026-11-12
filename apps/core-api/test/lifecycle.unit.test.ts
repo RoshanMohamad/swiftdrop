@@ -8,8 +8,12 @@ import {
   isTerminalStatus,
   attemptCountAfter,
   canReattemptDelivery,
+  isSwiftDropEvent,
+  ROUTING_KEYS,
   type ParcelStatus,
 } from "@swiftdrop/contracts";
+import type { Database } from "@swiftdrop/db";
+import { LifecycleService } from "../src/modules/lifecycle/service.js";
 
 describe("parcel transition table (FR-P4)", () => {
   it("accepts the full happy path CREATED → ... → DELIVERED", () => {
@@ -91,5 +95,98 @@ describe("delivery attempt accounting (FR-P4)", () => {
     expect(canReattemptDelivery(2)).toBe(true);
     expect(canReattemptDelivery(3)).toBe(false);
     expect(canReattemptDelivery(4)).toBe(false);
+  });
+});
+
+describe("lifecycle outbox event envelopes", () => {
+  const parcelId = "22222222-2222-4222-8222-222222222222";
+  const occurredAt = new Date("2026-11-13T10:30:00.000Z");
+
+  function createService(parcel: Record<string, unknown>) {
+    const outbox: Array<Record<string, unknown>> = [];
+    const transaction = {
+      parcel: {
+        findUnique: async () => parcel,
+        updateMany: async () => ({ count: 1 }),
+      },
+      parcelHistory: {
+        create: async (args: { data: Record<string, unknown> }) => ({
+          ...args.data,
+          createdAt: occurredAt,
+        }),
+      },
+      outboxEvent: {
+        create: async (args: { data: Record<string, unknown> }) => {
+          outbox.push(args.data);
+          return args.data;
+        },
+      },
+    };
+    const db = {
+      $transaction: async (
+        work: (tx: typeof transaction) => Promise<unknown>,
+      ) => work(transaction),
+    } as unknown as Database;
+
+    return { service: new LifecycleService(db), outbox };
+  }
+
+  it("emits a versioned status-changed envelope for a transition", async () => {
+    const { service, outbox } = createService({
+      status: "CREATED",
+      version: 1,
+      attemptCount: 0,
+      trackingNumber: "SD1234567A",
+    });
+
+    await service.transition(parcelId, "PICKED_UP", "Colombo", 1);
+
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]).toMatchObject({
+      eventType: ROUTING_KEYS.PARCEL_STATUS_CHANGED,
+      aggregateId: parcelId,
+    });
+    const payload = outbox[0]?.payload;
+    expect(isSwiftDropEvent(payload)).toBe(true);
+    expect(payload).toMatchObject({
+      type: ROUTING_KEYS.PARCEL_STATUS_CHANGED,
+      version: 1,
+      sequence: 2,
+      data: {
+        parcelId,
+        trackingNo: "SD1234567A",
+        from: "CREATED",
+        to: "PICKED_UP",
+        town: "Colombo",
+      },
+    });
+  });
+
+  it("emits the same envelope contract for cancellation", async () => {
+    const { service, outbox } = createService({
+      id: parcelId,
+      userId: 7,
+      status: "CREATED",
+      version: 1,
+      trackingNumber: "SD1234567A",
+      originZone: { town: "Colombo" },
+    });
+
+    await service.cancel(parcelId, 7, "CUSTOMER", 1);
+
+    expect(outbox).toHaveLength(1);
+    const payload = outbox[0]?.payload;
+    expect(isSwiftDropEvent(payload)).toBe(true);
+    expect(payload).toMatchObject({
+      type: ROUTING_KEYS.PARCEL_STATUS_CHANGED,
+      version: 1,
+      sequence: 2,
+      data: {
+        parcelId,
+        from: "CREATED",
+        to: "CANCELLED",
+        town: "Colombo",
+      },
+    });
   });
 });

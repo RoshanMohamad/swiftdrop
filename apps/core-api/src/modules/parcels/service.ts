@@ -2,12 +2,14 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma, type Database } from "@swiftdrop/db";
 import type {
   bookingRequestSchema,
+  ParcelCreatedEvent,
   quoteRequestSchema,
   parcelSchema,
   publicTrackingSchema,
   zoneInputSchema,
   priceInputSchema,
 } from "@swiftdrop/contracts";
+import { ROUTING_KEYS } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
 import type { z } from "zod";
 import { PricingService } from "../pricing/index.js";
@@ -72,7 +74,10 @@ type PriceInput = z.infer<typeof priceInputSchema>;
 export class ParcelService {
   private pricing: PricingService;
 
-  constructor(private db: Database, pricing?: PricingService) {
+  constructor(
+    private db: Database,
+    pricing?: PricingService,
+  ) {
     this.pricing = pricing ?? new PricingService(db);
   }
 
@@ -195,19 +200,30 @@ export class ParcelService {
           });
           const response = publicParcel(parcel);
           const eventId = randomUUID();
+          const occurredAt = now.toISOString();
+          const event = {
+            eventId,
+            type: ROUTING_KEYS.PARCEL_CREATED,
+            version: 1,
+            occurredAt,
+            sequence: 1,
+            data: {
+              parcelId,
+              trackingNo: tracking,
+              customerId: String(userId),
+              originZone: quote.originZone.town,
+              destZone: quote.destinationZone.town,
+              feeCents: quote.feeCents,
+              // Bookings are immediate until the parcel model gains a persisted schedule.
+              scheduledDate: occurredAt,
+            },
+          } satisfies ParcelCreatedEvent;
           await tx.outboxEvent.create({
             data: {
               eventId,
-              eventType: "parcel.created",
+              eventType: event.type,
               aggregateId: parcelId,
-              payload: {
-                eventId,
-                eventType: "parcel.created",
-                parcelId,
-                status: "CREATED",
-                town: quote.originZone.town,
-                createdAt: now.toISOString(),
-              },
+              payload: event,
             },
           });
           await tx.idempotencyRecord.create({
