@@ -22,7 +22,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | [M07](#m07) | TBD | TBD | Courier delivery and offline PWA | No work recorded | X-06, X-08 | PWA shell, offline queue, operation ledger |
 | [M08](#m08) | TBD | TBD | Eventing and webhook delivery | No work recorded (relay baseline exists in M01's local code, C-02) | X-03 boundary review (R-02), X-11, parcel ownership handoff (R-04) | Move relay to owned service; review X-03 lookup/event boundary with M01/M09/M02 |
 | [M09](#m09) | TBD | TBD | Notifications and realtime | No work recorded | X-03 boundary review (R-02), X-08, X-09 | Notification templates, realtime gateway; review X-03 lookup needs with M01/M08/M02 |
-| [M10](#m10) | TBD | TBD | Platform kernel and web foundation | No work recorded | X-02/X-13 shared interface/schema review (R-01) | Kernel, shell, typed client, MSW harness; review M01 auth/admin contracts and composition |
+| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | In progress | X-02/X-13 shared interface/schema review (R-01) | Kernel, shell, typed client, MSW harness; review M01 auth/admin contracts and composition |
 
 Integration target: `main`. Checked 8 November 2026: local `umair-dev` fast-forwarded from `8d7cf9c` to fetched `origin/main` at `948133d`, which contains M01's earlier implementation through PR #8 and subsequent M05 lifecycle changes. No conflicts occurred; incoming changes did not touch the existing local `handover.md` edit. At the time checked, `origin/umair-dev` remained at `b33e15a` and was 11 commits behind the local branch; publication is recorded in the checkpoint below. No automated runtime checks were run for this documentation/sync action, no hosted CI or other member branches were reviewed, and the M01 manual/provider acceptance and peer contract reviews remain pending. Merge order: kernel/contracts (X-01/X-09) → identity/administration + X-03 contracts/schema (X-02/C-03/C-05/C-06) → pricing/parcels/lifecycle (X-04–X-06) → dispatch/courier (X-07/X-08/X-15) → messaging consumers (X-03/X-10–X-12) → shared UI composition (X-13). Combined ten-branch verification was not performed. Release blockers: M10 contract/interface/schema review (C-03/C-05), M08/M09/M02 review of X-03 and actual worker integration (C-06), M06 courier readiness (C-04/X-15), outstanding browser/provider acceptance, unverified member dependencies, and the production gates in auth §12. Historical checkpoints below are preserved.
 
@@ -811,9 +811,17 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery. No work recorded.
 Planned slice (plan.md §4.1): Notifications and realtime. No work recorded.
 
 <a id="m10"></a>
-## M10 — TBD
+## M10 — Lavin (`lavin-dev`)
 
-Planned slice (plan.md §4.1): Platform kernel and web foundation. No work recorded.
+Planned slice (plan.md §4.1): Platform kernel and web foundation.
+
+### Checkpoint 0: Local setup, identity registration & environment verification (12 November 2026)
+
+#### Summary of changes
+- Registered M10 identity and created dedicated branch `lavin-dev`.
+- Environment verified: Node.js v24.22.1, pnpm v9.15.9, active Docker containers (PostgreSQL, Redis, RabbitMQ, MinIO, Mailpit).
+- Generated local RS256 signing and CSRF keypairs in `.local/auth/`.
+- Commenced M10 deliverables: platform kernel, typed OpenAPI client generator, central web layout shell, and MSW mock harness.
 
 ## Customer booking and tracking implementation checkpoint (29 October 2026)
 
