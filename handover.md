@@ -22,7 +22,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | [M07](#m07) | TBD | TBD | Courier delivery and offline PWA | No work recorded | X-06, X-08 | PWA shell, offline queue, operation ledger |
 | [M08](#m08) | TBD | TBD | Eventing and webhook delivery | No work recorded (relay baseline exists in M01's local code, C-02) | X-03 boundary review (R-02), X-11, parcel ownership handoff (R-04) | Move relay to owned service; review X-03 lookup/event boundary with M01/M09/M02 |
 | [M09](#m09) | TBD | TBD | Notifications and realtime | No work recorded | X-03 boundary review (R-02), X-08, X-09 | Notification templates, realtime gateway; review X-03 lookup needs with M01/M08/M02 |
-| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel (logger, correlation, cursor pagination), MSW mock harness & dev:mock mode | X-02/X-13 shared interface/schema review (R-01) | Coordinate R-01 with M01; open PR for review |
+| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel, MSW mock harness, and shared UI components (Milestones 1–3 delivered) | X-02/X-13 shared interface/schema review (R-01) | Implement correlation-id middleware, /api/docs, and authorization matrix harness |
 
 Integration target: `main`. Checked 8 November 2026: local `umair-dev` fast-forwarded from `8d7cf9c` to fetched `origin/main` at `948133d`, which contains M01's earlier implementation through PR #8 and subsequent M05 lifecycle changes. No conflicts occurred; incoming changes did not touch the existing local `handover.md` edit. At the time checked, `origin/umair-dev` remained at `b33e15a` and was 11 commits behind the local branch; publication is recorded in the checkpoint below. No automated runtime checks were run for this documentation/sync action, no hosted CI or other member branches were reviewed, and the M01 manual/provider acceptance and peer contract reviews remain pending. Merge order: kernel/contracts (X-01/X-09) → identity/administration + X-03 contracts/schema (X-02/C-03/C-05/C-06) → pricing/parcels/lifecycle (X-04–X-06) → dispatch/courier (X-07/X-08/X-15) → messaging consumers (X-03/X-10–X-12) → shared UI composition (X-13). Combined ten-branch verification was not performed. Release blockers: M10 contract/interface/schema review (C-03/C-05), M08/M09/M02 review of X-03 and actual worker integration (C-06), M06 courier readiness (C-04/X-15), outstanding browser/provider acceptance, unverified member dependencies, and the production gates in auth §12. Historical checkpoints below are preserved.
 
@@ -886,6 +886,40 @@ Planned slice (plan.md §4.1): Platform kernel and web foundation.
    - Request paginated endpoints (e.g. `/api/v1/parcels?take=10`).
    - Copy `pageInfo.endCursor` from response.
    - Request next page with `?cursor=<endCursor>&take=10`; verify non-overlapping sequential page delivery.
+
+### Milestone 3: Shared UI Components, Error Boundaries & WCAG 2.1 AA Accessibility (13 November 2026)
+
+#### Summary of changes
+- **Shared UI Components (`apps/web/src/shared/components/`):**
+  - `apps/web/src/shared/components/LoadingState.tsx`: Accessible loading indicator supporting full-container and inline modes with `role="status"` and `aria-live="polite"`.
+  - `apps/web/src/shared/components/EmptyState.tsx`: Standardized empty-state container with semantic `h2` headings, descriptions, and optional action buttons.
+  - `apps/web/src/shared/components/StatusBadge.tsx`: Universal status badge supporting parcel statuses (`IN_TRANSIT`, `DELIVERED`, `FAILED`, etc.), user account states (`ACTIVE`, `INVITED`, `SUSPENDED`), and merchant states with accessible `aria-label`s.
+  - `apps/web/src/shared/components/ErrorBoundary.tsx`: React class ErrorBoundary with fallback recovery UI, friendly error message, reset handler, and retry button (`role="alert"`).
+  - `apps/web/src/shared/components/index.ts`: Barrel export for all shared UI components.
+  - `apps/web/src/App.tsx`: Wrapped `AppRoutes` in `ErrorBoundary` to provide global client crash isolation without crashing the app shell.
+- **Accessibility & Unit Test Coverage (`apps/web/src/shared/components/components.test.tsx`):**
+  - 11 comprehensive unit and accessibility tests covering DOM roles, inline modes, dynamic labels, error recovery retry flows, and zero `axe-core` accessibility violations across all shared components.
+- **Architectural Alignment & R-01 Review Notes (coordination with M01):**
+  - **C-03 (Prisma Schema Path):** Confirmed continuing with the single consolidated `packages/db/prisma/schema.prisma` repository rather than breaking it into domain schemas prematurely, preventing schema/migration desynchronization.
+  - **C-05 (Authentication Interface):** Formally aligned with M01's implementation of `res.locals.user`, `authFamilyId`, and `authGrantId` in `core-api`, reconciling historical references to `req.user`.
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all 4 workspace packages (`packages/contracts`, `packages/db`, `apps/core-api`, `apps/web`).
+- `pnpm lint`: 0 errors, 0 warnings across entire monorepo.
+- `pnpm --filter web test`: 13/13 test suites passed, 71/71 tests passed (including all 11 component & `axe-core` tests).
+- `apps/core-api` pagination test suite: 1/1 suite, 16/16 unit tests passed.
+- `pnpm build`: Both web bundle (gzip: 146.66 kB, safely within the < 250 kB performance budget) and core-api tsup dist built cleanly.
+
+#### Manual test plan for this iteration
+1. **Error Boundary Recovery:**
+   - Mount a test component throwing an error inside `AppRoutes`.
+   - Verify the error alert displays with heading "Something went wrong" and "Try again" button without unmounting `AppShell`.
+   - Click "Try again" after correcting the state; verify graceful recovery.
+2. **Accessible Loading & Empty States:**
+   - In parcel list and admin screens, inspect network throttle / empty responses.
+   - Screen reader test: verify `role="status"` announces loading changes politely; verify `role="alert"` alerts on crash.
+3. **Status Badges:**
+   - Verify visual styling for `IN_TRANSIT`, `DELIVERED`, and `FAILED` badges at 360px viewport and high-contrast settings.
 
 
 ## Customer booking and tracking implementation checkpoint (29 October 2026)
