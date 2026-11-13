@@ -9,6 +9,7 @@ import type {
   priceInputSchema,
 } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
+import { outbox } from "../../shared/outbox/index.js";
 import type { z } from "zod";
 import { PricingService } from "../pricing/index.js";
 
@@ -194,20 +195,18 @@ export class ParcelService {
             include: parcelInclude,
           });
           const response = publicParcel(parcel);
-          const eventId = randomUUID();
-          await tx.outboxEvent.create({
+          // Envelope per Design Doc §6.3; no recipient name, phone or address (NFR-4).
+          await outbox.add(tx, {
+            type: "parcel.created",
+            aggregateId: parcelId,
+            sequence: 1,
+            occurredAt: now,
             data: {
-              eventId,
-              eventType: "parcel.created",
-              aggregateId: parcelId,
-              payload: {
-                eventId,
-                eventType: "parcel.created",
-                parcelId,
-                status: "CREATED",
-                town: quote.originZone.town,
-                createdAt: now.toISOString(),
-              },
+              parcelId,
+              trackingNo: tracking,
+              merchantId: null,
+              to: "CREATED",
+              town: quote.originZone.town,
             },
           });
           await tx.idempotencyRecord.create({

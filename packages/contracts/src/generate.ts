@@ -36,6 +36,10 @@ import {
   invitationResultSchema,
   acceptInvitationSchema,
   acceptInvitationResultSchema,
+  webhookDeliveryPageSchema,
+  webhookDeliveryDetailSchema,
+  webhookReplayRequestSchema,
+  webhookReplayResultSchema,
   notificationLookupResultSchema,
   dailyReportSummarySchema,
   assistantChatInputSchema,
@@ -441,6 +445,88 @@ for (const [method, path, input, output, status, bearer] of [
       },
       ...Object.fromEntries(
         [400, 401, 403, 404, 409, 410, 413, 415, 422, 429, 503].map((code) => [
+          code,
+          {
+            description: "Request rejected",
+            content: { "application/problem+json": { schema: problemSchema } },
+          },
+        ]),
+      ),
+    },
+  });
+}
+// M08: Admin webhook delivery log and audited replay (FR-I5).
+const webhookQuery = (name: string, schema: object) => ({
+  name,
+  in: "query" as const,
+  required: false,
+  schema,
+});
+const webhookId = {
+  name: "id",
+  in: "path" as const,
+  required: true,
+  schema: { type: "string" as const, format: "uuid" },
+};
+for (const [method, path, input, output, status] of [
+  [
+    "get",
+    "/api/v1/admin/webhook-deliveries",
+    null,
+    webhookDeliveryPageSchema,
+    200,
+  ],
+  [
+    "get",
+    "/api/v1/admin/webhook-deliveries/{id}",
+    null,
+    webhookDeliveryDetailSchema,
+    200,
+  ],
+  [
+    "post",
+    "/api/v1/admin/webhook-deliveries/{id}/replay",
+    webhookReplayRequestSchema,
+    webhookReplayResultSchema,
+    202,
+  ],
+] as const) {
+  registry.registerPath({
+    method,
+    path,
+    summary: path,
+    parameters: [
+      ...(path.includes("{id}") ? [webhookId] : []),
+      ...(path === "/api/v1/admin/webhook-deliveries"
+        ? [
+            webhookQuery("status", {
+              type: "string" as const,
+              enum: ["PENDING", "SUCCESS", "FAILED", "SKIPPED"],
+            }),
+            webhookQuery("merchantId", {
+              type: "integer" as const,
+              minimum: 1,
+            }),
+            webhookQuery("cursor", { type: "string" as const }),
+            webhookQuery("limit", {
+              type: "integer" as const,
+              minimum: 1,
+              maximum: 100,
+            }),
+          ]
+        : []),
+    ],
+    security:
+      method === "get"
+        ? [{ bearerAuth: [] }]
+        : [{ csrfHeader: [], bearerAuth: [] }],
+    ...(input
+      ? { request: { body: { required: true, content: json(input) } } }
+      : {}),
+    responses: {
+      [status]: { description: "Success", content: json(output) },
+      ...Object.fromEntries(
+        [400, 401, 403, 404, 409, 413, 415, 429, 503].map((code) => [
           code,
           {
             description: "Request rejected",

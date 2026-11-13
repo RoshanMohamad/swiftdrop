@@ -1,0 +1,30 @@
+{
+  "name": "webhook-svc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup",
+    "start": "node dist/server.js",
+    "typecheck": "tsc",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand"
+  },
+  "dependencies": {
+    "@swiftdrop/contracts": "workspace:*",
+    "@swiftdrop/db": "workspace:*",
+    "@swiftdrop/messaging": "workspace:*",
+    "amqplib": "^2.2.0",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@jest/globals": "30.5.2",
+    "@types/amqplib": "^0.10.8",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "testcontainers": "^11.8.0",
+    "ts-jest": "^29.4.5",
+    "tsup": "^8.5.0"
+  }
+}

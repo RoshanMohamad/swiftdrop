@@ -444,3 +444,5 @@ export type Principal =
       scopes: string[];
     }
   | { kind: "service"; serviceId: string; scopes: string[] };
+
+export * from "./messaging.js";

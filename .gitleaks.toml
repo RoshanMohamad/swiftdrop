@@ -1,0 +1,18 @@
+# Gitleaks configuration (read automatically by gitleaks/gitleaks-action from the repository root).
+# Keep the built-in rules and only ignore the two documented dummy values below.
+# Never add real credentials here, and prefer narrow stopwords over path allowlists.
+title = "SwiftDrop gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented non-secret placeholders used by M08 webhook tests and docs"
+# A stopword suppresses a finding whose matched secret contains the word.
+# - integration-secret-0123456789: test fixture in commit 4b3dba0, replaced by a generated value in f4ca48b.
+#   The commit stays in the PR history, so history scans still see it.
+# - local-dev-secret-0123456789: sample value in docs/messaging.md for a local-only webhook target file.
+stopwords = [
+  "integration-secret-0123456789",
+  "local-dev-secret-0123456789",
+]

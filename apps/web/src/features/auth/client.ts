@@ -38,7 +38,7 @@ import {
   merchantRegistrationResultSchema,
   type MerchantRegistration,
 } from "@swiftdrop/contracts";
-const api = createClient<paths>({
+export const api = createClient<paths>({
   baseUrl: window.location.origin,
   credentials: "same-origin",
   cache: "no-store",
@@ -97,7 +97,7 @@ async function authLock<T>(operation: () => Promise<T>): Promise<T> {
   // shortcut: older browsers have no cross-tab lock; a rotation race requires signing in again.
   return operation();
 }
-async function csrf() {
+export async function csrf() {
   return checked(await api.GET("/api/v1/auth/csrf"));
 }
 export async function register(input: Registration) {
@@ -122,7 +122,7 @@ export async function resendVerification(email: string) {
     );
   });
 }
-const bearer = async () => current ?? refreshSession();
+export const bearer = async () => current ?? refreshSession();
 export const sessionExpiredEvents = new EventTarget();
 function expireSession() {
   blockBootstrap();

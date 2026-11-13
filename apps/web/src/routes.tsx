@@ -18,6 +18,7 @@ import {
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
 import { AdminMerchants, MerchantSignup } from "./features/merchant/pages.js";
+import { AdminWebhookDeliveries } from "./features/webhook-admin/pages.js";
 import { Guard } from "./shared/auth/Guard.js";
 import { Account } from "./shared/components/Account.js";
 
@@ -130,6 +131,14 @@ export function AppRoutes() {
         element={
           <Guard role="ADMIN">
             <NewStaff />
+          </Guard>
+        }
+      />
+      <Route
+        path="/admin/webhooks"
+        element={
+          <Guard role="ADMIN">
+            <AdminWebhookDeliveries />
           </Guard>
         }
       />

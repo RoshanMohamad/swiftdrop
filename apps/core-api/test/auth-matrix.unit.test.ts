@@ -118,7 +118,7 @@ describe("Role × Endpoint Authorization Matrix Harness (plan.md §8.2, §12.1)"
     guards: RequestHandler[],
     authHeader?: string,
   ): Promise<{ status: number; code?: string }> {
-    let capturedError: HttpError | Error | null = null;
+    let capturedError = null as HttpError | Error | null;
 
     const req = {
       get: (header: string) => {

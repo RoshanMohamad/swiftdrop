@@ -211,7 +211,7 @@ beforeAll(async () => {
 }, 240000);
 beforeEach(async () => {
   await db.$executeRaw`TRUNCATE users CASCADE`;
-  await db.$executeRaw`TRUNCATE outbox_events, consumer_progress, idempotency_records, service_principals CASCADE`;
+  await db.$executeRaw`TRUNCATE outbox_events, consumer_progress, idempotency_records, service_principals, webhook_deliveries CASCADE`;
   await redis.flushdb();
   verificationLink = "";
   invitationLink = "";
@@ -1167,6 +1167,15 @@ describe("customer quote and booking workflow", () => {
     expect(await db.parcelHistory.count()).toBe(2);
     const event = await db.outboxEvent.findFirstOrThrow();
     expect(event.eventType).toBe("parcel.created");
+    // Envelope per Design Doc 6.3; eventId equals the outbox primary key.
+    expect(event.id).toBe(event.eventId);
+    expect(event.payload).toMatchObject({
+      eventId: event.eventId,
+      type: "parcel.created",
+      version: 1,
+      sequence: 1,
+      data: { trackingNo: booked.body.trackingNumber, to: "CREATED" },
+    });
     expect(JSON.stringify(event.payload)).not.toContain("Receiver Name");
     expect(JSON.stringify(event.payload)).not.toContain("+94771234567");
     const publicPage = await agent
@@ -1225,6 +1234,248 @@ describe("customer quote and booking workflow", () => {
       .get("/api/v1/parcels")
       .set("Authorization", `Bearer ${suspendedSession.response.accessToken}`)
       .expect(401);
+  });
+});
+
+describe("webhook delivery log and replay (M08)", () => {
+  async function adminSession(
+    role: RoleName = "ADMIN",
+    email = "admin@example.test",
+  ) {
+    const admin = await user(role, email);
+    const agent = request.agent(api.app);
+    const logged = await post(agent, "login", { email: admin.email, password });
+    const csrf = await agent.get("/api/v1/auth/csrf").expect(200);
+    const headers = {
+      Origin: config.APP_ORIGIN,
+      "X-CSRF-Token": csrf.body.csrfToken as string,
+      Authorization: `Bearer ${logged.body.accessToken}`,
+    };
+    return { admin, agent, headers };
+  }
+  async function delivery(
+    status: "FAILED" | "SUCCESS" | "PENDING",
+    merchantId = 7,
+  ) {
+    const eventId = randomUUID();
+    return db.webhookDelivery.create({
+      data: {
+        eventId,
+        merchantId,
+        eventType: "parcel.created",
+        envelope: { eventId, type: "parcel.created" },
+        status,
+        attempts: {
+          create: [0, 1].map((attempt) => ({
+            runNumber: 0,
+            attempt,
+            state: "DONE" as const,
+            leaseUntil: new Date(),
+            outcome: "FAILURE" as const,
+            statusCode: 500,
+            errorCode: "HTTP_500",
+            handoff: "RETRY" as const,
+          })),
+        },
+      },
+    });
+  }
+
+  it("lists deliveries newest first with filters and cursor pagination, without secrets or payloads", async () => {
+    const { agent, headers } = await adminSession();
+    const failed = await delivery("FAILED");
+    await delivery("SUCCESS");
+    await delivery("FAILED", 9);
+    const all = await agent
+      .get("/api/v1/admin/webhook-deliveries")
+      .set(headers)
+      .expect(200);
+    expect(all.body.items).toHaveLength(3);
+    expect(Object.keys(all.body.items[0]).sort()).toEqual([
+      "createdAt",
+      "currentRun",
+      "eventId",
+      "eventType",
+      "id",
+      "lastErrorCode",
+      "merchantId",
+      "status",
+      "updatedAt",
+    ]);
+    const onlyFailed = await agent
+      .get("/api/v1/admin/webhook-deliveries?status=FAILED&merchantId=7")
+      .set(headers)
+      .expect(200);
+    expect(onlyFailed.body.items.map((i: { id: string }) => i.id)).toEqual([
+      failed.id,
+    ]);
+    expect(onlyFailed.body.items[0].lastErrorCode).toBe("HTTP_500");
+    const first = await agent
+      .get("/api/v1/admin/webhook-deliveries?limit=2")
+      .set(headers)
+      .expect(200);
+    expect(first.body.items).toHaveLength(2);
+    const second = await agent
+      .get(
+        `/api/v1/admin/webhook-deliveries?limit=2&cursor=${first.body.nextCursor}`,
+      )
+      .set(headers)
+      .expect(200);
+    expect(second.body.items).toHaveLength(1);
+    expect(second.body.nextCursor).toBeNull();
+    await agent
+      .get("/api/v1/admin/webhook-deliveries?cursor=garbage")
+      .set(headers)
+      .expect(400);
+    await agent
+      .get("/api/v1/admin/webhook-deliveries?status=NOPE")
+      .set(headers)
+      .expect(400);
+  });
+
+  it("shows attempt history and replays a failed delivery exactly once, routed only to webhooks", async () => {
+    const { agent, headers, admin } = await adminSession();
+    const failed = await delivery("FAILED");
+    const detail = await agent
+      .get(`/api/v1/admin/webhook-deliveries/${failed.id}`)
+      .set(headers)
+      .expect(200);
+    expect(
+      detail.body.attempts.map((a: { attempt: number }) => a.attempt),
+    ).toEqual([0, 1]);
+    expect(JSON.stringify(detail.body)).not.toMatch(/secret|url|envelope/i);
+    await agent
+      .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+      .set(headers)
+      .send({ reason: "x" })
+      .expect(400);
+    const replay = await agent
+      .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+      .set(headers)
+      .send({ reason: "Merchant fixed their endpoint" })
+      .expect(202);
+    expect(replay.body).toEqual({
+      deliveryId: failed.id,
+      runNumber: 1,
+      status: "PENDING",
+    });
+    const after = await db.webhookDelivery.findUniqueOrThrow({
+      where: { id: failed.id },
+    });
+    expect(after).toMatchObject({
+      status: "PENDING",
+      currentRun: 1,
+      eventId: failed.eventId,
+    });
+    const audit = await db.webhookReplay.findFirstOrThrow({
+      where: { deliveryId: failed.id },
+    });
+    expect(audit).toMatchObject({
+      runNumber: 1,
+      requestedByUserId: admin.id,
+      reason: "Merchant fixed their endpoint",
+    });
+    const event = await db.outboxEvent.findFirstOrThrow({
+      where: { eventType: "webhook.replay.requested" },
+    });
+    expect(event.payload).toMatchObject({
+      type: "webhook.replay.requested",
+      data: { deliveryId: failed.id, runNumber: 1 },
+    });
+    // The delivery is now PENDING, so a second click or admin gets 409 and no new run.
+    await agent
+      .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+      .set(headers)
+      .send({ reason: "Second click" })
+      .expect(409);
+    expect(
+      await db.webhookReplay.count({ where: { deliveryId: failed.id } }),
+    ).toBe(1);
+    expect(
+      await db.outboxEvent.count({
+        where: { eventType: "webhook.replay.requested" },
+      }),
+    ).toBe(1);
+  });
+
+  it("serialises simultaneous replays to one run", async () => {
+    const { agent, headers } = await adminSession();
+    const failed = await delivery("FAILED");
+    const results = await Promise.all(
+      [1, 2, 3].map(() =>
+        agent
+          .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+          .set(headers)
+          .send({ reason: "Concurrent replay" }),
+      ),
+    );
+    expect(results.map((r) => r.status).sort()).toEqual([202, 409, 409]);
+    expect(await db.webhookReplay.count()).toBe(1);
+  });
+
+  it("only replays FAILED deliveries and treats unknown ids as not found", async () => {
+    const { agent, headers } = await adminSession();
+    for (const status of ["SUCCESS", "PENDING"] as const) {
+      const row = await delivery(status);
+      await agent
+        .post(`/api/v1/admin/webhook-deliveries/${row.id}/replay`)
+        .set(headers)
+        .send({ reason: "Should be refused" })
+        .expect(409);
+    }
+    await agent
+      .post(`/api/v1/admin/webhook-deliveries/${randomUUID()}/replay`)
+      .set(headers)
+      .send({ reason: "Unknown delivery" })
+      .expect(404);
+    await agent
+      .get("/api/v1/admin/webhook-deliveries/not-a-uuid")
+      .set(headers)
+      .expect(404);
+    expect(
+      await db.outboxEvent.count({
+        where: { eventType: "webhook.replay.requested" },
+      }),
+    ).toBe(0);
+  });
+
+  it("denies Dispatcher, Customer, anonymous and cross-site replay (Admin only)", async () => {
+    const failed = await delivery("FAILED");
+    for (const [role, email] of [
+      ["DISPATCHER", "dispatcher@example.test"],
+      ["CUSTOMER", "someone@example.test"],
+    ] as const) {
+      const { agent, headers } = await adminSession(role, email);
+      await agent
+        .get("/api/v1/admin/webhook-deliveries")
+        .set(headers)
+        .expect(403);
+      await agent
+        .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+        .set(headers)
+        .send({ reason: "Not allowed to do this" })
+        .expect(403);
+    }
+    await request(api.app).get("/api/v1/admin/webhook-deliveries").expect(401);
+    const { agent, headers } = await adminSession(
+      "ADMIN",
+      "second-admin@example.test",
+    );
+    await agent
+      .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+      .set({ ...headers, Origin: "https://evil.example" })
+      .send({ reason: "Cross site attempt" })
+      .expect(403);
+    await agent
+      .post(`/api/v1/admin/webhook-deliveries/${failed.id}/replay`)
+      .set({ ...headers, "X-CSRF-Token": "bad" })
+      .send({ reason: "Bad csrf attempt" })
+      .expect(403);
+    expect(await db.webhookReplay.count()).toBe(0);
+    expect(
+      (await db.webhookDelivery.findUniqueOrThrow({ where: { id: failed.id } }))
+        .status,
+    ).toBe("FAILED");
   });
 });
 

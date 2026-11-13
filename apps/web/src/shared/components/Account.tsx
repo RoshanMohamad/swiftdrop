@@ -91,6 +91,7 @@ export function Account() {
           <Link to="/admin/zones">Service districts</Link>
           <Link to="/admin/pricing">Pricing</Link>
           <Link to="/admin/reports">Operations Reports</Link>
+          <Link to="/admin/webhooks">Webhook deliveries</Link>
         </div>
       )}
       {state.user?.role === "DISPATCHER" && (
