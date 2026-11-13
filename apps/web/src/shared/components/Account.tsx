@@ -78,6 +78,12 @@ export function Account() {
           <Link to="/parcels/new">Book a delivery</Link>
           <Link to="/parcels">Booking history</Link>
         </div>
+      ) : state.user?.role === "MERCHANT" ? (
+        <div className="notice account-links">
+          <Link to="/merchant/clients">Manage API clients</Link>
+          <Link to="/merchant/orders">Orders</Link>
+          <Link to="/merchant/webhook">Webhook settings</Link>
+        </div>
       ) : (
         <div className="notice">
           Your role is recognised. Operational and onboarding screens arrive in

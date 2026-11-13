@@ -30,6 +30,17 @@ import { tokenHash } from "../src/modules/auth/service.js";
 import type { GoogleOidc } from "../src/modules/auth/google.js";
 import type { Config } from "../src/shared/config.js";
 const root = resolve(import.meta.dirname, "../../..");
+const runPnpm = (
+  args: string[],
+  options: Parameters<typeof execFileSync>[2],
+) =>
+  process.platform === "win32"
+    ? execFileSync(
+        process.env.ComSpec ?? "cmd.exe",
+        ["/d", "/s", "/c", `pnpm.cmd ${args.join(" ")}`],
+        options,
+      )
+    : execFileSync("pnpm", args, options);
 const password = "Integration test passphrase!";
 const input = {
   email: "customer@example.test",
@@ -85,8 +96,7 @@ beforeAll(async () => {
     .withWaitStrategy(Wait.forLogMessage("Ready to accept connections"))
     .start();
   const databaseURL = `postgresql://test:test@${postgres.getHost()}:${postgres.getMappedPort(5432)}/auth_test`;
-  execFileSync(
-    "pnpm",
+  runPnpm(
     ["--filter", "@swiftdrop/db", "exec", "prisma", "migrate", "deploy"],
     {
       cwd: root,
@@ -95,8 +105,7 @@ beforeAll(async () => {
     },
   );
   try {
-    execFileSync(
-      "pnpm",
+    runPnpm(
       [
         "--filter",
         "@swiftdrop/db",

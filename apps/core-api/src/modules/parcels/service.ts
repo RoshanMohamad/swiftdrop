@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma, type Database } from "@swiftdrop/db";
 import type {
   bookingRequestSchema,
+  merchantOrderRequestSchema,
   quoteRequestSchema,
   parcelSchema,
   publicTrackingSchema,
@@ -68,6 +69,7 @@ const parcelInclude = {
 
 type QuoteInput = z.infer<typeof quoteRequestSchema>;
 type BookingInput = z.infer<typeof bookingRequestSchema>;
+type MerchantOrderInput = z.infer<typeof merchantOrderRequestSchema>;
 type ZoneInput = z.infer<typeof zoneInputSchema>;
 type PriceInput = z.infer<typeof priceInputSchema>;
 
@@ -243,6 +245,229 @@ export class ParcelService {
           409,
           "BOOKING_BUSY",
           "This booking changed at the same time. Retry with the same key.",
+        );
+      throw error;
+    }
+  }
+
+  async createMerchantOrder(
+    merchantId: string,
+    idempotencyKey: string,
+    input: MerchantOrderInput,
+  ) {
+    if (!/^[A-Za-z0-9._~-]{16,128}$/.test(idempotencyKey))
+      throw new HttpError(
+        400,
+        "IDEMPOTENCY_KEY",
+        "Send a valid Idempotency-Key header.",
+      );
+    const principalKey = `merchant:${merchantId}`;
+    const hash = requestHash(input);
+    const operation = "merchant.order.create.v1";
+    try {
+      return await this.db.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${principalKey + operation + idempotencyKey}, 0))`;
+          await tx.$queryRaw`SELECT id FROM merchants WHERE id = ${merchantId}::uuid FOR UPDATE`;
+          const merchant = await tx.merchant.findUnique({
+            where: { id: merchantId },
+            include: { user: { select: { status: true } } },
+          });
+          if (!merchant)
+            throw new HttpError(
+              404,
+              "MERCHANT_NOT_FOUND",
+              "Merchant was not found.",
+            );
+          if (
+            merchant.status !== "APPROVED" ||
+            merchant.user.status !== "ACTIVE"
+          )
+            throw new HttpError(
+              403,
+              "MERCHANT_NOT_APPROVED",
+              "Order access is available only to active, approved merchants.",
+            );
+          const now = new Date();
+          await tx.idempotencyRecord.deleteMany({
+            where: {
+              principalKey,
+              operation,
+              key: idempotencyKey,
+              expiresAt: { lte: now },
+            },
+          });
+          const previous = await tx.idempotencyRecord.findUnique({
+            where: {
+              principalKey_operation_key: {
+                principalKey,
+                operation,
+                key: idempotencyKey,
+              },
+            },
+          });
+          if (previous) {
+            if (previous.requestHash !== hash)
+              throw new HttpError(
+                409,
+                "IDEMPOTENCY_CONFLICT",
+                "This request key was already used with different order details.",
+              );
+            return previous.response as z.infer<typeof parcelSchema>;
+          }
+
+          const [origin, destination] = await Promise.all([
+            tx.zone.findFirst({
+              where: {
+                district: { equals: input.originDistrict, mode: "insensitive" },
+                active: true,
+              },
+            }),
+            tx.zone.findFirst({
+              where: {
+                district: {
+                  equals: input.destinationDistrict,
+                  mode: "insensitive",
+                },
+                active: true,
+              },
+            }),
+          ]);
+          if (!origin || !destination)
+            throw new HttpError(
+              422,
+              "UNSERVED_AREA",
+              "One or both districts are not currently served.",
+            );
+          if (origin.id === destination.id)
+            throw new HttpError(
+              422,
+              "INVALID_ROUTE",
+              "Choose different pickup and delivery districts.",
+            );
+          const price = await tx.priceVersion.findFirst({
+            where: {
+              originZoneId: origin.id,
+              destinationZoneId: destination.id,
+              effectiveFrom: { lte: now },
+            },
+            orderBy: { effectiveFrom: "desc" },
+          });
+          if (!price)
+            throw new HttpError(
+              422,
+              "PRICE_UNAVAILABLE",
+              "A price is not available for this route yet.",
+            );
+          const dimensions = {
+            weightGrams: input.weightGrams,
+            lengthMm: input.lengthMm,
+            widthMm: input.widthMm,
+            heightMm: input.heightMm,
+          };
+          const feeCents = this.pricing.getStrategy().calculate(
+            dimensions,
+            price,
+          );
+          const quote = await tx.quote.create({
+            data: {
+              userId: merchant.userId,
+              originZoneId: origin.id,
+              destinationZoneId: destination.id,
+              priceVersionId: price.id,
+              ...dimensions,
+              feeCents,
+              expiresAt: now,
+              consumedAt: now,
+            },
+          });
+          const parcelId = randomUUID();
+          let tracking = "";
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const candidate = trackingNumber();
+            if (
+              !(await tx.parcel.findUnique({
+                where: { trackingNumber: candidate },
+                select: { id: true },
+              }))
+            ) {
+              tracking = candidate;
+              break;
+            }
+          }
+          if (!tracking)
+            throw new HttpError(
+              503,
+              "TRACKING_UNAVAILABLE",
+              "A tracking number could not be reserved. Retry with the same key.",
+            );
+          await tx.parcel.create({
+            data: {
+              id: parcelId,
+              trackingNumber: tracking,
+              userId: merchant.userId,
+              merchantId: merchant.id,
+              quoteId: quote.id,
+              originZoneId: origin.id,
+              destinationZoneId: destination.id,
+              feeCents,
+              recipientName: input.recipientName,
+              recipientPhone: input.recipientPhone,
+              recipientAddress: input.recipientAddress,
+              history: {
+                create: {
+                  status: "CREATED",
+                  town: origin.town,
+                  createdAt: now,
+                },
+              },
+            },
+          });
+          const parcel = await tx.parcel.findUniqueOrThrow({
+            where: { id: parcelId },
+            include: parcelInclude,
+          });
+          const response = publicParcel(parcel);
+          const eventId = randomUUID();
+          await tx.outboxEvent.create({
+            data: {
+              eventId,
+              eventType: "parcel.created",
+              aggregateId: parcelId,
+              payload: {
+                eventId,
+                eventType: "parcel.created",
+                parcelId,
+                status: "CREATED",
+                town: origin.town,
+                createdAt: now.toISOString(),
+              },
+            },
+          });
+          await tx.idempotencyRecord.create({
+            data: {
+              principalKey,
+              operation,
+              key: idempotencyKey,
+              requestHash: hash,
+              response,
+              expiresAt: new Date(now.getTime() + 24 * 60 * 60_000),
+            },
+          });
+          return response;
+        },
+        { timeout: 10_000 },
+      );
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2034"
+      )
+        throw new HttpError(
+          409,
+          "ORDER_BUSY",
+          "This order changed at the same time. Retry with the same key.",
         );
       throw error;
     }

@@ -72,8 +72,37 @@ model Merchant {
   reviewedBy   User?          @relation("MerchantReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  apiClients   MerchantApiClient[]
+  parcels      Parcel[]             @relation("MerchantOrders")
+  webhookConfig MerchantWebhookConfig?
   @@index([status, createdAt, id])
   @@map("merchants")
+}
+
+model MerchantApiClient {
+  id           String    @id @default(uuid()) @db.Uuid
+  merchantId   String    @map("merchant_id") @db.Uuid
+  merchant     Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  clientId     String    @unique @map("client_id") @db.VarChar(64)
+  name         String    @db.VarChar(80)
+  secretHash   String    @map("secret_hash") @db.Char(64)
+  scopes       String[]  @default([])
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  rotatedAt    DateTime? @map("rotated_at") @db.Timestamptz(3)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
+  accessGrants AccessGrant[]
+  @@index([merchantId, createdAt, id])
+  @@map("merchant_api_clients")
+}
+
+model MerchantWebhookConfig {
+  merchantId String   @id @map("merchant_id") @db.Uuid
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  url        String   @db.VarChar(2048)
+  encryptedSecret String @map("encrypted_secret") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@map("merchant_webhook_configs")
 }
 
 model StaffInvitation {
@@ -151,6 +180,8 @@ model Parcel {
   trackingNumber String @unique @map("tracking_number") @db.VarChar(16)
   userId Int @map("user_id")
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  merchantId String? @map("merchant_id") @db.Uuid
+  merchant Merchant? @relation("MerchantOrders", fields: [merchantId], references: [id], onDelete: Restrict)
   quoteId String @unique @map("quote_id") @db.Uuid
   quote Quote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   originZoneId Int @map("origin_zone_id")
@@ -168,6 +199,7 @@ model Parcel {
   history ParcelHistory[]
   receipt Receipt?
   @@index([userId, createdAt, id])
+  @@index([merchantId, createdAt, id])
   @@map("parcels")
 }
 
@@ -392,10 +424,13 @@ model RefreshToken {
 }
 model AccessGrant {
   jti       String @id @db.Uuid
-  familyId  String @map("family_id") @db.Uuid
-  family    AuthSession @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  familyId  String? @map("family_id") @db.Uuid
+  family    AuthSession? @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  clientId  String? @map("client_id") @db.Uuid
+  client    MerchantApiClient? @relation(fields: [clientId], references: [id], onDelete: Cascade)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   @@index([familyId])
+  @@index([clientId])
   @@index([expiresAt])
   @@map("access_grants")
 }
