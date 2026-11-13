@@ -22,13 +22,16 @@ import {
   bookingRequestSchema,
   parcelSchema,
   parcelPageSchema,
+  receiptSchema,
   publicTrackingSchema,
   zoneInputSchema,
   zoneSchema,
   priceInputSchema,
   priceSchema,
   createStaffSchema,
-  staffPageSchema,
+  adminUsersPageSchema,
+  adminUserSchema,
+  userStatusChangeSchema,
   invitationActionSchema,
   invitationResultSchema,
   acceptInvitationSchema,
@@ -37,10 +40,24 @@ import {
   webhookDeliveryDetailSchema,
   webhookReplayRequestSchema,
   webhookReplayResultSchema,
+  notificationLookupResultSchema,
+  dailyReportSummarySchema,
+  assistantChatInputSchema,
+  assistantChatOutputSchema,
+  merchantRegistrationSchema,
+  merchantReviewSchema,
+  merchantSchema,
+  merchantPageSchema,
+  merchantRegistrationResultSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
 registry.registerComponent("securitySchemes", "bearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
+});
+registry.registerComponent("securitySchemes", "serviceBearerAuth", {
   type: "http",
   scheme: "bearer",
   bearerFormat: "JWT",
@@ -131,10 +148,28 @@ for (const [method, suffix, input, output, status, bearer] of [
   });
 }
 for (const [method, path, input, output, status, bearer] of [
+  [
+    "post",
+    "/api/v1/merchant/register",
+    merchantRegistrationSchema,
+    merchantRegistrationResultSchema,
+    202,
+    false,
+  ],
+  ["get", "/api/v1/admin/merchants", null, merchantPageSchema, 200, true],
+  [
+    "patch",
+    "/api/v1/admin/merchants/{id}/review",
+    merchantReviewSchema,
+    merchantSchema,
+    200,
+    true,
+  ],
   ["post", "/api/v1/quotes", quoteRequestSchema, quoteSchema, 201, true],
   ["post", "/api/v1/parcels", bookingRequestSchema, parcelSchema, 201, true],
   ["get", "/api/v1/parcels", null, parcelPageSchema, 200, true],
   ["get", "/api/v1/parcels/{id}", null, parcelSchema, 200, true],
+  ["get", "/api/v1/parcels/{id}/receipt", null, receiptSchema, 200, true],
   [
     "get",
     "/api/v1/track/{trackingNumber}",
@@ -149,6 +184,22 @@ for (const [method, path, input, output, status, bearer] of [
   ["delete", "/api/v1/admin/zones/{id}", null, null, 204, true],
   ["get", "/api/v1/admin/pricing", null, z.array(priceSchema), 200, true],
   ["post", "/api/v1/admin/pricing", priceInputSchema, priceSchema, 201, true],
+  [
+    "get",
+    "/api/v1/admin/reports/daily",
+    null,
+    dailyReportSummarySchema,
+    200,
+    true,
+  ],
+  [
+    "post",
+    "/api/v1/assistant/chat",
+    assistantChatInputSchema,
+    assistantChatOutputSchema,
+    200,
+    false,
+  ],
 ] as const) {
   registry.registerPath({
     method,
@@ -188,6 +239,30 @@ for (const [method, path, input, output, status, bearer] of [
               in: "query" as const,
               required: false,
               schema: { type: "string" as const },
+            },
+          ],
+        }
+      : {}),
+    ...(method === "get" && path === "/api/v1/admin/reports/daily"
+      ? {
+          parameters: [
+            {
+              name: "from",
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const },
+            },
+            {
+              name: "to",
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const },
+            },
+            {
+              name: "format",
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const, enum: ["json", "csv"] },
             },
           ],
         }
@@ -234,8 +309,45 @@ for (const [method, path, input, output, status, bearer] of [
     },
   });
 }
+registry.registerPath({
+  method: "get",
+  path: "/internal/v1/notifications/events/{eventId}",
+  summary: "Look up booking contacts for a persisted parcel.created event",
+  parameters: [
+    {
+      name: "eventId",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+  ],
+  security: [{ serviceBearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Booking contact lookup",
+      content: json(notificationLookupResultSchema),
+    },
+    ...Object.fromEntries(
+      [400, 401, 403, 404, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
 for (const [method, path, input, output, status, bearer] of [
-  ["get", "/api/v1/admin/users", null, staffPageSchema, 200, true],
+  ["get", "/api/v1/admin/users", null, adminUsersPageSchema, 200, true],
+  [
+    "patch",
+    "/api/v1/admin/users/{id}/status",
+    userStatusChangeSchema,
+    adminUserSchema,
+    200,
+    true,
+  ],
   [
     "post",
     "/api/v1/admin/users",
@@ -286,7 +398,13 @@ for (const [method, path, input, output, status, bearer] of [
               required: false,
               schema: {
                 type: "string" as const,
-                enum: ["COURIER", "DISPATCHER"],
+                enum: [
+                  "CUSTOMER",
+                  "MERCHANT",
+                  "COURIER",
+                  "DISPATCHER",
+                  "ADMIN",
+                ],
               },
             },
             {

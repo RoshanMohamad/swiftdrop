@@ -24,6 +24,12 @@ module.exports = {
     "src/modules/auth/jwt.ts",
     "src/modules/auth/password.ts",
     "src/modules/auth/cleanup.ts",
+    "src/modules/auth/transactions.ts",
+    "src/modules/users/service.ts",
+    "src/modules/users/admin.ts",
+    "src/modules/services/auth.ts",
+    "src/modules/services/notifications.ts",
+    "src/modules/services/signing.ts",
   ],
   coverageThreshold: { global: { lines: 80 } },
 };

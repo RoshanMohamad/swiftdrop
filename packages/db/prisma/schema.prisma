@@ -19,6 +19,12 @@ enum UserStatus {
 }
 enum ParcelStatus {
   CREATED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  CANCELLED
 }
 model Role {
   id    RoleName @id
@@ -44,7 +50,30 @@ model User {
   oauthTransactions OAuthTransaction[]
   quotes Quote[]
   parcels Parcel[]
+  merchant Merchant?
+  reviewedMerchants Merchant[] @relation("MerchantReviewer")
   @@map("users")
+}
+
+enum MerchantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Merchant {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       Int            @unique @map("user_id")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName String         @map("business_name") @db.VarChar(160)
+  status       MerchantStatus @default(PENDING)
+  reviewedAt   DateTime?      @map("reviewed_at") @db.Timestamptz(3)
+  reviewedById Int?           @map("reviewed_by_id")
+  reviewedBy   User?          @relation("MerchantReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@index([status, createdAt, id])
+  @@map("merchants")
 }
 
 model StaffInvitation {
@@ -137,6 +166,7 @@ model Parcel {
   recipientAddress String @map("recipient_address") @db.VarChar(300)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   history ParcelHistory[]
+  receipt Receipt?
   @@index([userId, createdAt, id])
   @@map("parcels")
 }
@@ -150,6 +180,17 @@ model ParcelHistory {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   @@index([parcelId, createdAt, id])
   @@map("parcel_history")
+}
+
+model Receipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  parcelId        String   @unique @map("parcel_id") @db.Uuid
+  parcel          Parcel   @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  reference       String   @unique @db.VarChar(40)
+  objectKey       String   @unique @map("object_key") @db.VarChar(255)
+  generatedAt     DateTime @map("generated_at") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@map("parcel_receipts")
 }
 
 model IdempotencyRecord {
@@ -263,6 +304,31 @@ model ConsumerProgress {
   eventType String @map("event_type") @db.VarChar(100)
   consumedAt DateTime @default(now()) @map("consumed_at") @db.Timestamptz(3)
   @@map("consumer_progress")
+}
+
+model ServicePrincipal {
+  serviceId    String           @id @map("service_id") @db.VarChar(80)
+  serviceKind  String           @map("service_kind") @db.VarChar(32)
+  audience     String           @db.VarChar(120)
+  permissions  String[]         @default([])
+  revokedAt    DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  keys         ServicePublicKey[]
+  @@map("service_principals")
+}
+
+model ServicePublicKey {
+  keyId        String           @id @map("key_id") @db.VarChar(80)
+  serviceId    String           @map("service_id") @db.VarChar(80)
+  principal    ServicePrincipal @relation(fields: [serviceId], references: [serviceId], onDelete: Cascade)
+  publicKeyPem String           @map("public_key_pem") @db.Text
+  notBefore    DateTime         @map("not_before") @db.Timestamptz(3)
+  notAfter     DateTime?        @map("not_after") @db.Timestamptz(3)
+  revokedAt    DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([serviceId, notBefore, notAfter])
+  @@map("service_public_keys")
 }
 model VerificationToken {
   id         String   @id @default(uuid()) @db.Uuid

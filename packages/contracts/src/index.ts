@@ -1,5 +1,7 @@
 import { z } from "zod";
 import commonPasswords from "./common-passwords.json" with { type: "json" };
+export * from "./lifecycle";
+import { parcelStatusSchema } from "./lifecycle";
 const blocked = new Set(commonPasswords);
 export const roleSchema = z.enum([
   "CUSTOMER",
@@ -15,6 +17,17 @@ export const emailSchema = z
   .toLowerCase()
   .max(254)
   .email("Enter a valid email address.");
+export const notificationEventIdSchema = z.string().uuid();
+export const notificationLookupResultSchema = z
+  .object({
+    eventId: z.string().uuid(),
+    parcelId: z.string().uuid(),
+    trackingNumber: z.string().min(1).max(16),
+    customerEmail: emailSchema,
+    recipientName: z.string().min(1).max(120),
+    recipientPhone: z.string().regex(/^\+94[1-9]\d{8}$/),
+  })
+  .strict();
 export const passwordSchema = z
   .string()
   .refine((value) => [...value].length >= 15, "Use at least 15 characters.")
@@ -49,6 +62,41 @@ export const registrationSchema = z
   })
   .strict();
 export type Registration = z.infer<typeof registrationSchema>;
+export const merchantRegistrationSchema = registrationSchema
+  .extend({
+    businessName: z
+      .string()
+      .trim()
+      .min(2)
+      .max(160)
+      .regex(/^[^\p{Cc}]+$/u),
+  })
+  .strict();
+export type MerchantRegistration = z.infer<typeof merchantRegistrationSchema>;
+export const merchantStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+export const merchantReviewSchema = z
+  .object({
+    status: z.enum(["APPROVED", "REJECTED"]),
+  })
+  .strict();
+export type MerchantReview = z.infer<typeof merchantReviewSchema>;
+export const merchantSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.number().int().positive(),
+  email: emailSchema,
+  fullName: z.string(),
+  phone: z.string(),
+  businessName: z.string(),
+  status: merchantStatusSchema,
+  createdAt: z.string().datetime(),
+  reviewedAt: z.string().datetime().nullable(),
+});
+export const merchantPageSchema = z.object({
+  items: z.array(merchantSchema).max(100),
+});
+export const merchantRegistrationResultSchema = z.object({
+  message: z.string(),
+});
 export const loginSchema = z
   .object({
     email: emailSchema,
@@ -140,9 +188,13 @@ export type BookingRequest = z.infer<typeof bookingRequestSchema>;
 export const parcelSchema = z.object({
   id: z.string().uuid(),
   trackingNumber: z.string().regex(/^SD[A-Z0-9]{8}$/),
-  status: z.literal("CREATED"),
+  status: parcelStatusSchema,
   feeCents: z.number().int().nonnegative(),
   currency: z.literal("LKR"),
+  weightGrams: z.number().int().positive(),
+  lengthMm: z.number().int().positive(),
+  widthMm: z.number().int().positive(),
+  heightMm: z.number().int().positive(),
   originTown: z.string(),
   destinationTown: z.string(),
   recipientName: z.string(),
@@ -152,7 +204,7 @@ export const parcelSchema = z.object({
   history: z
     .array(
       z.object({
-        status: z.literal("CREATED"),
+        status: parcelStatusSchema,
         town: z.string(),
         createdAt: z.string().datetime(),
       }),
@@ -163,21 +215,44 @@ export const parcelPageSchema = z.object({
   items: z.array(parcelSchema),
   nextCursor: z.string().nullable(),
 });
+export const receiptSchema = z.object({
+  receiptReference: z.string().min(1).max(40),
+  downloadUrl: z.url(),
+  expiresAt: z.string().datetime(),
+});
 export const publicTrackingSchema = z.object({
   trackingNumber: z.string(),
-  status: z.literal("CREATED"),
+  status: parcelStatusSchema,
   originTown: z.string(),
   destinationTown: z.string(),
   history: z
     .array(
       z.object({
-        status: z.literal("CREATED"),
+        status: parcelStatusSchema,
         town: z.string(),
         createdAt: z.string().datetime(),
       }),
     )
     .max(100),
 });
+export const statusTransitionSchema = z
+  .object({
+    to: z.enum([
+      "PICKED_UP",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "DELIVERED",
+      "FAILED",
+    ]),
+    town: z.string().trim().min(1).max(80),
+    version: z.number().int().positive(),
+  })
+  .strict();
+export type StatusTransition = z.infer<typeof statusTransitionSchema>;
+export const cancelParcelSchema = z
+  .object({ version: z.number().int().positive() })
+  .strict();
+export type CancelParcel = z.infer<typeof cancelParcelSchema>;
 export const zoneSchema = z.object({
   id: z.number().int(),
   district: z.string(),
@@ -202,9 +277,14 @@ export const priceInputSchema = z
   })
   .strict();
 export type PriceInput = z.infer<typeof priceInputSchema>;
-export const priceSchema = priceInputSchema.extend({
+export const priceSchema = z.object({
   id: z.number().int(),
+  originZoneId: z.number().int().positive(),
+  destinationZoneId: z.number().int().positive(),
+  baseCents: z.number().int().nonnegative().max(100000000),
+  perExtraKgCents: z.number().int().nonnegative().max(100000000),
   effectiveFrom: z.string().datetime(),
+  createdAt: z.string().datetime().optional(),
 });
 export const zoneListSchema = z.array(zoneSchema);
 export const priceListSchema = z.array(priceSchema);
@@ -256,6 +336,20 @@ export const staffPageSchema = z.object({
   items: z.array(staffUserSchema).max(101),
   nextCursor: z.string().nullable(),
 });
+export const adminUserSchema = staffUserSchema.extend({
+  fullName: z.string().nullable(),
+  phone: z.string().nullable(),
+  role: roleSchema,
+});
+export const adminUsersPageSchema = z.object({
+  items: z.array(adminUserSchema).max(100),
+  nextCursor: z.string().nullable(),
+});
+export const userStatusChangeSchema = z
+  .object({ status: z.enum(["ACTIVE", "SUSPENDED"]) })
+  .strict();
+export type AdminUser = z.infer<typeof adminUserSchema>;
+export type UserStatusChange = z.infer<typeof userStatusChangeSchema>;
 export const invitationActionSchema = z
   .object({ action: z.enum(["resend", "revoke"]) })
   .strict();
@@ -272,6 +366,56 @@ export const invitationResultSchema = z.object({
 export const acceptInvitationResultSchema = z.object({
   message: z.string(),
 });
+export const dailyReportQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  format: z.enum(["json", "csv"]).default("json").optional(),
+});
+export type DailyReportQuery = z.infer<typeof dailyReportQuerySchema>;
+
+export const dailyReportItemSchema = z.object({
+  date: z.string(),
+  totalBooked: z.number().int().nonnegative(),
+  totalDelivered: z.number().int().nonnegative(),
+  totalFailed: z.number().int().nonnegative(),
+  totalInTransit: z.number().int().nonnegative(),
+  successRatePercent: z.number().min(0).max(100),
+});
+export type DailyReportItem = z.infer<typeof dailyReportItemSchema>;
+
+export const dailyReportSummarySchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  totalBooked: z.number().int().nonnegative(),
+  totalDelivered: z.number().int().nonnegative(),
+  totalFailed: z.number().int().nonnegative(),
+  overallSuccessRatePercent: z.number().min(0).max(100),
+  days: z.array(dailyReportItemSchema),
+});
+export type DailyReportSummary = z.infer<typeof dailyReportSummarySchema>;
+
+export const assistantChatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().max(2000),
+});
+
+export const assistantChatInputSchema = z
+  .object({
+    message: z.string().trim().min(1).max(1000),
+    history: z.array(assistantChatMessageSchema).optional(),
+  })
+  .strict();
+export type AssistantChatInput = z.infer<typeof assistantChatInputSchema>;
+
+export const assistantChatOutputSchema = z
+  .object({
+    reply: z.string(),
+    toolsUsed: z.array(z.string()),
+    data: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+export type AssistantChatOutput = z.infer<typeof assistantChatOutputSchema>;
+
 export const sessionSchema = z.object({
   state: z.literal("authenticated"),
   accessToken: z.string(),

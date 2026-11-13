@@ -55,7 +55,7 @@ This registry is the source of contributor identity across chats and branches. I
 | Member ID | Delivery slice (plan.md §4.1) | Name | Owned branches |
 | :-- | :-- | :-- | :-- |
 | M01 | 1 / Identity, access and user administration (also silent-work steward) | doktur-umair | `umair-dev` |
-| M02 | 2 / Merchant platform | TBD | TBD |
+| M02 | 2 / Merchant platform | TBD | `feature/Merchant` |
 | M03 | 3 / Pricing, zones and reports | TBD | TBD |
 | M04 | 4 / Customer booking and parcel records | TBD | TBD |
 | M05 | 5 / Parcel lifecycle, cancellation and public tracking | TBD | TBD |
@@ -63,7 +63,7 @@ This registry is the source of contributor identity across chats and branches. I
 | M07 | 7 / Courier delivery and offline PWA | TBD | TBD |
 | M08 | 8 / Eventing and webhook delivery | TBD | TBD |
 | M09 | 9 / Notifications and realtime | TBD | TBD |
-| M10 | 10 / Platform kernel and web foundation | TBD | TBD |
+| M10 | 10 / Platform kernel and web foundation | Lavin | `lavin-dev` |
 
 At the start of every new chat, after switching branches/worktrees, and before attributing a handover entry:
 

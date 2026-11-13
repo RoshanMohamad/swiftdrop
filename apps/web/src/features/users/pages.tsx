@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { createStaffSchema, type CreateStaff } from "@swiftdrop/contracts";
+import {
+  createStaffSchema,
+  type CreateStaff,
+  type Role,
+} from "@swiftdrop/contracts";
 import {
   createStaff,
   errorMessage,
-  listStaff,
+  listUsers,
+  updateUserStatus,
+  ApiError,
   updateInvitation,
 } from "../auth/client.js";
 
-type Staff = Awaited<ReturnType<typeof listStaff>>["items"][number];
+type Account = Awaited<ReturnType<typeof listUsers>>["items"][number];
 const deliveryText = (delivery: "sent" | "failed" | "not_sent") =>
   delivery === "sent"
     ? "Invitation email accepted by the mail server."
@@ -18,17 +24,20 @@ const deliveryText = (delivery: "sent" | "failed" | "not_sent") =>
 
 export function AdminUsers() {
   const location = useLocation();
-  const [role, setRole] = useState<"" | "COURIER" | "DISPATCHER">("");
+  const [role, setRole] = useState<"" | Role>("");
   const [status, setStatus] = useState<"" | "INVITED" | "ACTIVE" | "SUSPENDED">(
     "",
   );
   const [cursor, setCursor] = useState<string | undefined>();
   const [history, setHistory] = useState<Array<string | undefined>>([]);
-  const [rows, setRows] = useState<Staff[]>([]);
+  const [rows, setRows] = useState<Account[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<string>(location.state?.notice ?? "");
+  const busy = useRef(false);
+  const noticeRef = useRef<HTMLParagraphElement>(null);
+  const [actionError, setActionError] = useState("");
   const [actionId, setActionId] = useState<number | null>(null);
   const [refresh, setRefresh] = useState(0);
 
@@ -36,13 +45,18 @@ export function AdminUsers() {
     let live = true;
     setLoading(true);
     setError("");
-    void listStaff({
+    void listUsers({
       role: role || undefined,
       status: status || undefined,
       cursor,
     })
       .then((page) => {
         if (!live) return;
+        if (!page.items.length && cursor) {
+          setCursor(undefined);
+          setHistory([]);
+          return;
+        }
         setRows(page.items);
         setNext(page.nextCursor);
       })
@@ -62,8 +76,8 @@ export function AdminUsers() {
     setCursor(undefined);
     setHistory([]);
   }
-  async function action(row: Staff, kind: "resend" | "revoke") {
-    if (actionId !== null) return;
+  async function action(row: Account, kind: "resend" | "revoke") {
+    if (busy.current) return;
     if (
       kind === "revoke" &&
       !window.confirm(
@@ -71,8 +85,10 @@ export function AdminUsers() {
       )
     )
       return;
+    busy.current = true;
     setActionId(row.id);
     setNotice("");
+    setActionError("");
     try {
       const result = await updateInvitation(row.id, kind);
       setNotice(
@@ -82,9 +98,45 @@ export function AdminUsers() {
       );
       setRefresh((n) => n + 1);
     } catch (cause) {
-      setNotice(errorMessage(cause));
+      setActionError(errorMessage(cause));
     } finally {
+      busy.current = false;
       setActionId(null);
+      noticeRef.current?.focus();
+    }
+  }
+  async function changeStatus(row: Account) {
+    if (busy.current) return;
+    const nextStatus = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    const verb = nextStatus === "SUSPENDED" ? "Suspend" : "Reactivate";
+    if (
+      !window.confirm(
+        `${verb} ${row.fullName ?? "this user"} (${row.email})? ${
+          nextStatus === "SUSPENDED"
+            ? "All their sessions and pending account actions will be revoked."
+            : "They must sign in again. Old sessions will remain revoked."
+        }`,
+      )
+    )
+      return;
+    busy.current = true;
+    setActionId(row.id);
+    setNotice("");
+    setActionError("");
+    try {
+      const result = await updateUserStatus(row.id, nextStatus);
+      setNotice(
+        `${row.email}: ${result.status === "SUSPENDED" ? "suspended; all sessions revoked." : "reactivated; fresh sign-in required."}`,
+      );
+      setRefresh((n) => n + 1);
+    } catch (cause) {
+      setActionError(errorMessage(cause));
+      if (cause instanceof ApiError && cause.problem.status === 409)
+        setRefresh((n) => n + 1);
+    } finally {
+      busy.current = false;
+      setActionId(null);
+      noticeRef.current?.focus();
     }
   }
   return (
@@ -92,9 +144,9 @@ export function AdminUsers() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Administration</span>
-          <h1>Staff users</h1>
+          <h1>Users</h1>
           <p className="muted">
-            Invite dispatchers and couriers. New staff choose their own
+            Manage account access for all roles. Invited staff choose their own
             password.
           </p>
         </div>
@@ -112,7 +164,10 @@ export function AdminUsers() {
               changeFilter(() => setRole(event.target.value as typeof role))
             }
           >
-            <option value="">All staff roles</option>
+            <option value="">All roles</option>
+            <option value="CUSTOMER">Customer</option>
+            <option value="MERCHANT">Merchant</option>
+            <option value="ADMIN">Admin</option>
             <option value="DISPATCHER">Dispatcher</option>
             <option value="COURIER">Courier</option>
           </select>
@@ -133,11 +188,18 @@ export function AdminUsers() {
           </select>
         </div>
       </div>
-      {notice && (
-        <p role="status" aria-live="polite" className="notice">
-          {notice}
-        </p>
-      )}
+      <p
+        ref={noticeRef}
+        tabIndex={-1}
+        role={actionError ? "alert" : "status"}
+        className={
+          notice || actionError
+            ? `notice${actionError ? " error" : ""}`
+            : undefined
+        }
+      >
+        {actionError || notice}
+      </p>
       {error && (
         <div role="alert" className="notice error">
           {error}
@@ -150,9 +212,9 @@ export function AdminUsers() {
         </div>
       )}
       {loading ? (
-        <p role="status">Loading staff users…</p>
+        <p role="status">Loading users…</p>
       ) : !error && rows.length === 0 ? (
-        <p className="notice">No staff users match these filters.</p>
+        <p className="notice">No users match these filters.</p>
       ) : (
         !error && (
           <div className="table-scroll">
@@ -170,37 +232,55 @@ export function AdminUsers() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
-                    <td>{row.fullName}</td>
+                    <td>{row.fullName ?? "Profile incomplete"}</td>
                     <td>{row.email}</td>
+                    <td>{row.role}</td>
                     <td>
-                      {row.role === "DISPATCHER" ? "Dispatcher" : "Courier"}
+                      <span
+                        className={`user-status user-status-${row.status.toLowerCase()}`}
+                      >
+                        {row.status}
+                      </span>
                     </td>
-                    <td>{row.status}</td>
                     <td>
                       {row.invitationExpiresAt
                         ? `Expires ${new Date(row.invitationExpiresAt).toLocaleString()}`
                         : "—"}
                     </td>
                     <td>
-                      {row.status === "INVITED" && (
-                        <div className="row-actions">
-                          <button
-                            className="secondary"
-                            disabled={actionId !== null}
-                            onClick={() => void action(row, "resend")}
-                          >
-                            {actionId === row.id ? "Working…" : "Resend"}
-                          </button>
-                          <button
-                            className="text-button"
-                            disabled={
-                              actionId !== null || !row.invitationExpiresAt
-                            }
-                            onClick={() => void action(row, "revoke")}
-                          >
-                            Revoke
-                          </button>
-                        </div>
+                      {row.status === "INVITED" &&
+                        ["COURIER", "DISPATCHER"].includes(row.role) && (
+                          <div className="row-actions">
+                            <button
+                              className="secondary"
+                              disabled={actionId !== null}
+                              onClick={() => void action(row, "resend")}
+                            >
+                              {actionId === row.id ? "Working…" : "Resend"}
+                            </button>
+                            <button
+                              className="text-button"
+                              disabled={
+                                actionId !== null || !row.invitationExpiresAt
+                              }
+                              onClick={() => void action(row, "revoke")}
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        )}
+                      {row.status !== "INVITED" && (
+                        <button
+                          className="secondary"
+                          disabled={actionId !== null}
+                          onClick={() => void changeStatus(row)}
+                        >
+                          {actionId === row.id
+                            ? "Working…"
+                            : row.status === "ACTIVE"
+                              ? "Suspend"
+                              : "Reactivate"}
+                        </button>
                       )}
                     </td>
                   </tr>

@@ -25,6 +25,7 @@ import {
 import { checkPassword } from "./password.js";
 import * as oidc from "openid-client";
 import type { Logger } from "pino";
+import { revokeUserSessions } from "./transactions.js";
 export const tokenHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 export const validRefresh = (token: unknown): token is string =>
@@ -181,7 +182,17 @@ export class AuthService {
       );
     }
     try {
+      const boundUserId =
+        tx.userId ??
+        (
+          await this.db.user.findUnique({
+            where: { googleSub: identity.sub },
+            select: { id: true },
+          })
+        )?.id;
       return await this.db.$transaction(async (dbtx) => {
+        // Suspension also invalidates OAuth actions: keep user → action lock order.
+        if (boundUserId) await this.lockUser(dbtx, boundUserId);
         await dbtx.$queryRaw`SELECT id FROM oauth_transactions WHERE id = ${tx.id}::uuid FOR UPDATE`;
         const current = await dbtx.oAuthTransaction.findUnique({
           where: { id: tx.id },
@@ -640,11 +651,7 @@ export class AuthService {
   async revokeAll(userId: number) {
     await this.db.$transaction(async (tx) => {
       await this.lockUser(tx, userId);
-      await tx.authSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date(), revocationReason: "logout_all" },
-      });
-      await tx.accessGrant.deleteMany({ where: { family: { userId } } });
+      await revokeUserSessions(tx, userId, "logout_all");
     });
   }
   async authenticate(header: string | undefined) {

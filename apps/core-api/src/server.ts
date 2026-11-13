@@ -1,10 +1,13 @@
 import { Redis } from "ioredis";
 import { createDatabase } from "@swiftdrop/db";
 import { createApp } from "./app.js";
+import { createInternalApp } from "./internal-app.js";
 import { loadConfig } from "./shared/config.js";
 import { createTokenService } from "./modules/auth/jwt.js";
 import { createAuthMailer } from "./modules/auth/mail.js";
 import pino from "pino";
+import { startParcelEventWorkers } from "./modules/parcels/events.js";
+import { ReceiptService } from "./modules/receipts/service.js";
 const config = loadConfig();
 const db = createDatabase(config.DATABASE_URL);
 const redis = new Redis(config.REDIS_URL, {
@@ -35,6 +38,7 @@ const logger = pino({
     censor: "[REDACTED]",
   },
 });
+const workerState = { connected: false };
 const { app } = createApp({
   db,
   redis,
@@ -42,9 +46,27 @@ const { app } = createApp({
   tokens,
   mailer: createAuthMailer(config.SMTP_URL),
   logger,
+  workerState,
+  receipts: new ReceiptService(db, config),
 });
+const internalApp = createInternalApp({ db, config, logger });
+const workers = startParcelEventWorkers(
+  db,
+  config.RABBITMQ_URL,
+  logger,
+  workerState,
+  new ReceiptService(db, config),
+);
 const server = app.listen(config.PORT, "127.0.0.1", () =>
   console.log(`SwiftDrop API listening at http://127.0.0.1:${config.PORT}`),
+);
+const internalServer = internalApp.listen(
+  config.INTERNAL_PORT,
+  "127.0.0.1",
+  () =>
+    console.log(
+      `SwiftDrop internal API listening at http://127.0.0.1:${config.INTERNAL_PORT}`,
+    ),
 );
 let stopping = false;
 async function shutdown() {
@@ -53,9 +75,15 @@ async function shutdown() {
   const timeout = setTimeout(() => process.exit(1), 10000);
   timeout.unref();
   try {
-    await new Promise<void>((done, fail) =>
-      server.close((error) => (error ? fail(error) : done())),
+    await Promise.all(
+      [server, internalServer].map(
+        (listener) =>
+          new Promise<void>((done, fail) =>
+            listener.close((error) => (error ? fail(error) : done())),
+          ),
+      ),
     );
+    await workers.stop();
     await db.$disconnect();
     redis.disconnect();
     clearTimeout(timeout);
