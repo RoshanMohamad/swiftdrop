@@ -41,7 +41,6 @@ import {
   merchantApiClientPageSchema,
   merchantApiClientSecretSchema,
   merchantOrderPageSchema,
-  merchantOrderStatusSchema,
   type MerchantOrderStatus,
   type CreateMerchantApiClient,
   emptySchema,
