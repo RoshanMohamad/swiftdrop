@@ -253,6 +253,17 @@ export const cancelParcelSchema = z
   .object({ version: z.number().int().positive() })
   .strict();
 export type CancelParcel = z.infer<typeof cancelParcelSchema>;
+export const lifecycleResultSchema = z.object({
+  status: parcelStatusSchema,
+  version: z.number().int().positive(),
+  attemptCount: z.number().int().nonnegative(),
+});
+export type LifecycleResult = z.infer<typeof lifecycleResultSchema>;
+export const cancelResultSchema = z.object({
+  status: z.literal("CANCELLED"),
+  version: z.number().int().positive(),
+});
+export type CancelResult = z.infer<typeof cancelResultSchema>;
 export const zoneSchema = z.object({
   id: z.number().int(),
   district: z.string(),

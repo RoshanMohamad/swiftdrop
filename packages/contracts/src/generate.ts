@@ -49,6 +49,10 @@ import {
   merchantSchema,
   merchantPageSchema,
   merchantRegistrationResultSchema,
+  statusTransitionSchema,
+  lifecycleResultSchema,
+  cancelParcelSchema,
+  cancelResultSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -178,6 +182,8 @@ for (const [method, path, input, output, status, bearer] of [
     200,
     false,
   ],
+  ["patch", "/api/v1/parcels/{id}/status", statusTransitionSchema, lifecycleResultSchema, 200, true],
+  ["post", "/api/v1/parcels/{id}/cancel", cancelParcelSchema, cancelResultSchema, 200, true],
   ["get", "/api/v1/admin/zones", null, z.array(zoneSchema), 200, true],
   ["post", "/api/v1/admin/zones", zoneInputSchema, zoneSchema, 201, true],
   ["patch", "/api/v1/admin/zones/{id}", zoneInputSchema, zoneSchema, 200, true],
