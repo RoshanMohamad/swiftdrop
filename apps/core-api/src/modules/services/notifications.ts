@@ -1,7 +1,9 @@
 import { Router, type RequestHandler } from "express";
 import {
+  isSwiftDropEvent,
   notificationEventIdSchema,
   notificationLookupResultSchema,
+  ROUTING_KEYS,
 } from "@swiftdrop/contracts";
 import type { Database } from "@swiftdrop/db";
 import { HttpError } from "../../shared/problem.js";
@@ -27,22 +29,21 @@ export function createNotificationLookupRouter(
       const event = await db.outboxEvent.findUnique({ where: { eventId } });
       if (
         !event ||
-        event.eventType !== "parcel.created" ||
+        event.eventType !== ROUTING_KEYS.PARCEL_CREATED ||
         event.aggregateId !== claims.parcelId ||
-        typeof event.payload !== "object" ||
-        event.payload === null ||
-        Array.isArray(event.payload)
+        !isSwiftDropEvent(event.payload) ||
+        event.payload.type !== ROUTING_KEYS.PARCEL_CREATED
       )
         throw new HttpError(
           404,
           "NOT_FOUND",
           "The requested notification event is unavailable.",
         );
-      const payload = event.payload as Record<string, unknown>;
+      const payload = event.payload;
       if (
         payload.eventId !== event.eventId ||
-        payload.eventType !== "parcel.created" ||
-        payload.parcelId !== event.aggregateId ||
+        payload.type !== event.eventType ||
+        payload.data.parcelId !== event.aggregateId ||
         claims.parcelId !== event.aggregateId
       ) {
         throw new HttpError(

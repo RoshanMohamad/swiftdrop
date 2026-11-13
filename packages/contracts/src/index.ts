@@ -1,6 +1,8 @@
 import { z } from "zod";
 import commonPasswords from "./common-passwords.json" with { type: "json" };
 export * from "./lifecycle";
+export * from "./events/index";
+export * from "./events/routing-keys";
 import { parcelStatusSchema } from "./lifecycle";
 const blocked = new Set(commonPasswords);
 export const roleSchema = z.enum([
@@ -457,3 +459,5 @@ export type Principal =
   | { kind: "service"; serviceId: string; scopes: string[] };
 
 export * from "./messaging.js";
+// M08 (transport) and M09 (events/) both export EventEnvelope; the root name is the M08 runtime schema type.
+export type { EventEnvelope } from "./messaging.js";

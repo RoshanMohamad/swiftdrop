@@ -40,8 +40,19 @@ const event = {
   aggregateId: ids.parcel,
   payload: {
     eventId: ids.event,
-    eventType: "parcel.created",
-    parcelId: ids.parcel,
+    type: "parcel.created",
+    version: 1,
+    occurredAt: "2026-11-13T10:30:00.000Z",
+    sequence: 1,
+    data: {
+      parcelId: ids.parcel,
+      trackingNo: "SD1234567A",
+      customerId: "1",
+      originZone: "Colombo",
+      destZone: "Kandy",
+      feeCents: 1500,
+      scheduledDate: "2026-11-13T10:30:00.000Z",
+    },
   },
 };
 const parcel = {

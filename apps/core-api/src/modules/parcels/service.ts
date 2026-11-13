@@ -8,6 +8,7 @@ import type {
   zoneInputSchema,
   priceInputSchema,
 } from "@swiftdrop/contracts";
+import { ROUTING_KEYS } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
 import { outbox } from "../../shared/outbox/index.js";
 import type { z } from "zod";
@@ -73,7 +74,10 @@ type PriceInput = z.infer<typeof priceInputSchema>;
 export class ParcelService {
   private pricing: PricingService;
 
-  constructor(private db: Database, pricing?: PricingService) {
+  constructor(
+    private db: Database,
+    pricing?: PricingService,
+  ) {
     this.pricing = pricing ?? new PricingService(db);
   }
 
@@ -195,18 +199,24 @@ export class ParcelService {
             include: parcelInclude,
           });
           const response = publicParcel(parcel);
-          // Envelope per Design Doc §6.3; no recipient name, phone or address (NFR-4).
+          // Envelope per Design Doc 6.3; no recipient name, phone or address (NFR-4).
+          // `to` and `town` are kept for the M08 webhook payload; the rest is the M09 contract.
           await outbox.add(tx, {
-            type: "parcel.created",
+            type: ROUTING_KEYS.PARCEL_CREATED,
             aggregateId: parcelId,
             sequence: 1,
             occurredAt: now,
             data: {
               parcelId,
               trackingNo: tracking,
-              merchantId: null,
               to: "CREATED",
               town: quote.originZone.town,
+              customerId: String(userId),
+              originZone: quote.originZone.town,
+              destZone: quote.destinationZone.town,
+              feeCents: quote.feeCents,
+              // Bookings are immediate until the parcel model gains a persisted schedule.
+              scheduledDate: now.toISOString(),
             },
           });
           await tx.idempotencyRecord.create({

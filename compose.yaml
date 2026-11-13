@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: swiftdrop
       POSTGRES_PASSWORD: local-development-only
       POSTGRES_DB: swiftdrop
-    ports: ['127.0.0.1:5432:5432']
+    ports: ['127.0.0.1:5433:5432']
     volumes: ['postgres-data:/var/lib/postgresql/data']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U swiftdrop -d swiftdrop']
@@ -50,7 +50,7 @@ services:
       MINIO_ROOT_USER: swiftdrop
       MINIO_ROOT_PASSWORD: local-development-only
     ports:
-      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9002:9000'
       - '127.0.0.1:9001:9001'
     volumes:
       - minio-data:/data

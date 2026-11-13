@@ -1,6 +1,7 @@
 import { connect, type ChannelModel, type ConfirmChannel } from "amqplib";
 import type { Logger } from "pino";
 import { Prisma, type Database } from "@swiftdrop/db";
+import { isSwiftDropEvent, ROUTING_KEYS } from "@swiftdrop/contracts";
 import type { ReceiptService } from "../receipts/service.js";
 
 type WorkerState = { connected: boolean };
@@ -41,15 +42,18 @@ export function startParcelEventWorkers(
         const consumerChannel = await linked.createConfirmChannel();
         relay = relayChannel;
         consumer = consumerChannel;
-        await relayChannel.assertExchange(EXCHANGE, "direct", {
+        await relayChannel.assertExchange(EXCHANGE, "topic", {
           durable: true,
         });
-        await consumerChannel.assertExchange(EXCHANGE, "direct", {
+        await consumerChannel.assertExchange(EXCHANGE, "topic", {
           durable: true,
         });
         await consumerChannel.assertQueue(QUEUE, { durable: true });
-        await consumerChannel.bindQueue(QUEUE, EXCHANGE, "parcel.created");
-        await consumerChannel.bindQueue(QUEUE, EXCHANGE, "parcel.delivered");
+        await consumerChannel.bindQueue(
+          QUEUE,
+          EXCHANGE,
+          ROUTING_KEYS.ALL_PARCEL,
+        );
         await consumerChannel.prefetch(32);
         await consumerChannel.consume(QUEUE, (message) => {
           if (!message) return;
@@ -107,38 +111,33 @@ export function startParcelEventWorkers(
     }
   };
   const processMessage = async (body: Buffer, messageId?: string) => {
-    const value: unknown = JSON.parse(body.toString("utf8"));
-    if (!value || typeof value !== "object")
-      throw new InvalidEvent("Invalid event.");
-    const event = value as Record<string, unknown>;
-    if (
-      typeof event.eventId !== "string" ||
-      event.eventId !== messageId ||
-      (event.eventType !== "parcel.created" &&
-        event.eventType !== "parcel.delivered") ||
-      typeof event.parcelId !== "string" ||
-      typeof event.town !== "string" ||
-      typeof event.createdAt !== "string" ||
-      (event.eventType === "parcel.created" && event.status !== "CREATED") ||
-      (event.eventType === "parcel.delivered" && event.status !== "DELIVERED")
-    )
+    let value: unknown;
+    try {
+      value = JSON.parse(body.toString("utf8"));
+    } catch {
+      throw new InvalidEvent("Invalid event JSON.");
+    }
+    if (!isSwiftDropEvent(value) || value.eventId !== messageId)
       throw new InvalidEvent("Invalid parcel event.");
-    if (event.eventType === "parcel.delivered") {
+    const event = value;
+    if (
+      event.type === ROUTING_KEYS.PARCEL_STATUS_CHANGED &&
+      event.data.to === "DELIVERED"
+    ) {
       if (!receipts) throw new Error("Receipt worker is not configured.");
-      await receipts.generateForDelivered(event.parcelId);
+      await receipts.generateForDelivered(event.data.parcelId);
     }
     const inserted = await db.consumerProgress.createMany({
-      data: [{ eventId: event.eventId, eventType: event.eventType }],
+      data: [{ eventId: event.eventId, eventType: event.type }],
       skipDuplicates: true,
     });
     if (inserted.count)
       logger.info(
         {
           eventId: event.eventId,
-          eventType: event.eventType,
-          parcelId: event.parcelId,
-          status: event.status,
-          town: event.town,
+          eventType: event.type,
+          parcelId: event.data.parcelId,
+          sequence: event.sequence,
         },
         "Parcel event consumed",
       );
