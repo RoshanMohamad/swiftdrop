@@ -22,7 +22,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | [M07](#m07) | TBD | TBD | Courier delivery and offline PWA | No work recorded | X-06, X-08 | PWA shell, offline queue, operation ledger |
 | [M08](#m08) | TBD | TBD | Eventing and webhook delivery | No work recorded (relay baseline exists in M01's local code, C-02) | X-03 boundary review (R-02), X-11, parcel ownership handoff (R-04) | Move relay to owned service; review X-03 lookup/event boundary with M01/M09/M02 |
 | [M09](#m09) | TBD | TBD | Notifications and realtime | No work recorded | X-03 boundary review (R-02), X-08, X-09 | Notification templates, realtime gateway; review X-03 lookup needs with M01/M08/M02 |
-| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel (logger, correlation, cursor pagination), MSW mock harness & dev:mock mode | X-02/X-13 shared interface/schema review (R-01) | Coordinate R-01 with M01; open PR for review |
+| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel, MSW mock harness, shared UI components, correlation middleware, /api/docs, role x endpoint auth matrix, bundle budget CI gate, and 2-replica compose overlay (Milestones 1–4 delivered) | X-02/X-13 shared interface/schema review (R-01) | Ready for integration & M07 peer review |
 
 Integration target: `main`. Checked 8 November 2026: local `umair-dev` fast-forwarded from `8d7cf9c` to fetched `origin/main` at `948133d`, which contains M01's earlier implementation through PR #8 and subsequent M05 lifecycle changes. No conflicts occurred; incoming changes did not touch the existing local `handover.md` edit. At the time checked, `origin/umair-dev` remained at `b33e15a` and was 11 commits behind the local branch; publication is recorded in the checkpoint below. No automated runtime checks were run for this documentation/sync action, no hosted CI or other member branches were reviewed, and the M01 manual/provider acceptance and peer contract reviews remain pending. Merge order: kernel/contracts (X-01/X-09) → identity/administration + X-03 contracts/schema (X-02/C-03/C-05/C-06) → pricing/parcels/lifecycle (X-04–X-06) → dispatch/courier (X-07/X-08/X-15) → messaging consumers (X-03/X-10–X-12) → shared UI composition (X-13). Combined ten-branch verification was not performed. Release blockers: M10 contract/interface/schema review (C-03/C-05), M08/M09/M02 review of X-03 and actual worker integration (C-06), M06 courier readiness (C-04/X-15), outstanding browser/provider acceptance, unverified member dependencies, and the production gates in auth §12. Historical checkpoints below are preserved.
 
@@ -886,6 +886,84 @@ Planned slice (plan.md §4.1): Platform kernel and web foundation.
    - Request paginated endpoints (e.g. `/api/v1/parcels?take=10`).
    - Copy `pageInfo.endCursor` from response.
    - Request next page with `?cursor=<endCursor>&take=10`; verify non-overlapping sequential page delivery.
+
+### Milestone 3: Shared UI Components, Error Boundaries & WCAG 2.1 AA Accessibility (13 November 2026)
+
+#### Summary of changes
+- **Shared UI Components (`apps/web/src/shared/components/`):**
+  - `apps/web/src/shared/components/LoadingState.tsx`: Accessible loading indicator supporting full-container and inline modes with `role="status"` and `aria-live="polite"`.
+  - `apps/web/src/shared/components/EmptyState.tsx`: Standardized empty-state container with semantic `h2` headings, descriptions, and optional action buttons.
+  - `apps/web/src/shared/components/StatusBadge.tsx`: Universal status badge supporting parcel statuses (`IN_TRANSIT`, `DELIVERED`, `FAILED`, etc.), user account states (`ACTIVE`, `INVITED`, `SUSPENDED`), and merchant states with accessible `aria-label`s.
+  - `apps/web/src/shared/components/ErrorBoundary.tsx`: React class ErrorBoundary with fallback recovery UI, friendly error message, reset handler, and retry button (`role="alert"`).
+  - `apps/web/src/shared/components/index.ts`: Barrel export for all shared UI components.
+  - `apps/web/src/App.tsx`: Wrapped `AppRoutes` in `ErrorBoundary` to provide global client crash isolation without crashing the app shell.
+- **Accessibility & Unit Test Coverage (`apps/web/src/shared/components/components.test.tsx`):**
+  - 11 comprehensive unit and accessibility tests covering DOM roles, inline modes, dynamic labels, error recovery retry flows, and zero `axe-core` accessibility violations across all shared components.
+- **Architectural Alignment & R-01 Review Notes (coordination with M01):**
+  - **C-03 (Prisma Schema Path):** Confirmed continuing with the single consolidated `packages/db/prisma/schema.prisma` repository rather than breaking it into domain schemas prematurely, preventing schema/migration desynchronization.
+  - **C-05 (Authentication Interface):** Formally aligned with M01's implementation of `res.locals.user`, `authFamilyId`, and `authGrantId` in `core-api`, reconciling historical references to `req.user`.
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all 4 workspace packages (`packages/contracts`, `packages/db`, `apps/core-api`, `apps/web`).
+- `pnpm lint`: 0 errors, 0 warnings across entire monorepo.
+- `pnpm --filter web test`: 13/13 test suites passed, 71/71 tests passed (including all 11 component & `axe-core` tests).
+- `apps/core-api` pagination test suite: 1/1 suite, 16/16 unit tests passed.
+- `pnpm build`: Both web bundle (gzip: 146.66 kB, safely within the < 250 kB performance budget) and core-api tsup dist built cleanly.
+
+#### Manual test plan for this iteration
+1. **Error Boundary Recovery:**
+   - Mount a test component throwing an error inside `AppRoutes`.
+   - Verify the error alert displays with heading "Something went wrong" and "Try again" button without unmounting `AppShell`.
+   - Click "Try again" after correcting the state; verify graceful recovery.
+2. **Accessible Loading & Empty States:**
+   - In parcel list and admin screens, inspect network throttle / empty responses.
+   - Screen reader test: verify `role="status"` announces loading changes politely; verify `role="alert"` alerts on crash.
+3. **Status Badges:**
+   - Verify visual styling for `IN_TRANSIT`, `DELIVERED`, and `FAILED` badges at 360px viewport and high-contrast settings.
+
+### Milestone 4: Correlation Middleware, Interactive /api/docs, Role Authorization Matrix & NFR Gates (13 November 2026)
+
+#### Summary of changes
+- **Correlation ID Propagation Middleware (`apps/core-api/src/shared/correlation.ts`):**
+  - Implemented `correlationMiddleware`: respects incoming `x-correlation-id` header or generates a cryptographically secure UUIDv4.
+  - Attaches request-scoped child logger pre-bound with `correlationId` to both `res.locals.logger` and `res.locals.log`.
+  - Sets `X-Correlation-ID` and `Cache-Control: no-store` on all HTTP responses.
+  - Cleanly integrated into `apps/core-api/src/app.ts`, replacing legacy ad-hoc UUID middleware and consolidating logger instantiation with the singleton from `shared/logger.ts`.
+  - Added unit test suite `apps/core-api/test/correlation.unit.test.ts` (3 unit tests, all passing).
+- **Interactive OpenAPI Documentation Endpoint (`/api/docs`):**
+  - Upgraded `/api/docs` in `apps/core-api/src/app.ts` to serve a modern interactive Scalar API reference interface with an offline-compatible fallback.
+  - Serves OpenAPI contract at `/api/openapi.json` from `packages/contracts/openapi.json`.
+- **Role × Endpoint Authorization Matrix Harness (`apps/core-api/test/auth-matrix.unit.test.ts`):**
+  - Implemented the automated matrix test harness required by `plan.md` §8.2 and §12.1.
+  - Tests 8 endpoint families (`/api/v1/auth/me`, `/api/v1/quotes`, `/api/v1/parcels`, `/api/v1/admin/users`, `/api/v1/admin/merchants`, `/api/v1/admin/zones`, `/api/v1/admin/pricing`, `/api/v1/admin/reports/daily`) across all 6 role variants (`ANONYMOUS`, `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER`, `ADMIN`).
+  - 48 tests verify that unauthenticated calls yield 401 UNAUTHORISED, unauthorized roles receive 403 FORBIDDEN, and permitted roles pass through the security barrier.
+- **Web App Shell Role Navigation (`apps/web/src/shared/layout/AppShell.tsx`):**
+  - Added semantic role-aware navigation links for `CUSTOMER` (`Parcels`, `Book Delivery`), `ADMIN` (`Users`, `Merchants`, `Zones`, `Pricing`, `Reports`), and `DISPATCHER` (`Reports`) alongside `Dashboard` and `Security` links.
+- **Web Bundle Budget Enforcement (NFR-11):**
+  - Added `apps/web/scripts/check-bundle-budget.js` and registered `"check:budget"` in `apps/web/package.json` and root `package.json`.
+  - Verifies total JS production gzip payload is strictly below the 250 kB threshold (currently 141.51 kB, 56.6% of budget).
+- **2-Replica Scalability & Statelessness Configuration (NFR-9):**
+  - Added `compose.scale.yaml` Docker Compose overlay demonstrating 2-replica `core-api` instances operating statelessly with Redis-backed sessions and PostgreSQL.
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all 4 workspace packages.
+- `pnpm lint`: 0 errors, 0 warnings across the entire monorepo.
+- `apps/core-api` tests: 67/67 tests passing (`correlation.unit.test.ts`, `auth-matrix.unit.test.ts`, `pagination.unit.test.ts`).
+- `apps/web` tests: 9/9 tests passing in `pages.test.tsx`, 5/5 passing in `App.test.tsx`, 11/11 passing in `components.test.tsx`.
+- `pnpm check:budget`: 141.51 kB gzip vs 250 kB limit (PASSED).
+- `pnpm build`: Clean production build for both web and core-api packages.
+
+#### Manual test plan for this iteration
+1. **Interactive API Reference:**
+   - Launch `core-api` via `pnpm dev`.
+   - Visit `http://localhost:3000/api/docs` and verify the Scalar API explorer renders with all SwiftDrop endpoint schemas.
+   - Verify `http://localhost:3000/api/openapi.json` returns valid JSON.
+2. **Correlation ID Tracing:**
+   - Send `GET /api/health` with `X-Correlation-Id: test-trace-999`.
+   - Verify response contains `X-Correlation-ID: test-trace-999`.
+3. **Role Navigation:**
+   - Sign in as Customer: verify header displays "Parcels" and "Book Delivery".
+   - Sign in as Admin: verify header displays "Users", "Merchants", "Zones", "Pricing", and "Reports".
 
 
 ## Customer booking and tracking implementation checkpoint (29 October 2026)

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, type ReactNode } from "react";
-import { useSession } from "../../features/auth/session.js";
+import { roleHome, useSession } from "../../features/auth/session.js";
 import { logout } from "../../features/auth/client.js";
 import { ChatWidget } from "../../features/assistant/index.js";
 
@@ -42,6 +42,30 @@ export function AppShell({ children }: AppShellProps) {
           SwiftDrop<span className="brand-dot">.</span>
         </Link>
         <span className="header-note">Made to move.</span>
+        {state.user && (
+          <nav aria-label="Main Navigation" className="role-nav">
+            <Link to={roleHome(state.user.role)}>Dashboard</Link>
+            {state.user.role === "CUSTOMER" && (
+              <>
+                <Link to="/parcels">Parcels</Link>
+                <Link to="/parcels/new">Book Delivery</Link>
+              </>
+            )}
+            {state.user.role === "ADMIN" && (
+              <>
+                <Link to="/admin/users">Users</Link>
+                <Link to="/admin/merchants">Merchants</Link>
+                <Link to="/admin/zones">Zones</Link>
+                <Link to="/admin/pricing">Pricing</Link>
+                <Link to="/admin/reports">Reports</Link>
+              </>
+            )}
+            {state.user.role === "DISPATCHER" && (
+              <Link to="/admin/reports">Reports</Link>
+            )}
+            <Link to="/settings/security">Security</Link>
+          </nav>
+        )}
         {state.user && (
           <nav aria-label="Account">
             <button

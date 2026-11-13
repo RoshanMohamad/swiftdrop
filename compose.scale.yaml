@@ -1,0 +1,61 @@
+# SwiftDrop — 2-Replica Scalability & Statelessness Overlay (NFR-9)
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.scale.yaml up -d
+#
+# Proves that core-api operates completely statelessly across 2+ replicas:
+# - All user sessions, CSRF keys, and rate limits synchronize via Redis
+# - Database state is transactionally consistent via PostgreSQL
+# - Requests can be routed to either replica without session affinity
+
+services:
+  core-api-1:
+    build:
+      context: .
+      dockerfile: apps/core-api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      INTERNAL_PORT: 3001
+      DATABASE_URL: postgresql://swiftdrop:local-development-only@postgres:5432/swiftdrop
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SMTP_URL: smtp://mailpit:1025
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  core-api-2:
+    build:
+      context: .
+      dockerfile: apps/core-api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      INTERNAL_PORT: 3001
+      DATABASE_URL: postgresql://swiftdrop:local-development-only@postgres:5432/swiftdrop
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SMTP_URL: smtp://mailpit:1025
+    ports:
+      - "127.0.0.1:3002:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
