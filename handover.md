@@ -14,7 +14,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | Member | Name | Branch | Planned slice (plan.md §4.1) | Delivered vs merged | Depends on | Next step |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
-| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local, uncommitted M02 checkpoint: merchant schema, registration, Admin review API and initial screens; not merged | X-05 (orders, later), X-11 (webhook config, later), X-03 boundary review (R-02) | Complete API clients/OAuth/orders/webhooks/dashboard; review X-03 boundary with M01/M08/M09 |
+| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local M02 checkpoints: registration/approval, API clients, OAuth, order create/list and webhook settings; not merged | X-05 (M04 parcel review), X-10 (M08 delivery-log API), X-11 (worker config lookup), X-13 (shared route composition review) | Apply migrations and complete acceptance; get M04 parcel/schema review; coordinate worker delivery-log contract with M08 |
 | [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Core deliverables merged into main (PR #10); Milestone 2 completed: FR-B2 AI Assistant Service (MCP read-only tools) & FR-F9 Chat Widget delivered with 100% test coverage | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | Lifecycle transition contract and `LifecycleService` merged into `origin/main` via PR #7 (`497fdb9`, `c366ef7`, `5460dc3`); source branch `shazan-dev`, member identity/history not confirmed. Public tracking baseline exists in M01's local code (C-02). | X-05, X-07; parcel ownership handoff (R-04) | Confirm contributor registry mapping and record attributed checkpoint; continue lifecycle/public-tracking work and coordinate C-02 extraction |
@@ -51,7 +51,7 @@ Contract definitions are in [plan.md §10](plan.md#10-integration-contracts-betw
 | X-02 | M01 → all | Implemented `authenticate`/`requireRole`, `res.locals.user`, `authFamilyId`, `authGrantId` (planned `req.user` wording remains C-03) | `apps/core-api/src/modules/auth`, `modules/users` | Human guards in cached base; transactional Admin grant rechecks local/uncommitted; M10 interface review pending | M01 Sprint 2 checkpoint; C-03 |
 | <a id="x-03"></a>X-03 | M01 ↔ M08/M09; M02 boundary review | RS256 service JWT: service kind/subject, per-principal audience, issuer, kid/jti/iat/exp, signed event+parcel claims and scope; `notifications:lookup` GET returns six booking fields for verified persisted `parcel.created`; separate internal loopback listener; `webhooks:config` principal is fixture-only | `packages/contracts/{src/index.ts,src/generate.ts,openapi.json,src/api.generated.ts}`, `packages/db/prisma/{schema.prisma,migrations/202611060001_service_identity/migration.sql}`, `apps/core-api/src/{internal-app.ts,modules/services/*,services-cli.ts,server.ts,shared/config.ts}` | Local API/tooling implemented; 5-minute tokens, 30-second tolerance, per-request live DB revocation, 10-minute key overlap. M08/M09/M02 contract review and actual workers pending. | Local tests/checks in M01 X-03 checkpoint; C-06; no other member branch inspected |
 | X-04 | M03 → M04 | `PricingService.quote()`, owner-bound `quoteId`, `validateQuoteForBooking()` | `apps/core-api/src/modules/pricing/*` | Delivered in `umarali`; unit tested; ready for M04 consumption | M03 Milestone 1 checkpoint; 12 unit tests passing |
-| X-05 | M04 → M02, M05, M06, M07 | `ParcelsService.createFromQuote()` and variants, idempotency | `modules/parcels/service.ts` | Customer path implemented locally | C-02 |
+| X-05 | M04 → M02, M05, M06, M07 | `ParcelsService.createFromQuote()` and variants, idempotency | `modules/parcels/service.ts` | Customer path plus M02 merchant order path implemented locally; merchant path awaits M04 ownership/schema review and integration. | M02 checkpoint 12 November 2026; C-02/C-07 |
 | X-06 | M05 → M04, M06, M07, M02 | Transition table, `LifecycleService` | `packages/contracts` | Planned | None |
 | X-07 | M05 ↔ M06 | Shared lock protocol | Docs/code not created | Planned | None |
 | X-08 | M06 → M07 | Assigned-parcel read model, `parcel.assigned` | Not created | Planned | None |
@@ -64,6 +64,9 @@ Contract definitions are in [plan.md §10](plan.md#10-integration-contracts-betw
 | X-15 | M06 ↔ M01 | Proposed courier profile/readiness contract before invitation activation; `docs/auth.md` §4.5 | `modules/users`, future M06 courier profile module/schema | Unagreed; dispatcher onboarding proceeds independently; courier acceptance returns setup-pending without consuming its invitation until required fields, writer and atomicity are agreed | M01 Sprint 1 implementation checkpoint, 30 October 2026; C-04; no M06 branch inspected |
 
 | X-16 | M02 → Admin web and merchant account | `POST /api/v1/merchant/register`, `GET /api/v1/admin/merchants`, `PATCH /api/v1/admin/merchants/{id}/review`; merchant states `PENDING` → `APPROVED` or `REJECTED` | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611100001_merchants}`, `apps/core-api/src/modules/merchants`, `apps/web/src/features/merchant` | Implemented locally; schema, contract and type checks passed; not merged. Registration atomically creates the account and pending application; review is Admin-guarded and row-locked. API-client unlock and OAuth are future M02 work. | M02 checkpoint 10 November 2026; manual acceptance pending |
+| X-17 | M02 → merchant account and API | `GET/POST /api/v1/merchant/clients`, `POST /api/v1/merchant/clients/{id}/rotate`, `POST /api/v1/merchant/clients/{id}/revoke`; only approved merchants; secret returned once and stored hashed | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611110001_merchant_api_clients}`, `apps/core-api/src/modules/merchants`, `apps/web/src/features/merchant` | Implemented locally; generated contracts/Prisma client and four package type checks passed; not merged. OAuth consumption of these client credentials is future M02 work. | M02 checkpoint 11 November 2026; manual acceptance pending |
+| X-18 | M02 → merchant API routes | `POST /oauth/token`: form-encoded client-credentials grant with HTTP Basic, 15-minute RS256 machine token, distinct audience, granted scopes and revocable token grant | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611120001_merchant_oauth_access_grants}`, `apps/core-api/src/modules/{auth,merchants}` | Implemented locally; typed contract, issue/verify path and live grant/client/merchant/user checks are present; not merged. Merchant order routes will consume the exported machine auth/scope middleware. | M02 checkpoint 12 November 2026; resource-route acceptance pending |
+| X-19 | M02 ↔ M04; M08 consumes the event | `POST /api/v1/merchant/orders`: machine bearer token with `orders:write`, strict shipment/recipient body, merchant-scoped `Idempotency-Key`, current merchant approval, atomic parcel/history/outbox/response write | `packages/contracts`, `packages/db/prisma/{schema.prisma,migrations/202611120002_merchant_owned_orders}`, `apps/core-api/src/modules/{merchants,parcels}` | Implemented locally on M02 branch using the existing parcel module; additive `merchant_id` parcel ownership and merchant-specific idempotency. M04 review/integration and M08 event-consumer verification remain pending. | M02 checkpoint 12 November 2026; C-02/C-07 |
 
 ### Contradictions and overlaps
 
@@ -81,6 +84,8 @@ Contract definitions are in [plan.md §10](plan.md#10-integration-contracts-betw
 | <a id="c-10"></a>C-10 | M08, M09 | Design Doc Table 9 binds `webhooks.q` to `parcel.#` only. M08 added `webhook.replay.requested` so Admin replay travels through the outbox atomically with its audit row; it matches no other queue (tested). | Doc/implementation drift; M09 must not bind a broader pattern to the events exchange | Record as a deviation (done in `docs/messaging.md`); update Table 9 at final report | M08 / M09 | agreed by M08 only; M09 unaware |
 | <a id="c-11"></a>C-11 | M01, M08 | M01's `auth.integration.test.ts` spawns `pnpm` without a shell and so cannot start on Windows (`spawnSync pnpm ENOENT`); root `NODE_OPTIONS=… jest` scripts also fail under `cmd.exe`. Found while verifying M08 on Windows; not changed. | Windows contributors cannot run integration tests as written | M01 adds `shell: true` or a cross-platform runner; M08's new tests avoid the `NODE_OPTIONS=` prefix | M01 | open |
 | <a id="c-12"></a>C-12 | M08, M04, M05, M01, M09 | After merging `main` (`446324e`) into the M08 branch the in-process worker `apps/core-api/src/modules/parcels/events.ts` (kept from `main`: M04 receipts consumer plus its own outbox publisher) and the M08 relay/envelope disagree. (1) `events.ts` asserts `swiftdrop.events` as a **direct** exchange; `packages/messaging/src/topology.ts` declares it **topic**, so whichever process starts second fails with PRECONDITION_FAILED. (2) `ParcelService` now writes the M08 envelope for `parcel.created`, but `LifecycleService` (`modules/lifecycle/service.ts`) still writes the old flat `parcel.delivered` payload; the M08 relay quarantines rows that fail `eventEnvelopeSchema`, and `events.ts` rejects envelope payloads. (3) M01's `modules/services/notifications.ts` lookup reads `payload.eventType`/`payload.parcelId` and returns 404 for envelope `parcel.created` events. Net: receipts and the X-03 notification lookup are not safe to run with the relay until the producers, the receipt consumer and the lookup move to one envelope and one exchange type. | Receipt generation on DELIVERED and notification lookup break or stall; webhooks miss `parcel.delivered`. | Proposed: M08 + M04 + M05 migrate `parcel.delivered` to `outbox.add` (needs a per-parcel sequence), move the receipt consumer onto a queue bound in `topology.ts`, drop the in-process publisher from `events.ts`, and update the X-03 lookup to read the envelope. Not implemented here (cross-owner). | M08 with M04/M05/M01 review | open |
+| <a id="c-13"></a>C-13 | M02, M04, M08 | M02 implemented the merchant order route and a merchant-specific creation method in `modules/parcels/service.ts`, plus the additive `parcels.merchant_id` relation/migration, after confirming the planned M04 merchant variant was absent from the available local and cached M04 branch. M08's webhook consumer is not available for review. | Parcel service/schema ownership overlaps M04; event behavior and merchant/customer contact expectations need review before integration. | M04 reviews the variant, merchant ownership relation and migration; M08 reviews `parcel.created` consumer behavior. Keep the implementation on M02 branch, reconcile changes at merge, and do not claim combined readiness until reviews and acceptance are recorded. | M02 author; M04 parcel owner; M08 event consumer | open (user authorized minimal M04 support; peer reviews pending) |
+| <a id="c-14"></a>C-14 | M08, M09, M04, M05 | Integration merge of `origin/notifications-realtime` (M09) resolved most of C-12: `parcels/events.ts` now uses the topic exchange, validates M09 envelopes and generates receipts from `parcel.status.changed` with `to=DELIVERED`; lifecycle and the X-03 lookup emit/read the envelope. Remaining: two publishers drain the same outbox (the M08 relay and the in-process publisher in `events.ts`; `FOR UPDATE SKIP LOCKED` prevents double claims but duplicates logic), and M09 types `merchantId` as string while M08 contracts use a positive integer. `parcel.created` data is the union of both (M09 fields plus `to`/`town`) and omits `merchantId` because M09's validator rejects null. | Redundant publisher; possible contract drift on `merchantId`. | M08/M09 agree one publisher (relay) and drop the in-process one, and one `merchantId` type. | M08, M09 | open |
 
 Evidence boundary (6 November 2026): working tree on `umair-dev` at `f6adc50`, cached `origin/main` at `2eb332d`, and cached refs containing `67a77de`. Only ancestry was checked for those refs; their runtime integration was not reverified. No other contributor delivery branch/PR, remote settings or live remote revision was inspected. M02–M10 dependencies remain unverified.
 
@@ -712,6 +717,94 @@ From the repository root, with `.env` configured and a database available, run `
 4. Register a second application and reject it. Confirm the browser prompt; expect rejected status. Verify a non-Admin receives 403 and an unauthenticated request receives 401 on Admin endpoints.
 5. Send concurrent decisions for one pending application. Expect exactly one to succeed and the other to receive a conflict.
 
+### M02 support: Windows integration test launcher (11 November 2026)
+
+- Starting Docker Desktop resolved the initial Testcontainers runtime error. The next run exposed `spawnSync pnpm ENOENT`: Node's `execFileSync` could not launch the Windows `pnpm.cmd` shim directly from the integration setup.
+- Added a Windows `cmd.exe`/`pnpm.cmd` launcher helper for the two migration commands in `apps/core-api/test/auth.integration.test.ts`; non-Windows continues to invoke `pnpm` directly. This is a narrow cross-slice test-harness fix from the M02 task, not a transfer of M01 auth ownership; M01 review remains appropriate before merge.
+- `pnpm test:integration` then passed: 9 suites, 131 tests, and 89.42% line coverage. Docker Desktop was running. Node v22.18.0 still emits the repository's unsupported-engine warning (requires Node >=24.11 and <25); the suite passed under this local version. A pg client-query deprecation warning was also emitted.
+- This suite does not yet cover the new M02 registration/approval behavior. Merchant migration/model/client behavior remains outside this test suite; browser/manual acceptance and applying the migration to the development database remain pending.
+
+### M02 checkpoint: Merchant API-client management (11 November 2026)
+
+#### Summary
+- Added an additive `merchant_api_clients` table/model with merchant ownership, stable client ID, name, scope list, secret hash and rotation/revocation timestamps.
+- Added create/list/rotate/revoke contracts and generated OpenAPI/client operations. API routes require an authenticated MERCHANT user and an APPROVED merchant; data lookups are scoped to the owning merchant. Creation is limited to 10 active clients.
+- Generated cryptographically random client IDs and 256-bit secrets. Only SHA-256 secret hashes are stored. The client secret appears only in the create/rotate response; rotation invalidates the previous secret while keeping client ID stable.
+- Added `/merchant/clients` with create, reveal-once/copy, rotate and revoke controls; added a merchant-account link and responsive form/table styling.
+
+#### Checks and boundaries
+- Contract generation and drift check, Prisma validation/client generation, ESLint, TypeScript checks for core-api/web/db/contracts and `git diff --check` passed. Node v22.18.0 emitted the engine warning (required `>=24.11 <25`). No tests were added/run; migration was not applied and browser acceptance was not performed.
+- OAuth `/oauth/token`, merchant order creation through M04's X-05, webhook configuration X-11 and delivery log X-10 remain future work. Shared web route composition touches X-13; no M10 review is claimed.
+
+#### Manual acceptance
+From the repository root, with `.env` configured and a database available, run `pnpm db:generate`, `pnpm db:migrate`, then `pnpm dev`.
+
+1. Sign in as a pending merchant and open `/merchant/clients`; expect an approval-required message and no client data. A non-merchant must be denied.
+2. Approve that merchant in `/admin/merchants`, sign in again and open `/merchant/clients`. Create a client with one or both scopes; expect client ID and secret to appear once. Copy it, dismiss the one-time panel and confirm reload/list does not reveal the secret.
+3. Rotate the client; expect the client ID to remain stable and a new secret to appear once. Revoke it and expect revoked status and disabled actions. Try another merchant's client UUID; expect 404.
+4. Create up to 10 active clients; the next create should return a limit conflict. Revoke one and create another. Repeat at mobile width, keyboard-only and with clipboard access denied.
+
+### M02 checkpoint: Merchant OAuth client-credentials tokens (12 November 2026)
+
+#### Summary
+- Added `POST /oauth/token` outside `/api/v1`. It accepts only `application/x-www-form-urlencoded`, the `client_credentials` grant and HTTP Basic credentials; client credentials in the form body are rejected.
+- Added strict form, token-response and OAuth error contracts, Basic-auth OpenAPI documentation and generated types. Tokens are RS256-signed with a dedicated merchant audience, client ID subject, `merchant-client` kind, only granted scopes and a 900-second lifetime. No user role, cookie or refresh token is issued.
+- Added client/IP token endpoint throttles (30 per client/minute and 120 per IP/minute), standard OAuth error responses, and `no-store`/`no-cache` headers.
+- Extended `access_grants` to reference exactly one human session family or merchant API client. Token issuance records a client grant transactionally. Rotation and revocation delete that client's outstanding grants.
+- Added separate machine-token verification and reusable merchant-client authentication/scope middleware. Each request checks the grant, current client, approval state, active owner and current allowed scopes. Human-token verification retains its separate audience.
+
+#### Checks and boundaries
+- Prisma generation/validation, generated contract check, workspace TypeScript checks and ESLint passed. Node v22.18.0 emitted the engine warning (required `>=24.11 <25`). No tests were added/run, migration was not applied, and no HTTP/browser acceptance was performed.
+- OAuth tokens are ready for the next merchant resource routes, but `/api/v1/merchant/orders` is not implemented. Order creation remains on M04's X-05 service contract; webhook configuration/delivery remain X-11/X-10 coordination with M08.
+
+#### Manual acceptance
+From the repository root, run `pnpm db:generate`, `pnpm db:migrate`, then `pnpm dev`. Use an approved merchant and a client created at `/merchant/clients`; enter the secret only in a private HTTP client, not shell history or logs.
+
+1. POST to `/oauth/token` with Basic client ID/secret and form field `grant_type=client_credentials`. Expect 200, a bearer token, `expires_in: 900`, and exactly the client's scopes by default. Confirm `Cache-Control: no-store`, `Pragma: no-cache`, and no `Set-Cookie` header.
+2. Request one allowed scope; expect that scope only. Request an ungranted/unknown scope; expect OAuth `invalid_scope` with 400. Try unsupported grant, missing Basic auth, wrong secret, JSON content type and client credentials in the form body; expect `unsupported_grant_type`, `invalid_client`/401 with Basic challenge, or `invalid_request` as appropriate.
+3. Inspect the JWT in a local tool without sharing it: expect the merchant audience, client ID subject, `merchant-client` kind, scope claim and 15-minute lifetime; expect no human role. Send a merchant token to `/api/v1/auth/me`; expect 401 because it has the machine audience. Exercise the exported machine middleware when a merchant resource route is added.
+4. Issue a token, rotate or revoke its client, then confirm the matching access grant is removed. The machine middleware must reject that token and tokens for suspended owners. Repeat rate-limit checks in a disposable environment and expect 429 with `Retry-After` after the documented threshold.
+
+### M02 checkpoint: Merchant order creation (12 November 2026)
+
+#### Summary
+- Added `POST /api/v1/merchant/orders`, protected by the separate merchant machine-token verifier and `orders:write` scope. Human sessions, unapproved merchants, suspended owners and clients without the scope are rejected.
+- Added a strict order body for origin/destination districts, package dimensions and recipient details. Pricing is calculated at submission; the API returns the parcel response with its tracking number and fee.
+- Added an atomic merchant path to the parcel service: current merchant approval check, quote, merchant-linked parcel, initial history, outbox event and 24-hour idempotency response are written in one transaction. Repeating a key/body returns the stored response; reusing the key with different details returns 409. Different merchant principals have independent key spaces.
+- Added nullable `parcels.merchant_id` with a foreign key/index, a migration, an exported parcel service boundary, and generated OpenAPI/typed-client request/response definitions.
+
+#### Checks and boundaries
+- Passed Prisma client generation and schema validation, contract generation/check, workspace TypeScript checks, ESLint and `git diff --check`. Node v22.18.0 emits the repository engine warning (requires `>=24.11 <25`). No tests were added/run, the migration was not applied, and no HTTP acceptance was performed.
+- The existing required `parcels.user_id` remains the merchant account's user ID for compatibility with current parcel/contact code; `merchant_id` records the business owner used for machine access and future merchant queries. M04 review is required for this parcel service/schema addition; M08 must confirm event consumer expectations. C-02/C-13 remain open. Webhook configuration/delivery and merchant order listing/dashboard are separate work.
+
+#### Manual acceptance
+From the repository root, run `pnpm db:generate`, `pnpm db:migrate`, and `pnpm dev`. Use an approved merchant with an API client granted `orders:write`; obtain a token from `POST /oauth/token` and use a private HTTP client.
+
+1. POST valid JSON to `http://localhost:3000/api/v1/merchant/orders` with `Authorization: Bearer <token>`, a unique `Idempotency-Key` of 16–128 allowed characters, and districts/dimensions/recipient fields. Expect 201 with a tracking number, `CREATED` status and fee.
+2. Retry the exact body and key. Expect the original response and one parcel/history/outbox/idempotency record. Reuse the key with a changed body; expect 409. Omit or malform the key; expect 400.
+3. Try missing/expired/revoked credentials, a human token, a client without `orders:write`, a pending/rejected merchant, suspended owner, unserved district, same origin/destination and missing price. Expect 401/403/422 as appropriate and no partial parcel, quote, history, outbox or idempotency writes.
+4. Repeat concurrent identical requests with the same key; expect one order and identical successful responses. Try the same key under another merchant; expect an independent order. The response has no UI flow; review the merchant-owned parcel row and event in local DB/log tooling without exposing token or secret.
+
+### M02 checkpoint: Merchant orders dashboard (13 November 2026)
+
+#### Summary
+- Added `GET /api/v1/merchant/orders` for authenticated merchant users, with optional lifecycle-status filtering. It requires an approved merchant and queries parcels by `merchantId`, returning at most the latest 100 orders.
+- Added a strict response contract and generated OpenAPI/typed-client definitions. No database change was needed; order ownership uses the existing `parcels.merchant_id` column.
+- Added `/merchant/orders`, linked from the merchant account page, with status filtering and loading, error/retry, empty and results states.
+- Corrected the M02 module and feature READMEs: webhook settings already exist; delivery logs still depend on M08's delivery records/API.
+
+#### Checks and boundaries
+- Contract generation completed and workspace TypeScript checks passed. Node v22.18.0 emitted the configured engine warning (`>=24.11 <25`). Tests and browser acceptance were not run. `git diff --check` and contract drift checks passed; the repository-wide format check reports many existing unformatted files, so changed source files were formatted directly.
+- The list is intentionally capped at 100 for this first dashboard increment; pagination is not included. M08 delivery-log integration is still pending. M04 review of the shared parcel path/schema and M08 event-consumer review remain open (C-02/C-07).
+
+#### Manual acceptance
+From the repository root, with `.env` configured and a database available, run `pnpm db:generate`, `pnpm db:migrate`, then `pnpm dev`.
+
+1. Sign in as an approved merchant with created orders and open `/merchant/orders`. Expect only that merchant's orders, ordered newest first, with tracking, status, route, recipient, fee and creation time.
+2. Filter each lifecycle status and then choose “All statuses.” Expect only matching orders and a clear empty state where none match. Refresh after creating an order and expect it to appear.
+3. Sign in as a pending/rejected merchant and then as a non-merchant; expect access denial. Verify orders belonging to a second merchant never appear.
+4. Check API requests with an invalid status (400), no status (latest 100), and repeated status changes. Check loading/error/retry states, keyboard operation, and a narrow mobile viewport with the table scroll affordance.
+
 <a id="m03"></a>
 ## M03 — UmarYusuf03 (`umarali`)
 
@@ -848,6 +941,14 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery.
 - **Unresolved:** C-12 (exchange type, event shape and consumers) is open and needs M04/M05/M01 agreement; do not deploy the relay alongside `startParcelEventWorkers` until it is resolved.
 - **Checks run (Node 22.20, repo wants Node 24; pnpm via corepack):** unit tests: core-api 146, web 77, messaging 13, outbox-relay 5, webhook-svc 24, all pass; `eslint .` clean; `pnpm typecheck` passes for every package except 4 errors in `apps/core-api/test/auth-matrix.unit.test.ts` (M10 file, unchanged by this merge; not compared against `main` itself); contracts `generate`/`check` run. **Not run:** integration suites (Docker daemon not running), Node 24, CI.
 - **Manual test plan:** setup `pnpm install`, start Postgres/Redis/RabbitMQ (`docker compose up -d`), `pnpm dev`. 1) Sign in as Admin, open `/admin/webhooks`; expected: delivery log loads, empty state if none. 2) Account page shows a "Webhook deliveries" link for Admin only. 3) Create a parcel as a customer; expected: the outbox row is published by the relay and a delivery appears. 4) Mark a parcel delivered; expected to expose C-12 (receipt/webhook behaviour). Edge cases: non-admin gets redirected from `/admin/webhooks`; narrow viewport keeps the table usable.
+
+### Checkpoint: integration branch merging every unmerged branch into `main` content
+
+- **Branch:** `integration/merge-all` from `origin/main` at `08ba763` (shared integration; no member attribution). **Commit:** uncommitted at time of writing.
+- **Merged one by one:** `origin/shazan-dev` (M05), `origin/notifications-realtime` (M09), `origin/feature/Merchant` (M02). Every other remote branch was already an ancestor of `origin/main`.
+- **Resolutions:** `generate.ts` schema lists keep both sides; `parcel.created` is written through `outbox.add` with M09 data fields plus M08 `to`/`town`; `EventEnvelope` re-exported from the M08 schema; Merchant's service wiring and OAuth router re-applied onto `main`'s `app.ts`; merchant screens added to `routes.tsx`/`Account.tsx`. Merchant contradiction renumbered C-13; C-14 records what remains of C-12.
+- **Checks (Node 22):** lint clean, typecheck clean, unit tests pass (core-api 153, web 77, messaging 13, outbox-relay 5, webhook-svc 24). Not run: integration suites (Docker not running), CI, Node 24, UI.
+- **Next:** open one PR from `integration/merge-all` into `main` (direct pushes to `main` are blocked by the ruleset).
 
 <a id="m09"></a>
 ## M09 — TBD

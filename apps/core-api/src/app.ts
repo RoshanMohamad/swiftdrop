@@ -18,8 +18,7 @@ import {
 import type { TokenService } from "./modules/auth/jwt.js";
 import type { AuthMailer } from "./modules/auth/mail.js";
 import type { GoogleOidc } from "./modules/auth/google.js";
-import { ParcelService } from "./modules/parcels/service.js";
-import { createParcelRouter } from "./modules/parcels/routes.js";
+import { ParcelService, createParcelRouter } from "./modules/parcels/index.js";
 import {
   PricingService,
   createPricingRouter,
@@ -43,6 +42,7 @@ import {
   MerchantsService,
   createMerchantsRouter,
 } from "./modules/merchants/index.js";
+import { createMerchantOAuthRouter } from "./modules/merchants/oauth-routes.js";
 import {
   WebhooksService,
   createWebhooksRouter,
@@ -65,6 +65,21 @@ export function createApp(deps: {
   app.set("trust proxy", false);
   app.use(helmet({ referrerPolicy: { policy: "no-referrer" } }));
   app.use(correlationMiddleware(logger));
+  const service = new AuthService(
+    db,
+    tokens,
+    config,
+    deps.mailer,
+    deps.google,
+    logger,
+  );
+  const users = new UsersService(db, config.APP_ORIGIN, deps.mailer);
+  const limiter = new RateLimiter(redis, config.rateSecret);
+  const pricing = new PricingService(db);
+  const parcels = new ParcelService(db, pricing);
+  const merchants = new MerchantsService(db, tokens, config.oauthSecret);
+  // The OAuth token endpoint parses its own body, so it is mounted before express.json.
+  app.use(createMerchantOAuthRouter(merchants, limiter, logger));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/ready", async (_req, res) => {
@@ -113,16 +128,6 @@ export function createApp(deps: {
       res.status(500).json({ status: 500, title: "OpenAPI contract not found" });
     }
   });
-  const service = new AuthService(
-    db,
-    tokens,
-    config,
-    deps.mailer,
-    deps.google,
-    logger,
-  );
-  const users = new UsersService(db, config.APP_ORIGIN, deps.mailer);
-  const limiter = new RateLimiter(redis, config.rateSecret);
   app.get("/api/v1/auth/me", authenticate(service), (_req, res) =>
     res.json(res.locals.user),
   );
@@ -132,16 +137,13 @@ export function createApp(deps: {
     "/api/v1/admin/webhook-deliveries",
     createWebhooksRouter(new WebhooksService(db), service, config),
   );
-  const merchants = new MerchantsService(db);
   app.use(
     "/api/v1",
-    createMerchantsRouter(merchants, service, limiter, config),
+    createMerchantsRouter(merchants, parcels, service, limiter, config),
   );
-  const pricing = new PricingService(db);
   app.use("/api/v1", createPricingRouter(pricing, service, limiter, config));
   const reports = new ReportsService(db);
   app.use("/api/v1", createReportsRouter(reports, service, limiter, config));
-  const parcels = new ParcelService(db, pricing);
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
   const lifecycle = new LifecycleService(db);
   app.use(

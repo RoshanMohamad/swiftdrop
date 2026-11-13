@@ -17,7 +17,13 @@ import {
   PublicTracking,
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
-import { AdminMerchants, MerchantSignup } from "./features/merchant/pages.js";
+import {
+  AdminMerchants,
+  MerchantClients,
+  MerchantWebhookSettings,
+  MerchantOrders,
+  MerchantSignup,
+} from "./features/merchant/pages.js";
 import { AdminWebhookDeliveries } from "./features/webhook-admin/pages.js";
 import { Guard } from "./shared/auth/Guard.js";
 import { Account } from "./shared/components/Account.js";
@@ -115,6 +121,30 @@ export function AppRoutes() {
         element={
           <Guard role="ADMIN">
             <AdminUsers />
+          </Guard>
+        }
+      />
+      <Route
+        path="/merchant/clients"
+        element={
+          <Guard role="MERCHANT">
+            <MerchantClients />
+          </Guard>
+        }
+      />
+      <Route
+        path="/merchant/orders"
+        element={
+          <Guard role="MERCHANT">
+            <MerchantOrders />
+          </Guard>
+        }
+      />
+      <Route
+        path="/merchant/webhook"
+        element={
+          <Guard role="MERCHANT">
+            <MerchantWebhookSettings />
           </Guard>
         }
       />

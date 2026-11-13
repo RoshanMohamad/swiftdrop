@@ -666,6 +666,8 @@ export class AuthService {
     if (
       !grant ||
       grant.expiresAt <= now ||
+      !grant.familyId ||
+      !grant.family ||
       grant.family.userId !== claims.id ||
       grant.family.revokedAt ||
       grant.family.absoluteExpiresAt <= now ||
