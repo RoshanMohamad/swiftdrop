@@ -14,6 +14,9 @@ import {
   reviewMerchant,
   revokeMerchantApiClient,
   rotateMerchantApiClient,
+  getMerchantWebhookSettings,
+  saveMerchantWebhookSettings,
+  rotateMerchantWebhookSecret,
 } from "../auth/client.js";
 
 type Merchant = Awaited<ReturnType<typeof listMerchants>>["items"][number];
@@ -281,6 +284,184 @@ export function MerchantClients() {
             </tbody>
           </table>
         </div>
+      )}
+    </section>
+  );
+}
+
+export function MerchantWebhookSettings() {
+  const [settings, setSettings] = useState<
+    Awaited<ReturnType<typeof getMerchantWebhookSettings>> | null
+  >(null);
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [signingSecret, setSigningSecret] = useState<string | null>(null);
+  const actionLock = useRef(false);
+
+  useEffect(() => {
+    let live = true;
+    void getMerchantWebhookSettings()
+      .then((result) => {
+        if (!live) return;
+        setSettings(result);
+        setUrl(result.url ?? "");
+      })
+      .catch((cause) => {
+        if (live) setError(errorMessage(cause));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setSigningSecret(null);
+    try {
+      const result = await saveMerchantWebhookSettings(url);
+      setSettings(result.settings);
+      setUrl(result.settings.url ?? "");
+      setSigningSecret(result.signingSecret);
+      setMessage(
+        result.signingSecret
+          ? "Webhook configured. Save the signing secret now; it will not be shown again."
+          : "Webhook URL updated.",
+      );
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function rotate() {
+    if (actionLock.current || !settings?.configured) return;
+    if (
+      !window.confirm(
+        "Rotate the webhook signing secret? The old secret stops working immediately.",
+      )
+    )
+      return;
+    actionLock.current = true;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setSigningSecret(null);
+    try {
+      const result = await rotateMerchantWebhookSecret();
+      setSigningSecret(result.signingSecret);
+      setMessage("Secret rotated. Save the new signing secret now.");
+      setSettings(await getMerchantWebhookSettings());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function copySecret() {
+    if (!signingSecret) return;
+    try {
+      await navigator.clipboard.writeText(signingSecret);
+      setMessage("Signing secret copied. Store it securely; it cannot be viewed again.");
+    } catch {
+      setMessage("Copy is unavailable. Select and save the secret now; it cannot be viewed again.");
+    }
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-heading">
+        <div>
+          <span className="eyebrow">Merchant platform</span>
+          <h1>Webhook settings</h1>
+          <p className="muted">
+            Configure a public HTTPS endpoint to receive delivery events. The
+            signing secret is encrypted at rest and shown only when created or
+            rotated.
+          </p>
+        </div>
+      </div>
+      {error && <p className="notice error" role="alert">{error}</p>}
+      {message && <p className="notice success" role="status">{message}</p>}
+      {signingSecret && (
+        <div className="notice secret-panel" role="alert">
+          <h2>Save this signing secret now</h2>
+          <p>It will not be available again after you close this message.</p>
+          <label htmlFor="merchant-webhook-secret">Signing secret</label>
+          <input
+            id="merchant-webhook-secret"
+            readOnly
+            autoComplete="off"
+            value={signingSecret}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <button className="secondary" onClick={() => void copySecret()}>
+            Copy secret
+          </button>
+          <button className="secondary" onClick={() => setSigningSecret(null)}>
+            I’ve saved it
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <p role="status">Loading webhook settings…</p>
+      ) : (
+        <form className="merchant-client-form" onSubmit={(event) => void save(event)}>
+          <h2>{settings?.configured ? "Update endpoint" : "Configure endpoint"}</h2>
+          <label htmlFor="merchant-webhook-url">Webhook URL</label>
+          <input
+            id="merchant-webhook-url"
+            name="url"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            placeholder="https://hooks.example.com/swiftdrop"
+            value={url}
+            onChange={(event) => setUrl(event.currentTarget.value)}
+            required
+            maxLength={2048}
+            disabled={busy}
+          />
+          <p className="muted">
+            HTTPS is required. Loopback, private-network and link-local
+            destinations are blocked.
+          </p>
+          <button className="primary" disabled={busy || !url.trim()}>
+            {busy ? "Saving…" : "Save webhook URL"}
+          </button>
+          {settings?.configured && (
+            <button
+              className="secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => void rotate()}
+            >
+              Rotate signing secret
+            </button>
+          )}
+        </form>
+      )}
+      {settings?.configured && (
+        <p className="muted">
+          Configured endpoint: <code>{settings.url}</code>
+          {settings.updatedAt && (
+            <> · Updated {new Date(settings.updatedAt).toLocaleString()}</>
+          )}
+        </p>
       )}
     </section>
   );

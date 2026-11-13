@@ -134,6 +134,22 @@ export const merchantOrderRequestSchema = z
   })
   .strict();
 export type MerchantOrderRequest = z.infer<typeof merchantOrderRequestSchema>;
+export const merchantWebhookSettingsSchema = z.object({
+  configured: z.boolean(),
+  url: z.url().nullable(),
+  updatedAt: z.string().datetime().nullable(),
+});
+export const saveMerchantWebhookSchema = z
+  .object({ url: z.string().trim().url().max(2048) })
+  .strict();
+export type SaveMerchantWebhook = z.infer<typeof saveMerchantWebhookSchema>;
+export const saveMerchantWebhookResponseSchema = z.object({
+  settings: merchantWebhookSettingsSchema,
+  signingSecret: z.string().nullable(),
+});
+export const merchantWebhookSecretSchema = z.object({
+  signingSecret: z.string().min(32).max(128),
+});
 export const createMerchantApiClientSchema = z
   .object({
     name: z

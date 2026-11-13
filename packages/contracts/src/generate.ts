@@ -52,6 +52,10 @@ import {
   merchantOAuthTokenResponseSchema,
   merchantOAuthErrorSchema,
   merchantOrderRequestSchema,
+  merchantWebhookSettingsSchema,
+  saveMerchantWebhookSchema,
+  saveMerchantWebhookResponseSchema,
+  merchantWebhookSecretSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -282,6 +286,30 @@ for (const [method, path, input, output, status, bearer] of [
     true,
   ],
   ["post", "/api/v1/merchant/clients/{id}/revoke", null, null, 204, true],
+  [
+    "get",
+    "/api/v1/merchant/webhook",
+    null,
+    merchantWebhookSettingsSchema,
+    200,
+    true,
+  ],
+  [
+    "put",
+    "/api/v1/merchant/webhook",
+    saveMerchantWebhookSchema,
+    saveMerchantWebhookResponseSchema,
+    200,
+    true,
+  ],
+  [
+    "post",
+    "/api/v1/merchant/webhook/rotate-secret",
+    emptySchema,
+    merchantWebhookSecretSchema,
+    200,
+    true,
+  ],
   ["post", "/api/v1/quotes", quoteRequestSchema, quoteSchema, 201, true],
   ["post", "/api/v1/parcels", bookingRequestSchema, parcelSchema, 201, true],
   ["get", "/api/v1/parcels", null, parcelPageSchema, 200, true],

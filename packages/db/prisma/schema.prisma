@@ -74,6 +74,7 @@ model Merchant {
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   apiClients   MerchantApiClient[]
   parcels      Parcel[]             @relation("MerchantOrders")
+  webhookConfig MerchantWebhookConfig?
   @@index([status, createdAt, id])
   @@map("merchants")
 }
@@ -92,6 +93,16 @@ model MerchantApiClient {
   accessGrants AccessGrant[]
   @@index([merchantId, createdAt, id])
   @@map("merchant_api_clients")
+}
+
+model MerchantWebhookConfig {
+  merchantId String   @id @map("merchant_id") @db.Uuid
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  url        String   @db.VarChar(2048)
+  encryptedSecret String @map("encrypted_secret") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@map("merchant_webhook_configs")
 }
 
 model StaffInvitation {

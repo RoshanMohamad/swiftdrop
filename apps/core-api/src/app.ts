@@ -97,7 +97,7 @@ export function createApp(deps: {
   const limiter = new RateLimiter(redis, config.rateSecret);
   const pricing = new PricingService(db);
   const parcels = new ParcelService(db, pricing);
-  const merchants = new MerchantsService(db, tokens);
+  const merchants = new MerchantsService(db, tokens, config.oauthSecret);
   app.use(createMerchantOAuthRouter(merchants, limiter, logger));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));

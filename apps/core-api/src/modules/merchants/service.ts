@@ -6,6 +6,10 @@ import {
   merchantApiClientSchema,
   merchantApiClientSecretSchema,
   merchantOAuthTokenResponseSchema,
+  merchantWebhookSecretSchema,
+  merchantWebhookSettingsSchema,
+  saveMerchantWebhookResponseSchema,
+  saveMerchantWebhookSchema,
   merchantPageSchema,
   merchantRegistrationResultSchema,
   merchantSchema,
@@ -18,6 +22,12 @@ import type { TokenService } from "../auth/jwt.js";
 import { hashPassword } from "../auth/password.js";
 import { HttpError } from "../../shared/problem.js";
 import { OAuthProtocolError } from "./oauth-error.js";
+import {
+  decryptWebhookSecret,
+  encryptWebhookSecret,
+  newWebhookSecret,
+  validateMerchantWebhookUrl,
+} from "./webhook-security.js";
 
 const merchantSummary = (merchant: {
   id: string;
@@ -69,6 +79,7 @@ export class MerchantsService {
   constructor(
     private db: Database,
     private tokens: TokenService,
+    private webhookSecretRoot: string,
   ) {}
 
   async register(input: MerchantRegistration) {
@@ -277,6 +288,131 @@ export class MerchantsService {
           );
       }
     });
+  }
+
+  async getWebhookSettings(userId: number) {
+    const merchant = await this.approvedMerchant(userId);
+    const config = await this.db.merchantWebhookConfig.findUnique({
+      where: { merchantId: merchant.id },
+    });
+    return merchantWebhookSettingsSchema.parse({
+      configured: Boolean(config),
+      url: config?.url ?? null,
+      updatedAt: config?.updatedAt.toISOString() ?? null,
+    });
+  }
+
+  async saveWebhookSettings(userId: number, input: unknown) {
+    const values = saveMerchantWebhookSchema.parse(input);
+    const merchant = await this.approvedMerchant(userId);
+    const url = await validateMerchantWebhookUrl(values.url);
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM merchants WHERE id = ${merchant.id}::uuid FOR UPDATE`;
+      const currentMerchant = await tx.merchant.findUnique({
+        where: { id: merchant.id },
+        include: { user: { select: { status: true } } },
+      });
+      if (
+        !currentMerchant ||
+        currentMerchant.status !== "APPROVED" ||
+        currentMerchant.user.status !== "ACTIVE"
+      )
+        throw new HttpError(
+          403,
+          "MERCHANT_NOT_APPROVED",
+          "Webhook settings require an active, approved merchant.",
+        );
+      const existing = await tx.merchantWebhookConfig.findUnique({
+        where: { merchantId: merchant.id },
+      });
+      const signingSecret = existing ? null : newWebhookSecret();
+      const config = existing
+        ? await tx.merchantWebhookConfig.update({
+            where: { merchantId: merchant.id },
+            data: { url },
+          })
+        : await tx.merchantWebhookConfig.create({
+            data: {
+              merchantId: merchant.id,
+              url,
+              encryptedSecret: encryptWebhookSecret(
+                signingSecret!,
+                this.webhookSecretRoot,
+              ),
+            },
+          });
+      return saveMerchantWebhookResponseSchema.parse({
+        settings: {
+          configured: true,
+          url: config.url,
+          updatedAt: config.updatedAt.toISOString(),
+        },
+        signingSecret,
+      });
+    });
+  }
+
+  async rotateWebhookSecret(userId: number) {
+    const merchant = await this.approvedMerchant(userId);
+    const signingSecret = newWebhookSecret();
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM merchants WHERE id = ${merchant.id}::uuid FOR UPDATE`;
+      const currentMerchant = await tx.merchant.findUnique({
+        where: { id: merchant.id },
+        include: { user: { select: { status: true } } },
+      });
+      if (
+        !currentMerchant ||
+        currentMerchant.status !== "APPROVED" ||
+        currentMerchant.user.status !== "ACTIVE"
+      )
+        throw new HttpError(
+          403,
+          "MERCHANT_NOT_APPROVED",
+          "Webhook settings require an active, approved merchant.",
+        );
+      const existing = await tx.merchantWebhookConfig.findUnique({
+        where: { merchantId: merchant.id },
+      });
+      if (!existing)
+        throw new HttpError(
+          404,
+          "WEBHOOK_NOT_CONFIGURED",
+          "Configure a webhook URL before rotating its signing secret.",
+        );
+      await tx.merchantWebhookConfig.update({
+        where: { merchantId: merchant.id },
+        data: {
+          encryptedSecret: encryptWebhookSecret(
+            signingSecret,
+            this.webhookSecretRoot,
+          ),
+        },
+      });
+      return merchantWebhookSecretSchema.parse({ signingSecret });
+    });
+  }
+
+  async webhookTargetForDelivery(merchantId: string) {
+    const config = await this.db.merchantWebhookConfig.findUnique({
+      where: { merchantId },
+      include: {
+        merchant: { include: { user: { select: { status: true } } } },
+      },
+    });
+    if (
+      !config ||
+      config.merchant.status !== "APPROVED" ||
+      config.merchant.user.status !== "ACTIVE"
+    )
+      return null;
+    return {
+      url: config.url,
+      secret: decryptWebhookSecret(
+        config.encryptedSecret,
+        this.webhookSecretRoot,
+      ),
+    };
   }
 
   async issueOAuthToken(

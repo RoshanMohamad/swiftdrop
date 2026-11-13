@@ -42,6 +42,7 @@ import { AdminUsers, NewStaff } from "./features/users/pages.js";
 import {
   AdminMerchants,
   MerchantClients,
+  MerchantWebhookSettings,
   MerchantSignup,
 } from "./features/merchant/pages.js";
 import "./styles.css";
@@ -134,6 +135,7 @@ function Account() {
       ) : state.user?.role === "MERCHANT" ? (
         <div className="notice account-links">
           <Link to="/merchant/clients">Manage API clients</Link>
+          <Link to="/merchant/webhook">Webhook settings</Link>
         </div>
       ) : (
         <div className="notice">
@@ -333,6 +335,14 @@ function App() {
                 element={
                   <Guard role="MERCHANT">
                     <MerchantClients />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/merchant/webhook"
+                element={
+                  <Guard role="MERCHANT">
+                    <MerchantWebhookSettings />
                   </Guard>
                 }
               />

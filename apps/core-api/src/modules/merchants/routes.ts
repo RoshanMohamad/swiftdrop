@@ -4,6 +4,7 @@ import {
   merchantRegistrationSchema,
   merchantReviewSchema,
   merchantOrderRequestSchema,
+  saveMerchantWebhookSchema,
 } from "@swiftdrop/contracts";
 import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
@@ -112,6 +113,34 @@ export function createMerchantsRouter(
       await merchants.revokeApiClient(res.locals.user.id, id);
       res.status(204).end();
     },
+  );
+  router.get(
+    "/merchant/webhook",
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (_req, res) =>
+      res.json(await merchants.getWebhookSettings(res.locals.user.id)),
+  );
+  router.put(
+    "/merchant/webhook",
+    protectMutations(config),
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) =>
+      res.json(
+        await merchants.saveWebhookSettings(
+          res.locals.user.id,
+          saveMerchantWebhookSchema.parse(req.body),
+        ),
+      ),
+  );
+  router.post(
+    "/merchant/webhook/rotate-secret",
+    protectMutations(config),
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (_req, res) =>
+      res.json(await merchants.rotateWebhookSecret(res.locals.user.id)),
   );
   router.patch(
     "/admin/merchants/:id/review",
