@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { execFileSync } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import pino from "pino";
 import { connect, type ChannelModel, type ConfirmChannel } from "amqplib";
@@ -29,7 +29,8 @@ import { HEADERS, verify } from "../src/signing.js";
 // through the topic exchange), confirmed hand-offs, durable attempts and the DLQ. Retry waits
 // are shrunk to 400 ms through the topology test seam; production keeps 30..960 s.
 const root = path.resolve(import.meta.dirname, "../../..");
-const secret = "integration-secret-0123456789";
+// Generated per run so no secret-shaped literal is committed.
+const secret = randomBytes(24).toString("hex");
 let postgres: StartedTestContainer;
 let rabbit: StartedTestContainer;
 let db: Database;
