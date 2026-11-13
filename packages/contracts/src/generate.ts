@@ -52,6 +52,8 @@ import {
   merchantOAuthTokenResponseSchema,
   merchantOAuthErrorSchema,
   merchantOrderRequestSchema,
+  merchantOrderPageSchema,
+  merchantOrderStatusSchema,
   merchantWebhookSettingsSchema,
   saveMerchantWebhookSchema,
   saveMerchantWebhookResponseSchema,
@@ -119,6 +121,29 @@ registry.registerPath({
     503: {
       description: "Token service temporarily unavailable",
       content: json(merchantOAuthErrorSchema),
+    },
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/merchant/orders",
+  summary: "List orders for the authenticated merchant",
+  security: [{ bearerAuth: [] }],
+  request: {
+    query: z.object({ status: merchantOrderStatusSchema.optional() }),
+  },
+  responses: {
+    200: {
+      description: "Merchant orders",
+      content: json(merchantOrderPageSchema),
+    },
+    401: {
+      description: "Authentication required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    403: {
+      description: "Approved merchant account required",
+      content: { "application/problem+json": { schema: problemSchema } },
     },
   },
 });

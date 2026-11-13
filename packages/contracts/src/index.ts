@@ -134,6 +134,29 @@ export const merchantOrderRequestSchema = z
   })
   .strict();
 export type MerchantOrderRequest = z.infer<typeof merchantOrderRequestSchema>;
+export const merchantOrderStatusSchema = z.enum([
+  "CREATED",
+  "PICKED_UP",
+  "IN_TRANSIT",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "FAILED",
+  "CANCELLED",
+]);
+export const merchantOrderSummarySchema = z.object({
+  trackingNumber: z.string(),
+  status: merchantOrderStatusSchema,
+  originDistrict: z.string(),
+  destinationDistrict: z.string(),
+  recipientName: z.string(),
+  recipientPhone: z.string(),
+  feeCents: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+});
+export const merchantOrderPageSchema = z.object({
+  items: z.array(merchantOrderSummarySchema),
+});
+export type MerchantOrderStatus = z.infer<typeof merchantOrderStatusSchema>;
 export const merchantWebhookSettingsSchema = z.object({
   configured: z.boolean(),
   url: z.url().nullable(),

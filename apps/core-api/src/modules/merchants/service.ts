@@ -6,6 +6,8 @@ import {
   merchantApiClientSchema,
   merchantApiClientSecretSchema,
   merchantOAuthTokenResponseSchema,
+  merchantOrderPageSchema,
+  type MerchantOrderStatus,
   merchantWebhookSecretSchema,
   merchantWebhookSettingsSchema,
   saveMerchantWebhookResponseSchema,
@@ -197,6 +199,28 @@ export class MerchantsService {
     });
     return merchantApiClientPageSchema.parse({
       items: clients.map(clientSummary),
+    });
+  }
+
+  async listOrders(userId: number, status?: MerchantOrderStatus) {
+    const merchant = await this.approvedMerchant(userId);
+    const orders = await this.db.parcel.findMany({
+      where: { merchantId: merchant.id, ...(status ? { status } : {}) },
+      include: { originZone: true, destinationZone: true },
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      take: 100,
+    });
+    return merchantOrderPageSchema.parse({
+      items: orders.map((order) => ({
+        trackingNumber: order.trackingNumber,
+        status: order.status,
+        originDistrict: order.originZone.district,
+        destinationDistrict: order.destinationZone.district,
+        recipientName: order.recipientName,
+        recipientPhone: order.recipientPhone,
+        feeCents: order.feeCents,
+        createdAt: order.createdAt.toISOString(),
+      })),
     });
   }
 

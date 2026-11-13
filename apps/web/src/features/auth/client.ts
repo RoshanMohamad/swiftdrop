@@ -40,6 +40,9 @@ import {
   createMerchantApiClientSchema,
   merchantApiClientPageSchema,
   merchantApiClientSecretSchema,
+  merchantOrderPageSchema,
+  merchantOrderStatusSchema,
+  type MerchantOrderStatus,
   type CreateMerchantApiClient,
   emptySchema,
   merchantWebhookSettingsSchema,
@@ -488,6 +491,20 @@ export async function listMerchantApiClients() {
       merchantApiClientPageSchema.parse(
         await checked(
           await api.GET("/api/v1/merchant/clients", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function listMerchantOrders(status?: MerchantOrderStatus) {
+  return authenticated(
+    async (session) =>
+      merchantOrderPageSchema.parse(
+        await checked(
+          await api.GET("/api/v1/merchant/orders", {
+            params: { query: status ? { status } : {} },
             headers: { Authorization: `Bearer ${session.accessToken}` },
           }),
         ),

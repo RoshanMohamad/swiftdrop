@@ -17,12 +17,127 @@ import {
   getMerchantWebhookSettings,
   saveMerchantWebhookSettings,
   rotateMerchantWebhookSecret,
+  listMerchantOrders,
 } from "../auth/client.js";
+import { merchantOrderStatusSchema } from "@swiftdrop/contracts";
 
 type Merchant = Awaited<ReturnType<typeof listMerchants>>["items"][number];
 type MerchantApiClient = Awaited<
   ReturnType<typeof listMerchantApiClients>
 >["items"][number];
+type MerchantOrder = Awaited<
+  ReturnType<typeof listMerchantOrders>
+>["items"][number];
+
+export function MerchantOrders() {
+  const [status, setStatus] = useState("");
+  const [orders, setOrders] = useState<MerchantOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setError("");
+    const parsedStatus = status
+      ? merchantOrderStatusSchema.parse(status)
+      : undefined;
+    void listMerchantOrders(parsedStatus)
+      .then(({ items }) => {
+        if (live) setOrders(items);
+      })
+      .catch((cause) => {
+        if (live) setError(errorMessage(cause));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [status, refresh]);
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-heading">
+        <div>
+          <span className="eyebrow">Merchant platform</span>
+          <h1>Orders</h1>
+          <p className="muted">Orders created through your merchant account.</p>
+        </div>
+      </div>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      <label htmlFor="merchant-order-status">Filter by status</label>
+      <select
+        id="merchant-order-status"
+        value={status}
+        onChange={(event) => setStatus(event.target.value)}
+      >
+        <option value="">All statuses</option>
+        {merchantOrderStatusSchema.options.map((value) => (
+          <option key={value} value={value}>
+            {value.replaceAll("_", " ")}
+          </option>
+        ))}
+      </select>
+      {loading ? (
+        <p role="status">Loading orders…</p>
+      ) : error ? (
+        <button
+          className="secondary"
+          onClick={() => setRefresh((value) => value + 1)}
+        >
+          Retry
+        </button>
+      ) : orders.length === 0 ? (
+        <p className="notice">No orders found for this status.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Tracking</th>
+                <th scope="col">Status</th>
+                <th scope="col">Route</th>
+                <th scope="col">Recipient</th>
+                <th scope="col">Fee</th>
+                <th scope="col">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order.trackingNumber}>
+                  <td>{order.trackingNumber}</td>
+                  <td>{order.status.replaceAll("_", " ")}</td>
+                  <td>
+                    {order.originDistrict} → {order.destinationDistrict}
+                  </td>
+                  <td>
+                    {order.recipientName}
+                    <br />
+                    {order.recipientPhone}
+                  </td>
+                  <td>
+                    {new Intl.NumberFormat(undefined, {
+                      style: "currency",
+                      currency: "LKR",
+                    }).format(order.feeCents / 100)}
+                  </td>
+                  <td>{new Date(order.createdAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function MerchantClients() {
   const [clients, setClients] = useState<MerchantApiClient[]>([]);
@@ -290,9 +405,9 @@ export function MerchantClients() {
 }
 
 export function MerchantWebhookSettings() {
-  const [settings, setSettings] = useState<
-    Awaited<ReturnType<typeof getMerchantWebhookSettings>> | null
-  >(null);
+  const [settings, setSettings] = useState<Awaited<
+    ReturnType<typeof getMerchantWebhookSettings>
+  > | null>(null);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -376,9 +491,13 @@ export function MerchantWebhookSettings() {
     if (!signingSecret) return;
     try {
       await navigator.clipboard.writeText(signingSecret);
-      setMessage("Signing secret copied. Store it securely; it cannot be viewed again.");
+      setMessage(
+        "Signing secret copied. Store it securely; it cannot be viewed again.",
+      );
     } catch {
-      setMessage("Copy is unavailable. Select and save the secret now; it cannot be viewed again.");
+      setMessage(
+        "Copy is unavailable. Select and save the secret now; it cannot be viewed again.",
+      );
     }
   }
 
@@ -395,8 +514,16 @@ export function MerchantWebhookSettings() {
           </p>
         </div>
       </div>
-      {error && <p className="notice error" role="alert">{error}</p>}
-      {message && <p className="notice success" role="status">{message}</p>}
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="notice success" role="status">
+          {message}
+        </p>
+      )}
       {signingSecret && (
         <div className="notice secret-panel" role="alert">
           <h2>Save this signing secret now</h2>
@@ -420,8 +547,13 @@ export function MerchantWebhookSettings() {
       {loading ? (
         <p role="status">Loading webhook settings…</p>
       ) : (
-        <form className="merchant-client-form" onSubmit={(event) => void save(event)}>
-          <h2>{settings?.configured ? "Update endpoint" : "Configure endpoint"}</h2>
+        <form
+          className="merchant-client-form"
+          onSubmit={(event) => void save(event)}
+        >
+          <h2>
+            {settings?.configured ? "Update endpoint" : "Configure endpoint"}
+          </h2>
           <label htmlFor="merchant-webhook-url">Webhook URL</label>
           <input
             id="merchant-webhook-url"

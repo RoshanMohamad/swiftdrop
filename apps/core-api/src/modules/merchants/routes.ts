@@ -5,6 +5,7 @@ import {
   merchantReviewSchema,
   merchantOrderRequestSchema,
   saveMerchantWebhookSchema,
+  merchantOrderStatusSchema,
 } from "@swiftdrop/contracts";
 import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
@@ -13,7 +14,10 @@ import type { RateLimiter } from "../../shared/rate-limit.js";
 import { authenticate, requireRole } from "../auth/index.js";
 import type { AuthService } from "../auth/service.js";
 import { MerchantsService } from "./service.js";
-import { authenticateMerchantClient, requireMerchantScope } from "./machine-auth.js";
+import {
+  authenticateMerchantClient,
+  requireMerchantScope,
+} from "./machine-auth.js";
 import type { ParcelService } from "../parcels/index.js";
 
 export function createMerchantsRouter(
@@ -52,13 +56,27 @@ export function createMerchantsRouter(
           "FORBIDDEN",
           "This action requires a merchant API client.",
         );
-      res.status(201).json(
-        await parcels.createMerchantOrder(
-          principal.merchantId,
-          req.get("Idempotency-Key") ?? "",
-          merchantOrderRequestSchema.parse(req.body),
-        ),
-      );
+      res
+        .status(201)
+        .json(
+          await parcels.createMerchantOrder(
+            principal.merchantId,
+            req.get("Idempotency-Key") ?? "",
+            merchantOrderRequestSchema.parse(req.body),
+          ),
+        );
+    },
+  );
+  router.get(
+    "/merchant/orders",
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) => {
+      const status =
+        req.query.status === undefined
+          ? undefined
+          : merchantOrderStatusSchema.parse(req.query.status);
+      res.json(await merchants.listOrders(res.locals.user.id, status));
     },
   );
   router.get(

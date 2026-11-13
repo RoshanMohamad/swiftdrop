@@ -14,7 +14,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | Member | Name | Branch | Planned slice (plan.md §4.1) | Delivered vs merged | Depends on | Next step |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | [M01](#m01) | doktur-umair | `umair-dev` (published as `origin/umair-dev`; earlier M01 work was also published as `origin/dev-umair`) | Identity, access and user administration (+ silent-work steward) | Sprint 1 invitations (`67a77de`) and Sprint 2/Sprint 3 implementation (`e94758f`) are contained in `origin/main` via PR #8; local branch fast-forwarded to `origin/main` at `948133d`; handover sync update is published in PR #9 and awaiting review/merge | X-01/X-13 (M10 review), X-03 (M08/M09 and M02), X-15 (M06 readiness) | Review/merge PR #9; run manual service and existing auth acceptance; unblock courier activation with M06 (C-04); C-02 ownership handoff open |
-| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local M02 checkpoints: merchant registration/approval, API-client CRUD, OAuth and merchant order creation; not merged | X-05 (M04 parcel review), X-10/X-11 (delivery logs/webhook config), X-13 (shared route composition review) | Apply migrations and perform order acceptance; get M04 parcel/schema review; continue webhook configuration and M08 coordination |
+| [M02](#m02) | TBD | `feature/Merchant` | Merchant platform | Local M02 checkpoints: registration/approval, API clients, OAuth, order create/list and webhook settings; not merged | X-05 (M04 parcel review), X-10 (M08 delivery-log API), X-11 (worker config lookup), X-13 (shared route composition review) | Apply migrations and complete acceptance; get M04 parcel/schema review; coordinate worker delivery-log contract with M08 |
 | [M03](#m03) | UmarYusuf03 | umarali | Pricing, zones and reports | Core deliverables merged into main (PR #10); Milestone 2 completed: FR-B2 AI Assistant Service (MCP read-only tools) & FR-F9 Chat Widget delivered with 100% test coverage | X-04 | Full integration verification with M04 quote consumption |
 | [M04](#m04) | TBD | TBD | Customer booking and parcel records | No work recorded (booking baseline exists in M01's local code, C-02) | X-04, X-06, X-09; parcel ownership handoff (R-04) | Take over booking code; merchant/staff variants; coordinate C-02 extraction |
 | [M05](#m05) | TBD | TBD | Parcel lifecycle, cancellation and public tracking | Lifecycle transition contract and `LifecycleService` merged into `origin/main` via PR #7 (`497fdb9`, `c366ef7`, `5460dc3`); source branch `shazan-dev`, member identity/history not confirmed. Public tracking baseline exists in M01's local code (C-02). | X-05, X-07; parcel ownership handoff (R-04) | Confirm contributor registry mapping and record attributed checkpoint; continue lifecycle/public-tracking work and coordinate C-02 extraction |
@@ -777,6 +777,26 @@ From the repository root, run `pnpm db:generate`, `pnpm db:migrate`, and `pnpm d
 2. Retry the exact body and key. Expect the original response and one parcel/history/outbox/idempotency record. Reuse the key with a changed body; expect 409. Omit or malform the key; expect 400.
 3. Try missing/expired/revoked credentials, a human token, a client without `orders:write`, a pending/rejected merchant, suspended owner, unserved district, same origin/destination and missing price. Expect 401/403/422 as appropriate and no partial parcel, quote, history, outbox or idempotency writes.
 4. Repeat concurrent identical requests with the same key; expect one order and identical successful responses. Try the same key under another merchant; expect an independent order. The response has no UI flow; review the merchant-owned parcel row and event in local DB/log tooling without exposing token or secret.
+
+### M02 checkpoint: Merchant orders dashboard (13 November 2026)
+
+#### Summary
+- Added `GET /api/v1/merchant/orders` for authenticated merchant users, with optional lifecycle-status filtering. It requires an approved merchant and queries parcels by `merchantId`, returning at most the latest 100 orders.
+- Added a strict response contract and generated OpenAPI/typed-client definitions. No database change was needed; order ownership uses the existing `parcels.merchant_id` column.
+- Added `/merchant/orders`, linked from the merchant account page, with status filtering and loading, error/retry, empty and results states.
+- Corrected the M02 module and feature READMEs: webhook settings already exist; delivery logs still depend on M08's delivery records/API.
+
+#### Checks and boundaries
+- Contract generation completed and workspace TypeScript checks passed. Node v22.18.0 emitted the configured engine warning (`>=24.11 <25`). Tests and browser acceptance were not run. `git diff --check` and contract drift checks passed; the repository-wide format check reports many existing unformatted files, so changed source files were formatted directly.
+- The list is intentionally capped at 100 for this first dashboard increment; pagination is not included. M08 delivery-log integration is still pending. M04 review of the shared parcel path/schema and M08 event-consumer review remain open (C-02/C-07).
+
+#### Manual acceptance
+From the repository root, with `.env` configured and a database available, run `pnpm db:generate`, `pnpm db:migrate`, then `pnpm dev`.
+
+1. Sign in as an approved merchant with created orders and open `/merchant/orders`. Expect only that merchant's orders, ordered newest first, with tracking, status, route, recipient, fee and creation time.
+2. Filter each lifecycle status and then choose “All statuses.” Expect only matching orders and a clear empty state where none match. Refresh after creating an order and expect it to appear.
+3. Sign in as a pending/rejected merchant and then as a non-merchant; expect access denial. Verify orders belonging to a second merchant never appear.
+4. Check API requests with an invalid status (400), no status (latest 100), and repeated status changes. Check loading/error/retry states, keyboard operation, and a narrow mobile viewport with the table scroll affordance.
 
 <a id="m03"></a>
 ## M03 — UmarYusuf03 (`umarali`)
