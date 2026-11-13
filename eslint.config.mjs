@@ -8,6 +8,7 @@ export default ts.config(
       "**/dist/**",
       "**/coverage/**",
       "**/generated/**",
+      "**/public/**",
       "docs/**",
       "output/**",
     ],
