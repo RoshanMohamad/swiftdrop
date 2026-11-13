@@ -22,7 +22,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | [M07](#m07) | TBD | TBD | Courier delivery and offline PWA | No work recorded | X-06, X-08 | PWA shell, offline queue, operation ledger |
 | [M08](#m08) | TBD | TBD | Eventing and webhook delivery | No work recorded (relay baseline exists in M01's local code, C-02) | X-03 boundary review (R-02), X-11, parcel ownership handoff (R-04) | Move relay to owned service; review X-03 lookup/event boundary with M01/M09/M02 |
 | [M09](#m09) | TBD | TBD | Notifications and realtime | No work recorded | X-03 boundary review (R-02), X-08, X-09 | Notification templates, realtime gateway; review X-03 lookup needs with M01/M08/M02 |
-| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | In progress | X-02/X-13 shared interface/schema review (R-01) | Kernel, shell, typed client, MSW harness; review M01 auth/admin contracts and composition |
+| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel (logger, correlation, cursor pagination), MSW mock harness & dev:mock mode | X-02/X-13 shared interface/schema review (R-01) | Coordinate R-01 with M01; open PR for review |
 
 Integration target: `main`. Checked 8 November 2026: local `umair-dev` fast-forwarded from `8d7cf9c` to fetched `origin/main` at `948133d`, which contains M01's earlier implementation through PR #8 and subsequent M05 lifecycle changes. No conflicts occurred; incoming changes did not touch the existing local `handover.md` edit. At the time checked, `origin/umair-dev` remained at `b33e15a` and was 11 commits behind the local branch; publication is recorded in the checkpoint below. No automated runtime checks were run for this documentation/sync action, no hosted CI or other member branches were reviewed, and the M01 manual/provider acceptance and peer contract reviews remain pending. Merge order: kernel/contracts (X-01/X-09) → identity/administration + X-03 contracts/schema (X-02/C-03/C-05/C-06) → pricing/parcels/lifecycle (X-04–X-06) → dispatch/courier (X-07/X-08/X-15) → messaging consumers (X-03/X-10–X-12) → shared UI composition (X-13). Combined ten-branch verification was not performed. Release blockers: M10 contract/interface/schema review (C-03/C-05), M08/M09/M02 review of X-03 and actual worker integration (C-06), M06 courier readiness (C-04/X-15), outstanding browser/provider acceptance, unverified member dependencies, and the production gates in auth §12. Historical checkpoints below are preserved.
 
@@ -822,6 +822,71 @@ Planned slice (plan.md §4.1): Platform kernel and web foundation.
 - Environment verified: Node.js v24.22.1, pnpm v9.15.9, active Docker containers (PostgreSQL, Redis, RabbitMQ, MinIO, Mailpit).
 - Generated local RS256 signing and CSRF keypairs in `.local/auth/`.
 - Commenced M10 deliverables: platform kernel, typed OpenAPI client generator, central web layout shell, and MSW mock harness.
+
+### Milestone 1: Web Foundation & Modular App Shell (FR-F1) (13 November 2026)
+
+#### Summary of changes
+- Refactored monolithic `apps/web/src/main.tsx` into clean, modular architectural components per plan.md §4.1:
+  - `apps/web/src/App.tsx`: Top-level application component cleanly separating root providers from shell and routing.
+  - `apps/web/src/routes.tsx`: Centralized declarative router mounting all public, customer, staff, and admin routes.
+  - `apps/web/src/shared/layout/AppShell.tsx`: Semantic accessible shell providing skip-link (`#main`), responsive header with brand mark, role navigation, intro hero, status alert banner, and footer.
+  - `apps/web/src/shared/auth/Guard.tsx`: Reusable route protection guard (`Guard` / `RequireRole`) handling authentication, incomplete profile redirection, and multi-role RBAC authorization.
+  - `apps/web/src/shared/components/Account.tsx`: Decoupled workspace account view from main entry point.
+- Added comprehensive unit test suites:
+  - `apps/web/src/shared/auth/Guard.test.tsx` (5 unit tests covering unauthenticated, incomplete profile, role mismatch, and authorized access).
+  - `apps/web/src/App.test.tsx` (5 unit tests covering accessible shell landmarks, loading state, error reconnection, 404 fallback, and session-aware controls).
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all 4 workspace packages (`packages/contracts`, `packages/db`, `apps/core-api`, `apps/web`).
+- `pnpm --filter web test`: 11/11 test suites passed, 54/54 tests passed.
+- `pnpm build`: Both frontend Vite bundle (gzip: 146.33 kB, well within the < 250 kB performance budget) and core-api tsup dist built cleanly.
+
+#### Manual test plan for this iteration
+1. **Accessible Shell & Landmarks:**
+   - Launch `pnpm dev` and visit `http://localhost:5173/auth/login`.
+   - Press Tab on page load; verify "Skip to content" appears and focuses `#main`.
+   - Verify SwiftDrop brand link navigates to `/`.
+2. **Role Route Protection:**
+   - Sign in as `customer@swiftdrop.test`. Attempt to access `/admin/users` directly; verify automatic redirection to customer workspace (`/account`).
+   - Sign in as `admin@swiftdrop.test`. Navigate to `/admin/users`, `/admin/zones`, `/admin/pricing`, and `/admin/reports`; verify admin access is granted.
+3. **Fallback & 404:**
+   - Navigate to `/non-existent-route`; verify the accessible 404 error panel renders with a "Back to SwiftDrop" link.
+
+### Milestone 2: Backend Shared Kernel & MSW Mock Harness (13 November 2026)
+
+#### Summary of changes
+- **Backend Shared Kernel (`apps/core-api/src/shared/`):**
+  - `apps/core-api/src/shared/pagination.ts`: Comprehensive cursor-based pagination helper library implementing opaque URL-safe base-64 cursor encoding and decoding (`encodeCursor`, `decodeCursor`), Prisma `findMany` argument construction (`buildPrismaPage` with `take + 1` next-page probe and bounded limits [1..100]), and page-info derivation (`buildPageInfo`).
+  - `apps/core-api/src/shared/logger.ts`: Central application singleton logger using Pino with strict redaction paths for PII and secrets (`password`, `phone`, `email`, `authorization`, `cookie`, `secret`, `refreshToken`), JSON output in production, optional pretty-printing, and a request-scoped `childLogger(correlationId)` helper.
+  - `apps/core-api/test/pagination.unit.test.ts`: Complete unit test suite (16 tests) covering valid round-trip serialization, corruption resistance (malformed base-64, non-JSON strings, invalid dates, missing IDs), query argument clamping, and deterministic page slice calculation.
+- **Frontend MSW Mock Harness (`apps/web/src/mocks/`):**
+  - Integrated MSW v3 browser worker setup (`apps/web/src/mocks/browser.ts`).
+  - Implemented comprehensive mock handlers (`apps/web/src/mocks/handlers.ts`) covering all primary SwiftDrop endpoints: CSRF token, authentication & session lifecycle (`/api/v1/auth/*`), quotes & parcels (`/api/v1/quotes`, `/api/v1/parcels/*`, `/api/v1/track/*`), admin zones & pricing (`/api/v1/admin/zones`, `/api/v1/admin/pricing`), admin users & staff invitations (`/api/v1/admin/users/*`), merchant applications & review (`/api/v1/admin/merchants/*`), daily analytics (`/api/v1/admin/reports/daily`), and AI delivery assistant chat (`/api/v1/assistant/chat`).
+  - Added unit test suite `apps/web/src/mocks/handlers.test.ts` (6 unit tests) verifying coverage of all critical endpoints and schema compliance of fixtures.
+  - Initialized public service worker script `apps/web/public/mockServiceWorker.js` and registered `"msw": { "workerDirectory": ["public"] }` in `apps/web/package.json`.
+  - Added `"dev:mock": "vite --mode mock --host localhost"` script to `apps/web/package.json`.
+  - Added conditional mock-bootstrapping hook in `apps/web/src/main.tsx` (`startMocks()`) that activates only in `mock` mode without affecting production builds.
+- **Project Configuration:**
+  - Added `"**/public/**"` to `eslint.config.mjs` ignores to prevent lint warnings on vendor-generated service worker assets.
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all workspace packages (`packages/contracts`, `packages/db`, `apps/core-api`, `apps/web`).
+- `pnpm lint`: 0 errors, 0 warnings across entire monorepo.
+- `pnpm --filter web test`: 12/12 test suites passed, 60/60 tests passed.
+- `apps/core-api` pagination test suite: 1/1 suite, 16/16 unit tests passed.
+- `pnpm build`: Both web bundle (gzip: 146.35 kB, well below the 250 kB limit) and core-api tsup dist built cleanly.
+
+#### Manual test plan for this iteration
+1. **Frontend MSW Mock Development Mode:**
+   - Run `pnpm --filter web dev:mock`.
+   - Open browser to `http://localhost:5173`.
+   - Verify Service Worker registers successfully in console: `[MSW] Mocking enabled.`
+   - Navigate through login, parcel booking, admin zones, and tracking; verify realistic mock responses without running the backend API.
+2. **Cursor Pagination Integration:**
+   - Request paginated endpoints (e.g. `/api/v1/parcels?take=10`).
+   - Copy `pageInfo.endCursor` from response.
+   - Request next page with `?cursor=<endCursor>&take=10`; verify non-overlapping sequential page delivery.
+
 
 ## Customer booking and tracking implementation checkpoint (29 October 2026)
 
