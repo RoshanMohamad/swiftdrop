@@ -22,7 +22,7 @@ Local agent instructions checkpoint (2 November 2026): [M01 keeps `AGENTS.md` lo
 | [M07](#m07) | TBD | TBD | Courier delivery and offline PWA | No work recorded | X-06, X-08 | PWA shell, offline queue, operation ledger |
 | [M08](#m08) | TBD | TBD | Eventing and webhook delivery | No work recorded (relay baseline exists in M01's local code, C-02) | X-03 boundary review (R-02), X-11, parcel ownership handoff (R-04) | Move relay to owned service; review X-03 lookup/event boundary with M01/M09/M02 |
 | [M09](#m09) | TBD | TBD | Notifications and realtime | No work recorded | X-03 boundary review (R-02), X-08, X-09 | Notification templates, realtime gateway; review X-03 lookup needs with M01/M08/M02 |
-| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel, MSW mock harness, and shared UI components (Milestones 1–3 delivered) | X-02/X-13 shared interface/schema review (R-01) | Implement correlation-id middleware, /api/docs, and authorization matrix harness |
+| [M10](#m10) | Lavin | `lavin-dev` | Platform kernel and web foundation | Delivered: Web foundation (FR-F1), backend shared kernel, MSW mock harness, shared UI components, correlation middleware, /api/docs, role x endpoint auth matrix, bundle budget CI gate, and 2-replica compose overlay (Milestones 1–4 delivered) | X-02/X-13 shared interface/schema review (R-01) | Ready for integration & M07 peer review |
 
 Integration target: `main`. Checked 8 November 2026: local `umair-dev` fast-forwarded from `8d7cf9c` to fetched `origin/main` at `948133d`, which contains M01's earlier implementation through PR #8 and subsequent M05 lifecycle changes. No conflicts occurred; incoming changes did not touch the existing local `handover.md` edit. At the time checked, `origin/umair-dev` remained at `b33e15a` and was 11 commits behind the local branch; publication is recorded in the checkpoint below. No automated runtime checks were run for this documentation/sync action, no hosted CI or other member branches were reviewed, and the M01 manual/provider acceptance and peer contract reviews remain pending. Merge order: kernel/contracts (X-01/X-09) → identity/administration + X-03 contracts/schema (X-02/C-03/C-05/C-06) → pricing/parcels/lifecycle (X-04–X-06) → dispatch/courier (X-07/X-08/X-15) → messaging consumers (X-03/X-10–X-12) → shared UI composition (X-13). Combined ten-branch verification was not performed. Release blockers: M10 contract/interface/schema review (C-03/C-05), M08/M09/M02 review of X-03 and actual worker integration (C-06), M06 courier readiness (C-04/X-15), outstanding browser/provider acceptance, unverified member dependencies, and the production gates in auth §12. Historical checkpoints below are preserved.
 
@@ -920,6 +920,50 @@ Planned slice (plan.md §4.1): Platform kernel and web foundation.
    - Screen reader test: verify `role="status"` announces loading changes politely; verify `role="alert"` alerts on crash.
 3. **Status Badges:**
    - Verify visual styling for `IN_TRANSIT`, `DELIVERED`, and `FAILED` badges at 360px viewport and high-contrast settings.
+
+### Milestone 4: Correlation Middleware, Interactive /api/docs, Role Authorization Matrix & NFR Gates (13 November 2026)
+
+#### Summary of changes
+- **Correlation ID Propagation Middleware (`apps/core-api/src/shared/correlation.ts`):**
+  - Implemented `correlationMiddleware`: respects incoming `x-correlation-id` header or generates a cryptographically secure UUIDv4.
+  - Attaches request-scoped child logger pre-bound with `correlationId` to both `res.locals.logger` and `res.locals.log`.
+  - Sets `X-Correlation-ID` and `Cache-Control: no-store` on all HTTP responses.
+  - Cleanly integrated into `apps/core-api/src/app.ts`, replacing legacy ad-hoc UUID middleware and consolidating logger instantiation with the singleton from `shared/logger.ts`.
+  - Added unit test suite `apps/core-api/test/correlation.unit.test.ts` (3 unit tests, all passing).
+- **Interactive OpenAPI Documentation Endpoint (`/api/docs`):**
+  - Upgraded `/api/docs` in `apps/core-api/src/app.ts` to serve a modern interactive Scalar API reference interface with an offline-compatible fallback.
+  - Serves OpenAPI contract at `/api/openapi.json` from `packages/contracts/openapi.json`.
+- **Role × Endpoint Authorization Matrix Harness (`apps/core-api/test/auth-matrix.unit.test.ts`):**
+  - Implemented the automated matrix test harness required by `plan.md` §8.2 and §12.1.
+  - Tests 8 endpoint families (`/api/v1/auth/me`, `/api/v1/quotes`, `/api/v1/parcels`, `/api/v1/admin/users`, `/api/v1/admin/merchants`, `/api/v1/admin/zones`, `/api/v1/admin/pricing`, `/api/v1/admin/reports/daily`) across all 6 role variants (`ANONYMOUS`, `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER`, `ADMIN`).
+  - 48 tests verify that unauthenticated calls yield 401 UNAUTHORISED, unauthorized roles receive 403 FORBIDDEN, and permitted roles pass through the security barrier.
+- **Web App Shell Role Navigation (`apps/web/src/shared/layout/AppShell.tsx`):**
+  - Added semantic role-aware navigation links for `CUSTOMER` (`Parcels`, `Book Delivery`), `ADMIN` (`Users`, `Merchants`, `Zones`, `Pricing`, `Reports`), and `DISPATCHER` (`Reports`) alongside `Dashboard` and `Security` links.
+- **Web Bundle Budget Enforcement (NFR-11):**
+  - Added `apps/web/scripts/check-bundle-budget.js` and registered `"check:budget"` in `apps/web/package.json` and root `package.json`.
+  - Verifies total JS production gzip payload is strictly below the 250 kB threshold (currently 141.51 kB, 56.6% of budget).
+- **2-Replica Scalability & Statelessness Configuration (NFR-9):**
+  - Added `compose.scale.yaml` Docker Compose overlay demonstrating 2-replica `core-api` instances operating statelessly with Redis-backed sessions and PostgreSQL.
+
+#### Checks actually run
+- `pnpm typecheck`: 0 errors across all 4 workspace packages.
+- `pnpm lint`: 0 errors, 0 warnings across the entire monorepo.
+- `apps/core-api` tests: 67/67 tests passing (`correlation.unit.test.ts`, `auth-matrix.unit.test.ts`, `pagination.unit.test.ts`).
+- `apps/web` tests: 9/9 tests passing in `pages.test.tsx`, 5/5 passing in `App.test.tsx`, 11/11 passing in `components.test.tsx`.
+- `pnpm check:budget`: 141.51 kB gzip vs 250 kB limit (PASSED).
+- `pnpm build`: Clean production build for both web and core-api packages.
+
+#### Manual test plan for this iteration
+1. **Interactive API Reference:**
+   - Launch `core-api` via `pnpm dev`.
+   - Visit `http://localhost:3000/api/docs` and verify the Scalar API explorer renders with all SwiftDrop endpoint schemas.
+   - Verify `http://localhost:3000/api/openapi.json` returns valid JSON.
+2. **Correlation ID Tracing:**
+   - Send `GET /api/health` with `X-Correlation-Id: test-trace-999`.
+   - Verify response contains `X-Correlation-ID: test-trace-999`.
+3. **Role Navigation:**
+   - Sign in as Customer: verify header displays "Parcels" and "Book Delivery".
+   - Sign in as Admin: verify header displays "Users", "Merchants", "Zones", "Pricing", and "Reports".
 
 
 ## Customer booking and tracking implementation checkpoint (29 October 2026)

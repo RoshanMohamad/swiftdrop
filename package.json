@@ -28,6 +28,7 @@
     "contracts:check": "pnpm --filter @swiftdrop/contracts check",
     "format:check": "prettier --check apps packages/config packages/contracts/src/index.ts packages/contracts/src/lifecycle.ts packages/contracts/src/generate.ts packages/db/src packages/db/prisma packages/db/prisma.config.ts scripts eslint.config.mjs",
     "test:built": "node scripts/check-built.mjs",
+    "check:budget": "pnpm --filter web check:budget",
     "benchmark": "tsx scripts/benchmark-p95.mjs"
   },
   "devDependencies": {

@@ -6,6 +6,7 @@
     "dev": "vite --host localhost",
     "dev:mock": "vite --mode mock --host localhost",
     "build": "vite build",
+    "check:budget": "node scripts/check-bundle-budget.js",
     "typecheck": "tsc",
     "test": "vitest run"
   },
