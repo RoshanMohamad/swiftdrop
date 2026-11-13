@@ -1,6 +1,6 @@
 # SwiftDrop
 
-Customer authentication and the next customer booking/tracking increment are implemented locally: password signup/login, optional mailbox verification, Google customer sign-in/linking, profile completion, rotating sessions, quotes, booking/history, public tracking, Admin zone/pricing maintenance, staff invitations, all-role suspension/reactivation, operator admin creation and RabbitMQ event relay/consumer. This remains an initial product slice; parcel operations, staff/merchant workflows and production security gates are not complete.
+Customer authentication, booking/tracking, notification-worker and realtime increments are implemented locally: password signup/login, optional mailbox verification, Google customer sign-in/linking, profile completion, rotating sessions, quotes, booking/history, public tracking, Admin zone/pricing maintenance, staff invitations, all-role suspension/reactivation, operator admin creation, RabbitMQ event relay/consumer, Mailpit booking/status notifications and Socket.IO parcel updates. This remains an initial product slice; M08 RabbitMQ topology, parcel operations, staff workflows and production security gates are not complete.
 
 ## Start locally
 
@@ -19,7 +19,7 @@ pnpm services:provision --service webhook-svc
 pnpm dev
 ```
 
-Key generation and service provisioning refuse to overwrite existing keys. Run each service provisioning command once per local database; skip them on subsequent starts. Open [the web app](http://localhost:5173/auth/login), [API health](http://localhost:5173/api/health), [readiness](http://localhost:5173/api/ready) or [API documentation](http://localhost:5173/api/docs). Vite proxies `/api` to the API at `127.0.0.1:3000`. The internal notification API listens separately on `127.0.0.1:3001` and is not proxied by Vite. PostgreSQL uses localhost:5432; Redis uses localhost:6380 to avoid another local project's Redis. Infrastructure ports bind to loopback only. Verification mail is captured at [Mailpit](http://localhost:8025); Google sign-in requires private development credentials and remains unavailable until configured.
+Key generation and service provisioning refuse to overwrite existing keys. Run each service provisioning command once per local database; skip them on subsequent starts. Open [the web app](http://localhost:5173/auth/login), [API health](http://localhost:5173/api/health), [readiness](http://localhost:5173/api/ready) or [API documentation](http://localhost:5173/api/docs). Vite proxies `/api` and Socket.IO to the API at `127.0.0.1:3000`. The internal notification API listens separately on `127.0.0.1:3001` and is not proxied by Vite. PostgreSQL uses localhost:5433, MinIO uses localhost:9002 and Redis uses localhost:6380 to avoid other local services. Infrastructure ports bind to loopback only. Verification and parcel notification mail is captured at [Mailpit](http://localhost:8025); Google sign-in requires private development credentials and remains unavailable until configured.
 
 ### Test login and email verification
 
@@ -57,7 +57,13 @@ Status changes serialize through PostgreSQL advisory lock `(1396982864, 1)` befo
 
 ## Worker service credentials and booking-contact demo
 
-The internal listener accepts only RS256 service JWTs backed by live service-principal and public-key rows. Service credentials are separate from human access grants. The local provisioner creates `notification-svc` with `notifications:lookup`; `webhook-svc` has its own audience/key and `webhooks:config` permission fixture, but webhook configuration lookup is pending M02/M08 contract agreement. The notification route supports persisted `parcel.created` events and returns current customer email plus recipient SMS contact; customer suspension does not change an existing booking's contacts. Private keys and signer metadata stay in ignored `.local/services/` with mode `0600`; no endpoint issues service tokens.
+The internal listener accepts only RS256 service JWTs backed by live service-principal and public-key rows. Service credentials are separate from human access grants. The local provisioner creates `notification-svc` with `notifications:lookup`; `webhook-svc` has its own audience/key and `webhooks:config` permission fixture, but webhook configuration lookup is pending M02/M08 contract agreement. The notification route supports persisted `parcel.created` and `parcel.status.changed` events and returns current customer email plus recipient SMS contact; customer suspension does not change an existing booking's contacts. Private keys and signer metadata stay in ignored `.local/services/` with mode `0600`; no endpoint issues service tokens.
+
+## Notifications and realtime
+
+`notification-svc` consumes the existing M08-owned `notifications.q`, sends booking/status email through SMTP, records only masked recipients, and uses a mock SMS adapter. Progress is keyed by `(consumer,eventId)` with per-channel sent checks. Normal redelivery is suppressed, but SMTP has an unavoidable crash window: if the provider accepts a message before local completion is saved, the same event may send a duplicate unless the provider supports idempotency. The worker retries the source delivery three times and confirms `notifications.dlq` handoff before acknowledging. It does not declare RabbitMQ topology; `/readyz` remains unavailable until M08 supplies `notifications.q` and `notifications.dlq`.
+
+The Core API hosts Socket.IO at `/socket.io` with the Redis adapter. Public rooms are `public:<trackingNo>` and receive only status, time, town and sequence. Private rooms are `private:<parcelId>` and recheck current authorization before joining; token expiry and assignment changes evict membership. The customer detail and public tracking pages retain REST snapshots and visibility-aware polling for reconnects, gaps and socket outages. Multi-replica polling requires sticky sessions at the proxy. Courier private-room authorization remains disabled until M06 provides the X-08 assignment read model.
 
 After setup above, create a booking as a customer, then run:
 

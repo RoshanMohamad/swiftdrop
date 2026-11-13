@@ -6572,7 +6572,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Look up booking contacts for a persisted parcel.created event */
+        /** Look up contacts for a persisted notification event */
         get: {
             parameters: {
                 query?: never;

@@ -6,6 +6,10 @@ import { NewParcel, ParcelDetail, ParcelList } from "./pages.js";
 import { createParcel, createQuote } from "../auth/client.js";
 import { getParcel, getParcelReceipt, listParcels } from "../auth/client.js";
 
+vi.mock("../../shared/realtime/index.js", () => ({
+  useParcelRealtime: () => "live",
+}));
+
 vi.mock("../auth/client.js", () => ({
   ApiError: class extends Error {
     problem: { status: number };

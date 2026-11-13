@@ -6,12 +6,12 @@
     "node": ">=24.11 <25"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter core-api --filter web dev",
+    "dev": "pnpm --parallel --filter core-api --filter notification-svc --filter web dev",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter core-api test && pnpm --filter web test",
+    "test": "pnpm --filter core-api test && pnpm --filter notification-svc test && pnpm --filter web test",
     "test:integration": "pnpm --filter core-api test:integration",
-    "build": "pnpm --filter web build && pnpm --filter core-api build",
+    "build": "pnpm --filter web build && pnpm --filter core-api build && pnpm --filter notification-svc build",
     "auth:keys:generate": "node scripts/auth-keys.mjs",
     "db:generate": "pnpm --filter @swiftdrop/db generate",
     "db:migrate": "pnpm --filter @swiftdrop/db migrate",
@@ -26,7 +26,7 @@
     "services:demo": "pnpm --filter core-api services:cli demo",
     "contracts:generate": "pnpm --filter @swiftdrop/contracts generate",
     "contracts:check": "pnpm --filter @swiftdrop/contracts check",
-    "format:check": "prettier --check apps packages/config packages/contracts/src/index.ts packages/contracts/src/lifecycle.ts packages/contracts/src/generate.ts packages/db/src packages/db/prisma packages/db/prisma.config.ts scripts eslint.config.mjs",
+    "format:check": "prettier --check apps/notification-svc apps/core-api/src/modules/realtime apps/core-api/test/realtime.unit.test.ts apps/web/src/shared/realtime packages/config packages/contracts/src/index.ts packages/contracts/src/lifecycle.ts packages/contracts/src/realtime.ts packages/contracts/src/service-auth.ts packages/contracts/src/generate.ts packages/db/src packages/db/prisma packages/db/prisma.config.ts scripts eslint.config.mjs",
     "test:built": "node scripts/check-built.mjs",
     "benchmark": "tsx scripts/benchmark-p95.mjs"
   },

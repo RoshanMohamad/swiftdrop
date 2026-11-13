@@ -13,7 +13,8 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-router-dom": "^7.18.5",
-    "openapi-fetch": "^0.15.0"
+    "openapi-fetch": "^0.15.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.26",

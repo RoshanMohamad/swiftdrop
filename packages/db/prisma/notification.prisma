@@ -1,5 +1,5 @@
 // Notification module-owned schema (M09: Notifications & Realtime).
-// Raw SQL migration reference: packages/db/prisma/migrations/notification_init.sql.
+// Migration: packages/db/prisma/migrations/202611130001_notifications/migration.sql.
 
 /// Tracks per-consumer processing and duplicate suppression for outbox events.
 model ProcessedEvent {
@@ -7,11 +7,13 @@ model ProcessedEvent {
   consumer       String    @db.VarChar(80)
   eventId        String    @map("event_id") @db.Uuid
   status         String    @db.VarChar(16) // PROCESSING | DONE | FAILED
+  attempts       Int       @default(0)
   leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(3)
   completedAt    DateTime? @map("completed_at") @db.Timestamptz(3)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@unique([consumer, eventId])
+  @@index([leaseExpiresAt])
   @@map("processed_events")
 }
 
@@ -28,5 +30,6 @@ model NotificationLog {
   errorMsg        String?   @map("error_msg") @db.Text
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  @@index([eventId, channel, createdAt])
   @@map("notification_logs")
 }

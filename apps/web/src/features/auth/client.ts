@@ -123,6 +123,9 @@ export async function resendVerification(email: string) {
   });
 }
 const bearer = async () => current ?? refreshSession();
+export async function realtimeAccessToken() {
+  return (await bearer()).accessToken;
+}
 export const sessionExpiredEvents = new EventTarget();
 function expireSession() {
   blockBootstrap();

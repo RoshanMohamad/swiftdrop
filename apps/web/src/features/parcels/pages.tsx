@@ -15,6 +15,7 @@ import {
   quoteRequestSchema,
   type QuoteRequest,
 } from "@swiftdrop/contracts";
+import { useParcelRealtime } from "../../shared/realtime/index.js";
 const money = (cents: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(
     cents / 100,
@@ -643,15 +644,46 @@ export function ParcelDetail() {
   > | null>(null);
   const [receiptError, setReceiptError] = useState("");
   const [receiptPending, setReceiptPending] = useState(false);
+  const loadParcel = useCallback(async () => {
+    try {
+      setParcel(await getParcel(id));
+      setError("");
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }, [id]);
   useEffect(() => {
-    let active = true;
-    void getParcel(id)
-      .then((value) => active && setParcel(value))
-      .catch((e) => active && setError(errorMessage(e)));
-    return () => {
-      active = false;
-    };
-  }, [id, retry]);
+    void loadParcel();
+  }, [loadParcel, retry]);
+  const realtimeState = useParcelRealtime({
+    kind: "private",
+    parcelId: id,
+    onSnapshot: loadParcel,
+    onUpdate: (update) =>
+      setParcel((current) => {
+        if (!current || current.id !== update.parcelId) return current;
+        if (
+          current.history.some(
+            (item) =>
+              item.createdAt === update.occurredAt &&
+              item.status === update.status,
+          )
+        )
+          return { ...current, status: update.status };
+        return {
+          ...current,
+          status: update.status,
+          history: [
+            ...current.history,
+            {
+              status: update.status,
+              town: update.town,
+              createdAt: update.occurredAt,
+            },
+          ],
+        };
+      }),
+  });
   async function prepareReceipt() {
     setReceiptPending(true);
     setReceiptError("");
@@ -698,6 +730,15 @@ export function ParcelDetail() {
           {statusLabel(parcel.status)}
         </span>
       </div>
+      <p className="muted" role="status">
+        {realtimeState === "live"
+          ? "Live updates connected."
+          : realtimeState === "evicted"
+            ? "Live access changed. Refreshing your authorised view."
+            : realtimeState === "fallback"
+              ? "Live updates unavailable. Showing the latest saved status."
+              : "Connecting live updates…"}
+      </p>
       <div className="detail-route">
         <span><small>Pickup</small><strong>{parcel.originTown}</strong></span>
         <span className="route-arrow" aria-hidden="true">→</span>
@@ -796,6 +837,15 @@ export function PublicTracking() {
   > | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const loadTracking = useCallback(async () => {
+    try {
+      const next = await getTracking(trackingNumber);
+      setData(next);
+      setError("");
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }, [trackingNumber]);
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -803,11 +853,7 @@ export function PublicTracking() {
     const fetchStatus = async () => {
       if (document.visibilityState !== "visible") return;
       try {
-        const next = await getTracking(trackingNumber);
-        if (!stopped) {
-          setData(next);
-          setError("");
-        }
+        if (!stopped) await loadTracking();
       } catch (reason) {
         if (!stopped) setError(errorMessage(reason));
       }
@@ -829,11 +875,47 @@ export function PublicTracking() {
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, [trackingNumber, retry]);
+  }, [loadTracking, retry]);
+  const realtimeState = useParcelRealtime({
+    kind: "public",
+    trackingNumber,
+    onSnapshot: loadTracking,
+    onUpdate: (update) =>
+      setData((current) => {
+        if (!current) return current;
+        if (
+          current.history.some(
+            (item) =>
+              item.createdAt === update.occurredAt &&
+              item.status === update.status,
+          )
+        )
+          return { ...current, status: update.status };
+        return {
+          ...current,
+          status: update.status,
+          history: [
+            ...current.history,
+            {
+              status: update.status,
+              town: update.town,
+              createdAt: update.occurredAt,
+            },
+          ],
+        };
+      }),
+  });
   return (
     <section className="auth-panel">
       <span className="eyebrow">SwiftDrop tracking</span>
       <h1>{trackingNumber}</h1>
+      <p className="muted" role="status">
+        {realtimeState === "live"
+          ? "Live tracking connected."
+          : realtimeState === "fallback"
+            ? "Live tracking unavailable. Automatic refresh is still active."
+            : "Connecting live tracking…"}
+      </p>
       {error && (
         <div role="alert" className="notice error">
           {error}

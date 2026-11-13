@@ -29,10 +29,13 @@ export function createNotificationLookupRouter(
       const event = await db.outboxEvent.findUnique({ where: { eventId } });
       if (
         !event ||
-        event.eventType !== ROUTING_KEYS.PARCEL_CREATED ||
+        (event.eventType !== ROUTING_KEYS.PARCEL_CREATED &&
+          event.eventType !== ROUTING_KEYS.PARCEL_STATUS_CHANGED) ||
         event.aggregateId !== claims.parcelId ||
         !isSwiftDropEvent(event.payload) ||
-        event.payload.type !== ROUTING_KEYS.PARCEL_CREATED
+        event.payload.type !== event.eventType ||
+        (event.payload.type !== ROUTING_KEYS.PARCEL_CREATED &&
+          event.payload.type !== ROUTING_KEYS.PARCEL_STATUS_CHANGED)
       )
         throw new HttpError(
           404,

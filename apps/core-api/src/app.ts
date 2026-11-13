@@ -50,7 +50,7 @@ export function createApp(deps: {
   logger?: Logger;
   mailer?: AuthMailer;
   google?: GoogleOidc;
-  workerState?: { connected: boolean };
+  workerState?: { connected: boolean; realtimeConnected?: boolean };
   receipts?: ReceiptService;
 }) {
   const { db, redis, config, tokens } = deps;
@@ -93,6 +93,9 @@ export function createApp(deps: {
       status: "ready",
       dependencies: {
         rabbitmq: deps.workerState?.connected ? "connected" : "reconnecting",
+        realtimeQueue: deps.workerState?.realtimeConnected
+          ? "connected"
+          : "reconnecting",
       },
     });
   });

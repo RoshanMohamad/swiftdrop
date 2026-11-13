@@ -308,7 +308,7 @@ for (const [method, path, input, output, status, bearer] of [
 registry.registerPath({
   method: "get",
   path: "/internal/v1/notifications/events/{eventId}",
-  summary: "Look up booking contacts for a persisted parcel.created event",
+  summary: "Look up contacts for a persisted notification event",
   parameters: [
     {
       name: "eventId",
