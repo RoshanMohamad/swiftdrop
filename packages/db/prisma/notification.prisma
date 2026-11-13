@@ -1,5 +1,6 @@
 // Notification module-owned schema (M09: Notifications & Realtime).
 // Migration: packages/db/prisma/migrations/202611130001_notifications/migration.sql.
+// Reference-only SQL: packages/db/prisma/migrations/notification_init.sql (never deployed by Prisma).
 
 /// Tracks per-consumer processing and duplicate suppression for outbox events.
 model ProcessedEvent {
