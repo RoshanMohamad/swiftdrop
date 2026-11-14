@@ -36,6 +36,15 @@ import {
   merchantPageSchema,
   merchantSchema,
   merchantRegistrationResultSchema,
+  dispatchQueueSchema,
+  courierCapacityPageSchema,
+  courierAssignmentInputSchema,
+  courierAssignmentSchema,
+  dispatchAssignmentPageSchema,
+  dispatchAssignmentRecordSchema,
+  dispatchParcelAssignmentSchema,
+  type CourierAssignmentInput,
+  type DispatchAssignmentQuery,
   type MerchantRegistration,
 } from "@swiftdrop/contracts";
 const api = createClient<paths>({
@@ -195,6 +204,109 @@ export async function listParcels(cursor?: string) {
       ),
     );
   }, true);
+}
+export async function listDispatchParcels(
+  pickupZoneId?: number,
+  limit = 50,
+) {
+  return authenticated(async (session) => {
+    return dispatchQueueSchema.parse(
+      await checked(
+        await api.GET("/api/v1/dispatch/parcels/unassigned", {
+          params: {
+            query: {
+              ...(pickupZoneId ? { pickupZoneId } : {}),
+              limit,
+            },
+          },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function listCourierCapacity() {
+  return authenticated(async (session) => {
+    return courierCapacityPageSchema.parse(
+      await checked(
+        await api.GET("/api/v1/dispatch/couriers/capacity", {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function listDispatchAssignments(
+  query: DispatchAssignmentQuery = { page: 1, limit: 20 },
+) {
+  return authenticated(async (session) => {
+    return dispatchAssignmentPageSchema.parse(
+      await checked(
+        await api.GET("/api/v1/dispatch/assignments", {
+          params: { query },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function listDispatchHistory(
+  query: DispatchAssignmentQuery = { page: 1, limit: 20 },
+) {
+  return authenticated(async (session) => {
+    return dispatchAssignmentPageSchema.parse(
+      await checked(
+        await api.GET("/api/v1/dispatch/history", {
+          params: { query },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function getDispatchAssignment(assignmentId: string) {
+  return authenticated(async (session) => {
+    return dispatchAssignmentRecordSchema.parse(
+      await checked(
+        await api.GET("/api/v1/dispatch/assignments/{id}", {
+          params: { path: { id: assignmentId } },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function getDispatchParcelAssignment(parcelId: string) {
+  return authenticated(async (session) => {
+    return dispatchParcelAssignmentSchema.parse(
+      await checked(
+        await api.GET("/api/v1/dispatch/parcels/{id}/assignment", {
+          params: { path: { id: parcelId } },
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }),
+      ),
+    );
+  }, true);
+}
+export async function assignDispatchParcel(
+  parcelId: string,
+  input: CourierAssignmentInput,
+) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return courierAssignmentSchema.parse(
+      await checked(
+        await api.PUT("/api/v1/dispatch/parcels/{id}/assignment", {
+          params: { path: { id: parcelId } },
+          body: courierAssignmentInputSchema.parse(input),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
 }
 export async function getParcel(id: string) {
   return authenticated(async (session) => {

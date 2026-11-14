@@ -45,6 +45,13 @@ import {
   merchantSchema,
   merchantPageSchema,
   merchantRegistrationResultSchema,
+  dispatchQueueSchema,
+  courierCapacityPageSchema,
+  courierAssignmentInputSchema,
+  courierAssignmentSchema,
+  dispatchAssignmentPageSchema,
+  dispatchAssignmentRecordSchema,
+  dispatchParcelAssignmentSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -143,6 +150,211 @@ for (const [method, suffix, input, output, status, bearer] of [
     },
   });
 }
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/dispatch/parcels/unassigned",
+  summary: "List unassigned parcels",
+  parameters: [
+    {
+      name: "pickupZoneId",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1 },
+    },
+    {
+      name: "limit",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    },
+  ],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Unassigned parcel queue",
+      content: json(dispatchQueueSchema),
+    },
+    ...Object.fromEntries(
+      [400, 401, 403, 422, 429, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/dispatch/couriers/capacity",
+  summary: "List courier capacity",
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Courier capacity",
+      content: json(courierCapacityPageSchema),
+    },
+    ...Object.fromEntries(
+      [401, 403, 429, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
+const dispatchAssignmentParameters = [
+  {
+    name: "page",
+    in: "query" as const,
+    required: false,
+    schema: { type: "integer" as const, minimum: 1, default: 1 },
+  },
+  {
+    name: "limit",
+    in: "query" as const,
+    required: false,
+    schema: { type: "integer" as const, minimum: 1, maximum: 100, default: 20 },
+  },
+  {
+    name: "search",
+    in: "query" as const,
+    required: false,
+    schema: { type: "string" as const, maxLength: 120 },
+  },
+  {
+    name: "status",
+    in: "query" as const,
+    required: false,
+    schema: { type: "string" as const, enum: ["ACTIVE", "RELEASED"] },
+  },
+  {
+    name: "courierUserId",
+    in: "query" as const,
+    required: false,
+    schema: { type: "integer" as const, minimum: 1 },
+  },
+];
+for (const [path, summary] of [
+  ["/api/v1/dispatch/assignments", "List current courier assignments"],
+  ["/api/v1/dispatch/history", "List dispatch assignment history"],
+] as const) {
+  registry.registerPath({
+    method: "get",
+    path,
+    summary,
+    parameters: dispatchAssignmentParameters,
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: summary,
+        content: json(dispatchAssignmentPageSchema),
+      },
+      ...Object.fromEntries(
+        [400, 401, 403, 429, 503].map((code) => [
+          code,
+          {
+            description: "Request rejected",
+            content: {
+              "application/problem+json": { schema: problemSchema },
+            },
+          },
+        ]),
+      ),
+    },
+  });
+}
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/dispatch/assignments/{id}",
+  summary: "Get assignment details",
+  parameters: [
+    {
+      name: "id",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+  ],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Assignment details",
+      content: json(dispatchAssignmentRecordSchema),
+    },
+    ...Object.fromEntries(
+      [401, 403, 404, 429, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/dispatch/parcels/{id}/assignment",
+  summary: "Get current parcel assignment",
+  parameters: [
+    {
+      name: "id",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+  ],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Current parcel assignment",
+      content: json(dispatchParcelAssignmentSchema),
+    },
+    ...Object.fromEntries(
+      [401, 403, 404, 429, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
+registry.registerPath({
+  method: "put",
+  path: "/api/v1/dispatch/parcels/{id}/assignment",
+  summary: "Assign or reassign a parcel",
+  parameters: [
+    {
+      name: "id",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+  ],
+  security: [{ csrfHeader: [], bearerAuth: [] }],
+  request: { body: { required: true, content: json(courierAssignmentInputSchema) } },
+  responses: {
+    200: {
+      description: "Parcel assignment",
+      content: json(courierAssignmentSchema),
+    },
+    ...Object.fromEntries(
+      [400, 401, 403, 404, 409, 413, 415, 422, 429, 503].map((code) => [
+        code,
+        {
+          description: "Request rejected",
+          content: { "application/problem+json": { schema: problemSchema } },
+        },
+      ]),
+    ),
+  },
+});
 for (const [method, path, input, output, status, bearer] of [
   [
     "post",

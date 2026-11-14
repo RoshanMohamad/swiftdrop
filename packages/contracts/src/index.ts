@@ -2,6 +2,7 @@ import { z } from "zod";
 import commonPasswords from "./common-passwords.json" with { type: "json" };
 export * from "./lifecycle";
 import { parcelStatusSchema } from "./lifecycle";
+export * from "./dispatch";
 const blocked = new Set(commonPasswords);
 export const roleSchema = z.enum([
   "CUSTOMER",

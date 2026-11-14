@@ -42,6 +42,10 @@ import {
   MerchantsService,
   createMerchantsRouter,
 } from "./modules/merchants/index.js";
+import {
+  DispatchService,
+  createDispatchRouter,
+} from "./modules/dispatch/index.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -145,6 +149,11 @@ export function createApp(deps: {
   app.use(
     "/api/v1",
     createLifecycleRouter(lifecycle, service, limiter, config),
+  );
+  const dispatch = new DispatchService(db);
+  app.use(
+    "/api/v1",
+    createDispatchRouter(dispatch, service, limiter, config),
   );
   if (deps.receipts)
     app.use("/api/v1", createReceiptRouter(deps.receipts, service, config));

@@ -26,6 +26,10 @@ enum ParcelStatus {
   FAILED
   CANCELLED
 }
+enum CourierAssignmentStatus {
+  ACTIVE
+  RELEASED
+}
 model Role {
   id    RoleName @id
   users User[]
@@ -51,6 +55,7 @@ model User {
   quotes Quote[]
   parcels Parcel[]
   merchant Merchant?
+  courierProfile CourierProfile?
   reviewedMerchants Merchant[] @relation("MerchantReviewer")
   @@map("users")
 }
@@ -160,6 +165,7 @@ model Parcel {
   status ParcelStatus @default(CREATED)
   feeCents Int @map("fee_cents")
   version Int @default(1)
+  dispatchVersion Int @default(1) @map("dispatch_version")
   attemptCount Int @default(0) @map("attempt_count")
   recipientName String @map("recipient_name") @db.VarChar(120)
   recipientPhone String @map("recipient_phone") @db.VarChar(16)
@@ -167,8 +173,38 @@ model Parcel {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   history ParcelHistory[]
   receipt Receipt?
+  assignments CourierAssignment[]
   @@index([userId, createdAt, id])
   @@map("parcels")
+}
+
+model CourierProfile {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          Int                 @unique @map("user_id")
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  onDuty          Boolean             @default(false) @map("on_duty")
+  maxCapacity     Int                 @map("max_capacity")
+  currentWorkload Int                 @default(0) @map("current_workload")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  assignments     CourierAssignment[]
+  @@map("courier_profiles")
+}
+
+model CourierAssignment {
+  id              String                  @id @default(uuid()) @db.Uuid
+  parcelId        String                  @map("parcel_id") @db.Uuid
+  parcel          Parcel                  @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  courierProfileId String                 @map("courier_profile_id") @db.Uuid
+  courierProfile  CourierProfile          @relation(fields: [courierProfileId], references: [id], onDelete: Restrict)
+  status          CourierAssignmentStatus @default(ACTIVE)
+  assignedAt      DateTime                @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  releasedAt      DateTime?               @map("released_at") @db.Timestamptz(3)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@index([courierProfileId, status, assignedAt])
+  @@index([parcelId, status, assignedAt])
+  @@map("courier_assignments")
 }
 
 model ParcelHistory {

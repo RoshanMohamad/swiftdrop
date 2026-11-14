@@ -40,6 +40,13 @@ import {
 } from "./features/parcels/pages.js";
 import { AdminUsers, NewStaff } from "./features/users/pages.js";
 import { AdminMerchants, MerchantSignup } from "./features/merchant/pages.js";
+import {
+  DispatchDashboard,
+  AssignmentsPage,
+  CourierWorkloadPage,
+  DispatchHistoryPage,
+  UnassignedParcelsPage,
+} from "./features/dispatch/pages.js";
 import "./styles.css";
 function Guard({
   role,
@@ -59,6 +66,52 @@ function Guard({
     : state.user.role === role;
   if (!allowed) return <Navigate to={roleHome(state.user.role)} replace />;
   return children;
+}
+function DispatcherRoutes() {
+  return (
+    <Routes>
+      <Route
+        path="/dispatcher"
+        element={
+          <Guard roles={["ADMIN", "DISPATCHER"]}>
+            <DispatchDashboard />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dispatcher/parcels"
+        element={
+          <Guard roles={["ADMIN", "DISPATCHER"]}>
+            <UnassignedParcelsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dispatcher/couriers"
+        element={
+          <Guard roles={["ADMIN", "DISPATCHER"]}>
+            <CourierWorkloadPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dispatcher/assignments"
+        element={
+          <Guard roles={["ADMIN", "DISPATCHER"]}>
+            <AssignmentsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dispatcher/history"
+        element={
+          <Guard roles={["ADMIN", "DISPATCHER"]}>
+            <DispatchHistoryPage />
+          </Guard>
+        }
+      />
+    </Routes>
+  );
 }
 function Account() {
   const { state, clear } = useSession();
@@ -183,6 +236,12 @@ function App() {
       clear();
       setPending(false);
     }
+  }
+  if (location.pathname.startsWith("/dispatcher")) {
+    if (state.status === "loading")
+      return <div className="dispatch-loading" role="status">Restoring your session…</div>;
+    if (!state.user) return <Navigate to="/auth/login" replace />;
+    return <DispatcherRoutes />;
   }
   return (
     <div className="app">
@@ -349,6 +408,46 @@ function App() {
                 element={
                   <Guard roles={["ADMIN", "DISPATCHER"]}>
                     <AdminReports />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/dispatcher"
+                element={
+                  <Guard roles={["ADMIN", "DISPATCHER"]}>
+                    <DispatchDashboard />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/dispatcher/parcels"
+                element={
+                  <Guard roles={["ADMIN", "DISPATCHER"]}>
+                    <UnassignedParcelsPage />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/dispatcher/couriers"
+                element={
+                  <Guard roles={["ADMIN", "DISPATCHER"]}>
+                    <CourierWorkloadPage />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/dispatcher/assignments"
+                element={
+                  <Guard roles={["ADMIN", "DISPATCHER"]}>
+                    <AssignmentsPage />
+                  </Guard>
+                }
+              />
+              <Route
+                path="/dispatcher/history"
+                element={
+                  <Guard roles={["ADMIN", "DISPATCHER"]}>
+                    <DispatchHistoryPage />
                   </Guard>
                 }
               />
