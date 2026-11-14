@@ -66,6 +66,17 @@ import {
   saveMerchantWebhookSchema,
   saveMerchantWebhookResponseSchema,
   merchantWebhookSecretSchema,
+  dispatchParcelPageSchema,
+  courierListSchema,
+  courierSummarySchema,
+  assignParcelSchema,
+  assignResultSchema,
+  courierProfileUpdateSchema,
+  courierJobsSchema,
+  courierStatusUpdateSchema,
+  courierStatusResultSchema,
+  courierDutySchema,
+  proofUploadResultSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -702,6 +713,140 @@ for (const [method, path, input, output, status] of [
         : [{ csrfHeader: [], bearerAuth: [] }],
     ...(input
       ? { request: { body: { required: true, content: json(input) } } }
+      : {}),
+    responses: {
+      [status]: { description: "Success", content: json(output) },
+      ...Object.fromEntries(
+        [400, 401, 403, 404, 409, 413, 415, 429, 503].map((code) => [
+          code,
+          {
+            description: "Request rejected",
+            content: { "application/problem+json": { schema: problemSchema } },
+          },
+        ]),
+      ),
+    },
+  });
+}
+const operationKeyJson = {
+  type: "string" as const,
+  pattern: "^[A-Za-z0-9_-]{8,64}$",
+};
+const uuidPath = (name: string) => ({
+  name,
+  in: "path" as const,
+  required: true,
+  schema: { type: "string" as const, format: "uuid" },
+});
+const intPath = (name: string) => ({
+  name,
+  in: "path" as const,
+  required: true,
+  schema: { type: "integer" as const, minimum: 1 },
+});
+// M06 dispatch and M07 courier endpoints.
+for (const [method, path, input, output, status, parameters, headers] of [
+  [
+    "get",
+    "/api/v1/dispatch/parcels",
+    null,
+    dispatchParcelPageSchema,
+    200,
+    [
+      webhookQuery("state", {
+        type: "string" as const,
+        enum: ["unassigned", "assigned"],
+      }),
+      webhookQuery("zoneId", { type: "integer" as const, minimum: 1 }),
+      webhookQuery("cursor", { type: "string" as const }),
+      webhookQuery("limit", {
+        type: "integer" as const,
+        minimum: 1,
+        maximum: 100,
+      }),
+    ],
+    [],
+  ],
+  ["get", "/api/v1/dispatch/couriers", null, courierListSchema, 200, [], []],
+  [
+    "patch",
+    "/api/v1/dispatch/couriers/{courierId}",
+    courierProfileUpdateSchema,
+    courierSummarySchema,
+    200,
+    [intPath("courierId")],
+    [],
+  ],
+  [
+    "post",
+    "/api/v1/dispatch/parcels/{id}/assign",
+    assignParcelSchema,
+    assignResultSchema,
+    200,
+    [uuidPath("id")],
+    [],
+  ],
+  ["get", "/api/v1/courier/jobs", null, courierJobsSchema, 200, [], []],
+  [
+    "patch",
+    "/api/v1/courier/jobs/{id}/status",
+    courierStatusUpdateSchema,
+    courierStatusResultSchema,
+    200,
+    [uuidPath("id")],
+    ["Idempotency-Key"],
+  ],
+  [
+    "post",
+    "/api/v1/courier/jobs/{id}/proof",
+    null,
+    proofUploadResultSchema,
+    201,
+    [uuidPath("id")],
+    [],
+  ],
+  [
+    "patch",
+    "/api/v1/courier/duty",
+    courierDutySchema,
+    courierSummarySchema,
+    200,
+    [],
+    [],
+  ],
+] as const) {
+  registry.registerPath({
+    method,
+    path,
+    summary: path,
+    parameters: [
+      ...parameters,
+      ...headers.map((name) => ({
+        name,
+        in: "header" as const,
+        required: true,
+        schema: operationKeyJson,
+      })),
+    ],
+    security:
+      method === "get"
+        ? [{ bearerAuth: [] }]
+        : [{ csrfHeader: [], bearerAuth: [] }],
+    ...(input
+      ? { request: { body: { required: true, content: json(input) } } }
+      : {}),
+    ...(path.endsWith("/proof")
+      ? {
+          request: {
+            body: {
+              required: true,
+              content: {
+                "image/jpeg": { schema: { type: "string" as const, format: "binary" } },
+                "image/png": { schema: { type: "string" as const, format: "binary" } },
+              },
+            },
+          },
+        }
       : {}),
     responses: {
       [status]: { description: "Success", content: json(output) },

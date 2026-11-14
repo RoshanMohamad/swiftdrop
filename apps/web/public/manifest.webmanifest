@@ -1,0 +1,15 @@
+{
+  "name": "SwiftDrop Courier",
+  "short_name": "SwiftDrop",
+  "description": "Today's deliveries, status updates and proof of delivery.",
+  "start_url": "/courier",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f5f0",
+  "theme_color": "#123b32",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

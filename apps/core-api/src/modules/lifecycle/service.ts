@@ -9,6 +9,13 @@ import {
   type ParcelStatus,
 } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
+import {
+  activeCourierOf,
+  isFinishedForCapacity,
+  lockCourierRows,
+  releaseAssignment,
+  releaseReasonFor,
+} from "../dispatch/index.js";
 
 export class LifecycleService {
   constructor(private db: Database) {}
@@ -22,10 +29,18 @@ export class LifecycleService {
     to: ParcelStatus,
     town: string,
     expectedVersion: number,
+    /** Runs inside the same transaction, e.g. the courier operation ledger (M07). */
+    onApplied?: (
+      tx: Prisma.TransactionClient,
+      result: { status: ParcelStatus; version: number; attemptCount: number },
+    ) => Promise<void>,
   ) {
     try {
       return await this.db.$transaction(
         async (tx) => {
+          // Capacity protocol (plan X-07): courier row first, then the parcel row.
+          const courierId = await activeCourierOf(tx, parcelId);
+          await lockCourierRows(tx, [courierId]);
           const parcel = await tx.parcel.findUnique({
             where: { id: parcelId },
             select: {
@@ -95,6 +110,7 @@ export class LifecycleService {
               to,
               town,
               occurredAt,
+              ...(courierId !== null ? { courierId: String(courierId) } : {}),
             },
           } satisfies ParcelStatusChangedEvent;
           await tx.outboxEvent.create({
@@ -104,6 +120,13 @@ export class LifecycleService {
               aggregateId: parcelId,
               payload: event,
             },
+          });
+          if (courierId !== null && isFinishedForCapacity(to, newAttemptCount))
+            await releaseAssignment(tx, parcelId, releaseReasonFor(to));
+          await onApplied?.(tx, {
+            status: to,
+            version: expectedVersion + 1,
+            attemptCount: newAttemptCount,
           });
 
           return {
@@ -142,6 +165,8 @@ export class LifecycleService {
     try {
       return await this.db.$transaction(
         async (tx) => {
+          const courierId = await activeCourierOf(tx, parcelId);
+          await lockCourierRows(tx, [courierId]);
           const parcel = await tx.parcel.findUnique({
             where: { id: parcelId },
             include: { originZone: { select: { town: true } } },
@@ -195,6 +220,7 @@ export class LifecycleService {
               to: "CANCELLED",
               town: parcel.originZone.town,
               occurredAt,
+              ...(courierId !== null ? { courierId: String(courierId) } : {}),
             },
           } satisfies ParcelStatusChangedEvent;
           await tx.outboxEvent.create({
@@ -205,6 +231,8 @@ export class LifecycleService {
               payload: event,
             },
           });
+          if (courierId !== null)
+            await releaseAssignment(tx, parcelId, releaseReasonFor("CANCELLED"));
 
           return { status: "CANCELLED" as const, version: expectedVersion + 1 };
         },

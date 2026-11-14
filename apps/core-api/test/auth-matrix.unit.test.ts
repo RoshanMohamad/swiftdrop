@@ -112,6 +112,42 @@ describe("Role × Endpoint Authorization Matrix Harness (plan.md §8.2, §12.1)"
       allowedRoles: ["ADMIN", "DISPATCHER"],
       description: "Operational Reports & Analytics",
     },
+    {
+      endpoint: "GET /api/v1/dispatch/parcels",
+      guards: [authGuard, requireRole("DISPATCHER"), requireCompleteProfile],
+      allowedRoles: ["DISPATCHER", "ADMIN"],
+      description: "Dispatcher Queue (Admin inherits Dispatcher)",
+    },
+    {
+      endpoint: "POST /api/v1/dispatch/parcels/:id/assign",
+      guards: [authGuard, requireRole("DISPATCHER"), requireCompleteProfile],
+      allowedRoles: ["DISPATCHER", "ADMIN"],
+      description: "Assign / Reassign Courier",
+    },
+    {
+      endpoint: "PATCH /api/v1/dispatch/couriers/:courierId",
+      guards: [authGuard, requireRole("DISPATCHER"), requireCompleteProfile],
+      allowedRoles: ["DISPATCHER", "ADMIN"],
+      description: "Courier Duty & Capacity",
+    },
+    {
+      endpoint: "GET /api/v1/courier/jobs",
+      guards: [authGuard, requireRole("COURIER"), requireCompleteProfile],
+      allowedRoles: ["COURIER"],
+      description: "Courier Assigned Jobs (Admin does not inherit courier actions)",
+    },
+    {
+      endpoint: "PATCH /api/v1/courier/jobs/:id/status",
+      guards: [authGuard, requireRole("COURIER"), requireCompleteProfile],
+      allowedRoles: ["COURIER"],
+      description: "Courier Status Update",
+    },
+    {
+      endpoint: "POST /api/v1/courier/jobs/:id/proof",
+      guards: [authGuard, requireRole("COURIER"), requireCompleteProfile],
+      allowedRoles: ["COURIER"],
+      description: "Courier Proof Photo Upload",
+    },
   ];
 
   async function evaluateGuards(

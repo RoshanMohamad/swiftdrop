@@ -1149,3 +1149,67 @@ footer {
   margin-top: 0;
   border-radius: 6px;
 }
+
+/* Dispatcher console and courier PWA (M06/M07) */
+.dispatch-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 28, 22, 0.55);
+}
+.dispatch-dialog form {
+  width: min(480px, 100%);
+  padding: 22px;
+  border-radius: 12px;
+  background: #fff;
+}
+.courier-tap {
+  min-height: 44px;
+  min-width: 44px;
+}
+.courier-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.courier-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dce3dc;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.courier-detail,
+.courier-action {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dce3dc;
+  border-radius: 10px;
+  background: #fff;
+}
+.courier-detail dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+}
+.courier-detail dd {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .courier-detail dl {
+    grid-template-columns: 1fr;
+  }
+}

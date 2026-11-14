@@ -25,6 +25,8 @@ import {
   MerchantSignup,
 } from "./features/merchant/pages.js";
 import { AdminWebhookDeliveries } from "./features/webhook-admin/pages.js";
+import { DispatcherConsole } from "./features/dispatcher/index.js";
+import { CourierJobs } from "./features/courier/index.js";
 import { Guard } from "./shared/auth/Guard.js";
 import { Account } from "./shared/components/Account.js";
 
@@ -199,8 +201,30 @@ export function AppRoutes() {
         }
       />
 
+      {/* Dispatcher console (Admin inherits Dispatcher operations) */}
+      <Route
+        path="/dispatcher"
+        element={
+          <Guard roles={["DISPATCHER", "ADMIN"]}>
+            <DispatcherConsole />
+          </Guard>
+        }
+      />
+
+      {/* Courier PWA home (Courier only) */}
+      <Route
+        path="/courier"
+        element={
+          <Guard role="COURIER">
+            <CourierJobs />
+          </Guard>
+        }
+      />
+
       {/* Role Workspaces */}
-      {APP_ROLES.map((role) => (
+      {APP_ROLES.filter(
+        (role) => role !== "COURIER" && role !== "DISPATCHER",
+      ).map((role) => (
         <Route
           key={role}
           path={roleHome(role)}

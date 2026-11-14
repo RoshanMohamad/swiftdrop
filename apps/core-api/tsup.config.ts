@@ -8,5 +8,5 @@ export default defineConfig({
   banner: {
     js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
   },
-  noExternal: ["@swiftdrop/db", "@swiftdrop/contracts"],
+  noExternal: ["@swiftdrop/db", "@swiftdrop/contracts", "@swiftdrop/messaging"],
 });

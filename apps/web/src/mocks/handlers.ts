@@ -421,4 +421,102 @@ export const handlers = [
       toolsUsed: [],
     });
   }),
+
+  // ── Dispatch and courier (M06 / M07) ────────────────────────────────────────
+  http.get("/api/v1/dispatch/parcels", ({ request }) => {
+    const state = new URL(request.url).searchParams.get("state") ?? "unassigned";
+    return HttpResponse.json({
+      items: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          trackingNumber: "SD-MOCK0001-X",
+          status: "CREATED",
+          version: 1,
+          attemptCount: 0,
+          originZoneId: 1,
+          originTown: "Colombo Fort",
+          destinationTown: "Kandy Town",
+          courierId: state === "assigned" ? 10 : null,
+          createdAt: new Date(Date.now() - 20 * 60000).toISOString(),
+        },
+      ],
+      nextCursor: null,
+    });
+  }),
+
+  http.get("/api/v1/dispatch/couriers", () => {
+    return HttpResponse.json({
+      items: [
+        { userId: 10, fullName: "Demo Courier", onDuty: true, capacity: 5, workload: 1, hasProfile: true },
+        { userId: 11, fullName: "Night Courier", onDuty: false, capacity: 5, workload: 0, hasProfile: true },
+      ],
+    });
+  }),
+
+  http.patch("/api/v1/dispatch/couriers/:courierId", async ({ params, request }) => {
+    const body = (await request.json()) as { onDuty?: boolean; capacity?: number };
+    return HttpResponse.json({
+      userId: Number(params["courierId"]),
+      fullName: "Demo Courier",
+      onDuty: body.onDuty ?? true,
+      capacity: body.capacity ?? 5,
+      workload: 1,
+      hasProfile: true,
+    });
+  }),
+
+  http.post("/api/v1/dispatch/parcels/:id/assign", async ({ params, request }) => {
+    const body = (await request.json()) as { courierId: number; version: number };
+    return HttpResponse.json({
+      parcelId: params["id"],
+      courierId: body.courierId,
+      version: body.version + 1,
+      changed: true,
+    });
+  }),
+
+  http.get("/api/v1/courier/jobs", () => {
+    return HttpResponse.json({
+      profile: { userId: 10, fullName: "Demo Courier", onDuty: true, capacity: 5, workload: 1, hasProfile: true },
+      items: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          trackingNumber: "SD-MOCK0001-X",
+          status: "OUT_FOR_DELIVERY",
+          version: 4,
+          attemptCount: 1,
+          originTown: "Colombo Fort",
+          destinationTown: "Kandy Town",
+          recipientName: "Kamal Perera",
+          recipientPhone: "+94771234567",
+          recipientAddress: "12 Lake Road, Kandy",
+          assignedAt: new Date().toISOString(),
+        },
+      ],
+    });
+  }),
+
+  http.patch("/api/v1/courier/jobs/:id/status", async ({ request }) => {
+    const body = (await request.json()) as { to: string; version: number };
+    return HttpResponse.json({
+      status: body.to,
+      version: body.version + 1,
+      attemptCount: 1,
+      replayed: false,
+    });
+  }),
+
+  http.post("/api/v1/courier/jobs/:id/proof", () => {
+    return HttpResponse.json(
+      { proofObjectKey: `proofs/${crypto.randomUUID()}/${crypto.randomUUID()}.jpg` },
+      { status: 201 },
+    );
+  }),
+
+  http.patch("/api/v1/courier/duty", async ({ request }) => {
+    const body = (await request.json()) as { onDuty: boolean };
+    return HttpResponse.json({
+      userId: 10, fullName: "Demo Courier", onDuty: body.onDuty, capacity: 5, workload: 1, hasProfile: true,
+    });
+  }),
 ];

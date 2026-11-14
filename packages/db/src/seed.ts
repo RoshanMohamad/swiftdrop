@@ -32,6 +32,15 @@ try {
       },
     });
   }
+  // Demo courier capacity profile so the dispatcher console can assign right after seeding.
+  const courier = await db.user.findUniqueOrThrow({
+    where: { email: "courier@swiftdrop.test" },
+  });
+  await db.courierProfile.upsert({
+    where: { userId: courier.id },
+    update: {},
+    create: { userId: courier.id, onDuty: true, capacity: 10 },
+  });
   const districts = [
     { district: "Colombo", town: "Colombo" },
     { district: "Kandy", town: "Kandy" },

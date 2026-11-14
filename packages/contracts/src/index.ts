@@ -598,5 +598,8 @@ export type Principal =
   | { kind: "service"; serviceId: string; scopes: string[] };
 
 export * from "./messaging.js";
+export * from "./dispatch.js";
+export * from "./courier.js";
+export * from "./realtime.js";
 // M08 (transport) and M09 (events/) both export EventEnvelope; the root name is the M08 runtime schema type.
 export type { EventEnvelope } from "./messaging.js";

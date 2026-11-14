@@ -47,6 +47,14 @@ import {
   WebhooksService,
   createWebhooksRouter,
 } from "./modules/webhooks/index.js";
+import { DispatchService, createDispatchRouter } from "./modules/dispatch/index.js";
+import {
+  CourierService,
+  MinioProofStorage,
+  createCourierRouter,
+  createProofUploadRouter,
+  type ProofStorage,
+} from "./modules/courier/index.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -57,6 +65,7 @@ export function createApp(deps: {
   google?: GoogleOidc;
   workerState?: { connected: boolean };
   receipts?: ReceiptService;
+  proofStorage?: ProofStorage;
 }) {
   const { db, redis, config, tokens } = deps;
   const logger = deps.logger ?? defaultLogger;
@@ -78,8 +87,16 @@ export function createApp(deps: {
   const pricing = new PricingService(db);
   const parcels = new ParcelService(db, pricing);
   const merchants = new MerchantsService(db, tokens, config.oauthSecret);
-  // The OAuth token endpoint parses its own body, so it is mounted before express.json.
+  const lifecycle = new LifecycleService(db);
+  const courier = new CourierService(
+    db,
+    lifecycle,
+    deps.proofStorage ?? new MinioProofStorage(config),
+  );
+  // The OAuth token endpoint and the proof photo upload parse their own bodies, so they are
+  // mounted before express.json.
   app.use(createMerchantOAuthRouter(merchants, limiter, logger));
+  app.use(createProofUploadRouter(courier, service, limiter, config));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/ready", async (_req, res) => {
@@ -145,11 +162,15 @@ export function createApp(deps: {
   const reports = new ReportsService(db);
   app.use("/api/v1", createReportsRouter(reports, service, limiter, config));
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
-  const lifecycle = new LifecycleService(db);
   app.use(
     "/api/v1",
     createLifecycleRouter(lifecycle, service, limiter, config),
   );
+  app.use(
+    "/api/v1",
+    createDispatchRouter(new DispatchService(db), service, config),
+  );
+  app.use("/api/v1", createCourierRouter(courier, service, config));
   if (deps.receipts)
     app.use("/api/v1", createReceiptRouter(deps.receipts, service, config));
   const assistant = new AssistantService(db, pricing, parcels);
@@ -161,5 +182,5 @@ export function createApp(deps: {
     next(new HttpError(404, "NOT_FOUND", "This route does not exist.")),
   );
   app.use(errorHandler(logger));
-  return { app, service, users, limiter };
+  return { app, service, users, limiter, parcels };
 }

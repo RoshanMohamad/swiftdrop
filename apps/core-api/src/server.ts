@@ -8,6 +8,11 @@ import { createAuthMailer } from "./modules/auth/mail.js";
 import pino from "pino";
 import { startParcelEventWorkers } from "./modules/parcels/events.js";
 import { ReceiptService } from "./modules/receipts/service.js";
+import {
+  PrivateAccess,
+  createRealtimeGateway,
+  startRealtimeConsumer,
+} from "./modules/realtime/index.js";
 const config = loadConfig();
 const db = createDatabase(config.DATABASE_URL);
 const redis = new Redis(config.REDIS_URL, {
@@ -39,7 +44,7 @@ const logger = pino({
   },
 });
 const workerState = { connected: false };
-const { app } = createApp({
+const { app, service, parcels } = createApp({
   db,
   redis,
   config,
@@ -68,6 +73,20 @@ const internalServer = internalApp.listen(
       `SwiftDrop internal API listening at http://127.0.0.1:${config.INTERNAL_PORT}`,
     ),
 );
+const realtime = createRealtimeGateway({
+  httpServer: server,
+  origin: config.APP_ORIGIN,
+  redis,
+  auth: service,
+  access: new PrivateAccess(db),
+  track: (trackingNumber) => parcels.track(trackingNumber),
+  logger,
+});
+const realtimeConsumer = startRealtimeConsumer({
+  url: config.RABBITMQ_URL,
+  logger,
+  handle: realtime.handle,
+});
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
@@ -75,14 +94,14 @@ async function shutdown() {
   const timeout = setTimeout(() => process.exit(1), 10000);
   timeout.unref();
   try {
-    await Promise.all(
-      [server, internalServer].map(
-        (listener) =>
-          new Promise<void>((done, fail) =>
-            listener.close((error) => (error ? fail(error) : done())),
-          ),
+    await realtimeConsumer.stop();
+    // Closing Socket.IO also closes the public HTTP server it is attached to.
+    await Promise.all([
+      realtime.close(),
+      new Promise<void>((done, fail) =>
+        internalServer.close((error) => (error ? fail(error) : done())),
       ),
-    );
+    ]);
     await workers.stop();
     await db.$disconnect();
     redis.disconnect();
