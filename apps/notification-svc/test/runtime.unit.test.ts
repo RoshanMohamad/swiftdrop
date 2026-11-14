@@ -1,11 +1,16 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Database } from "@swiftdrop/db";
-import type { ChannelModel } from "amqplib";
+import type {
+  ChannelModel,
+  ConfirmChannel,
+  ConsumeMessage,
+  Options,
+} from "amqplib";
 import type { DestinationStream, Logger } from "pino";
 import { createNotificationRuntime } from "../src/app.js";
 import { parseNotificationConfig } from "../src/config.js";
 import { createNotificationLogger } from "../src/logger.js";
-import { RabbitMqEventConsumerSkeleton } from "../src/rabbit.js";
+import { RabbitNotificationConsumer } from "../src/rabbit.js";
 import { MockSmsSender } from "../src/senders.js";
 import type { EventConsumer } from "../src/types.js";
 
@@ -147,6 +152,8 @@ describe("configuration and redaction", () => {
       {
         phone: "+94771234567",
         recipient: "customer@example.test",
+        recipientName: "Private Recipient",
+        address: "Private Address",
         recipientMasked: "***4567",
       },
       "privacy test",
@@ -155,41 +162,86 @@ describe("configuration and redaction", () => {
     const serialized = output.join("");
     expect(serialized).not.toContain("+94771234567");
     expect(serialized).not.toContain("customer@example.test");
+    expect(serialized).not.toContain("Private Recipient");
+    expect(serialized).not.toContain("Private Address");
     expect(serialized).toContain("***4567");
     expect(JSON.parse(serialized)).toMatchObject({
       name: "notification-svc",
       phone: "[REDACTED]",
       recipient: "[REDACTED]",
+      recipientName: "[REDACTED]",
+      address: "[REDACTED]",
     });
   });
 });
 
-describe("adapter skeletons", () => {
-  it("connects to RabbitMQ without registering a message consumer", async () => {
-    const consume = jest.fn(() => {
-      throw new Error("The skeleton must not consume messages.");
-    });
+describe("adapters", () => {
+  it("declares bounded durable notification topology", async () => {
+    const consume = jest.fn(
+      async (
+        _queue: string,
+        _callback: (message: ConsumeMessage | null) => void,
+        _options?: Options.Consume,
+      ) => ({ consumerTag: "notifications" }),
+    );
     const closeChannel = jest.fn(async () => undefined);
-    const channel = { consume, close: closeChannel };
+    const channel = {
+      assertExchange: jest.fn(async () => ({ exchange: "swiftdrop.events" })),
+      assertQueue: jest.fn(async (queue: string) => ({
+        queue,
+        messageCount: 0,
+        consumerCount: 0,
+      })),
+      bindQueue: jest.fn(async () => ({})),
+      prefetch: jest.fn(async () => ({})),
+      consume,
+      cancel: jest.fn(async () => ({ consumerTag: "notifications" })),
+      close: closeChannel,
+    } as unknown as ConfirmChannel;
     const listeners = new Map<string, () => void>();
     const connection = {
       on: jest.fn((event: string, listener: () => void) => {
         listeners.set(event, listener);
         return connection;
       }),
-      createChannel: jest.fn(async () => channel),
+      createConfirmChannel: jest.fn(async () => channel),
       close: jest.fn(async () => undefined),
     } as unknown as ChannelModel;
     const connector = jest.fn(async () => connection);
-    const consumer = new RabbitMqEventConsumerSkeleton(
+    const consumer = new RabbitNotificationConsumer(
       "amqp://guest:guest@localhost:5672",
+      { process: jest.fn(async () => "completed" as const) },
       logger,
+      4,
       connector,
     );
 
     await consumer.start();
     expect(await consumer.checkReady()).toBe(true);
-    expect(consume).not.toHaveBeenCalled();
+    expect(channel.assertExchange).toHaveBeenCalledWith(
+      "swiftdrop.events",
+      "topic",
+      { durable: true },
+    );
+    expect(channel.assertQueue).toHaveBeenCalledWith("notifications.q", {
+      durable: true,
+    });
+    expect(channel.bindQueue).toHaveBeenCalledWith(
+      "notifications.q",
+      "swiftdrop.events",
+      "parcel.created",
+    );
+    expect(channel.bindQueue).toHaveBeenCalledWith(
+      "notifications.q",
+      "swiftdrop.events",
+      "parcel.status.*",
+    );
+    expect(channel.prefetch).toHaveBeenCalledWith(4);
+    expect(consume).toHaveBeenCalledWith(
+      "notifications.q",
+      expect.any(Function),
+      { noAck: false },
+    );
     await consumer.stop();
     expect(closeChannel).toHaveBeenCalledTimes(1);
   });

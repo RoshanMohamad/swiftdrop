@@ -35,17 +35,27 @@ class PersistenceDatabaseHarness {
 
   readonly notificationLog = {
     findFirst: async (args: {
-      where: { eventId: string; channel: string; status: string };
+      where: { eventId: string; channel: string; status?: string };
     }) =>
       this.logs.find(
         (log) =>
           log.eventId === args.where.eventId &&
           log.channel === args.where.channel &&
-          log.status === args.where.status,
+          (args.where.status === undefined || log.status === args.where.status),
       ) ?? null,
     create: async (args: { data: Record<string, unknown> }) => {
-      this.logs.push(args.data);
-      return args.data;
+      const data = { id: `log-${this.logs.length + 1}`, ...args.data };
+      this.logs.push(data);
+      return data;
+    },
+    update: async (args: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }) => {
+      const existing = this.logs.find((log) => log.id === args.where.id);
+      if (!existing) throw new Error("Missing notification log.");
+      Object.assign(existing, args.data);
+      return existing;
     },
   };
 
@@ -275,5 +285,54 @@ describe("PrismaNotificationLogStore", () => {
     expect(JSON.stringify(database.logs)).not.toContain(
       "customer@example.test",
     );
+  });
+
+  it("keeps one durable log per event channel across retry outcomes", async () => {
+    const database = new PersistenceDatabaseHarness();
+    const store = new PrismaNotificationLogStore(database.asDatabase());
+    const base = {
+      eventId,
+      channel: "EMAIL" as const,
+      templateId: "booking_confirmation",
+      recipientMasked: "c***@example.test",
+    };
+
+    await store.append({
+      ...base,
+      status: "FAILED",
+      errorMessage: "DELIVERY_FAILED",
+    });
+    await store.append({
+      ...base,
+      status: "SENT",
+      providerMessageId: "smtp-1",
+    });
+
+    expect(database.logs).toHaveLength(1);
+    expect(database.logs[0]).toMatchObject({
+      status: "SENT",
+      providerMsgId: "smtp-1",
+      errorMsg: null,
+      recipientMasked: "c***@example.test",
+    });
+  });
+
+  it("replaces unsafe provider error text with a stable code", async () => {
+    const database = new PersistenceDatabaseHarness();
+    const store = new PrismaNotificationLogStore(database.asDatabase());
+
+    await store.append({
+      eventId,
+      channel: "SMS",
+      templateId: "status_update",
+      recipientMasked: "***4567",
+      status: "FAILED",
+      errorMessage: "provider exposed private@example.test",
+    });
+
+    expect(database.logs[0]).toMatchObject({
+      errorMsg: "NOTIFICATION_FAILED",
+    });
+    expect(JSON.stringify(database.logs)).not.toContain("private@example.test");
   });
 });

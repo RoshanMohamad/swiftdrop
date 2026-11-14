@@ -1,6 +1,8 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type {
+  ParcelAssignedEvent,
   ParcelCreatedEvent,
+  ParcelStatus,
   ParcelStatusChangedEvent,
 } from "@swiftdrop/contracts";
 import { maskEmail, maskPhone } from "../src/masking.js";
@@ -42,6 +44,15 @@ const changed: ParcelStatusChangedEvent = {
     occurredAt: "2026-11-13T10:31:00.000Z",
   },
 };
+const assigned: ParcelAssignedEvent = {
+  ...created,
+  type: "parcel.assignment.changed",
+  data: {
+    parcelId: created.data.parcelId,
+    trackingNo: created.data.trackingNo,
+    newCourierId: "33333333-3333-4333-8333-333333333333",
+  },
+};
 const recipient = {
   eventId: created.eventId,
   parcelId: created.data.parcelId,
@@ -54,6 +65,7 @@ const recipient = {
 function harness(options?: {
   acquire?: "acquired" | "done" | "busy";
   failEmail?: boolean;
+  missingContact?: boolean;
 }) {
   const records: Array<Record<string, unknown>> = [];
   const progress: NotificationProgress = {
@@ -67,7 +79,10 @@ function harness(options?: {
     fail: jest.fn(async () => 2),
   };
   const lookup: ContactLookupClient = {
-    lookup: jest.fn(async () => recipient),
+    lookup: jest.fn(async () => {
+      if (options?.missingContact) throw new Error("contact unavailable");
+      return recipient;
+    }),
   };
   const email: EmailSender = {
     send: jest.fn(async () => {
@@ -91,14 +106,39 @@ function harness(options?: {
 describe("notification templates and privacy", () => {
   it("renders distinct booking and status templates", () => {
     expect(renderNotification(created, recipient)).toMatchObject({
-      templateId: "parcel-created-v1",
+      templateId: "booking_confirmation",
       subject: expect.stringContaining("SD1234567A"),
     });
     expect(
       renderNotification(changed, { ...recipient, eventId: changed.eventId }),
     ).toMatchObject({
-      templateId: "parcel-status-v1",
+      templateId: "status_update",
       emailBody: expect.stringContaining("Picked Up in Colombo"),
+    });
+  });
+
+  it.each<ParcelStatus>([
+    "CREATED",
+    "PICKED_UP",
+    "IN_TRANSIT",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "FAILED",
+    "CANCELLED",
+  ])("renders the valid %s status", (status) => {
+    expect(
+      renderNotification(
+        { ...changed, data: { ...changed.data, to: status } },
+        recipient,
+      ),
+    ).toMatchObject({
+      templateId: "status_update",
+      emailBody: expect.stringContaining(
+        status
+          .toLowerCase()
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      ),
     });
   });
 
@@ -109,21 +149,43 @@ describe("notification templates and privacy", () => {
 });
 
 describe("NotificationService", () => {
+  it("ignores assignment-only events without claiming or sending", async () => {
+    const test = harness();
+
+    await expect(test.service.process(assigned)).resolves.toBe("ignored");
+    expect(test.progress.acquire).not.toHaveBeenCalled();
+    expect(test.lookup.lookup).not.toHaveBeenCalled();
+    expect(test.email.send).not.toHaveBeenCalled();
+    expect(test.sms.send).not.toHaveBeenCalled();
+  });
+
   it("sends each channel and stores only masked recipients", async () => {
     const test = harness();
     await expect(test.service.process(created)).resolves.toBe("completed");
     expect(test.email.send).toHaveBeenCalledTimes(1);
+    expect(test.email.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: created.eventId,
+        recipient: recipient.customerEmail,
+        subject: expect.stringContaining(created.data.trackingNo),
+        body: expect.stringContaining("booking is confirmed"),
+      }),
+    );
     expect(test.sms.send).toHaveBeenCalledTimes(1);
     expect(test.records).toEqual([
       expect.objectContaining({
         channel: "EMAIL",
+        templateId: "booking_confirmation",
         recipientMasked: "c***@example.test",
         status: "SENT",
+        providerMessageId: "smtp-1",
       }),
       expect.objectContaining({
         channel: "SMS",
+        templateId: "booking_confirmation",
         recipientMasked: "***4567",
         status: "SENT",
+        providerMessageId: "mock-1",
       }),
     ]);
     expect(test.progress.complete).toHaveBeenCalledWith(created.eventId);
@@ -151,5 +213,31 @@ describe("NotificationService", () => {
     );
     expect(JSON.stringify(test.records)).not.toContain("Private Recipient");
     expect(JSON.stringify(test.records)).not.toContain("+94771234567");
+  });
+
+  it("records both channels as skipped when contact lookup is missing", async () => {
+    const test = harness({ missingContact: true });
+
+    await expect(test.service.process(created)).rejects.toEqual(
+      expect.objectContaining({ attempts: 2 }),
+    );
+    expect(test.email.send).not.toHaveBeenCalled();
+    expect(test.sms.send).not.toHaveBeenCalled();
+    expect(test.records).toEqual([
+      expect.objectContaining({
+        channel: "EMAIL",
+        templateId: "booking_confirmation",
+        recipientMasked: "***unavailable",
+        status: "SKIPPED",
+        errorMessage: "CONTACT_LOOKUP_FAILED",
+      }),
+      expect.objectContaining({
+        channel: "SMS",
+        templateId: "booking_confirmation",
+        recipientMasked: "***unavailable",
+        status: "SKIPPED",
+        errorMessage: "CONTACT_LOOKUP_FAILED",
+      }),
+    ]);
   });
 });

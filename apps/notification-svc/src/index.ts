@@ -9,7 +9,10 @@ export {
 } from "./config.js";
 export { createNotificationLogger } from "./logger.js";
 export { ServiceJwtContactLookupClient } from "./lookup.js";
-export { RabbitMqEventConsumerSkeleton } from "./rabbit.js";
+export {
+  RabbitNotificationConsumer,
+  type NotificationEventProcessor,
+} from "./rabbit.js";
 export { MockSmsSender, SmtpEmailSender } from "./senders.js";
 export {
   PrismaNotificationLogStore,

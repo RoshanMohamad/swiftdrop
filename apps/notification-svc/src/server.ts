@@ -2,14 +2,29 @@ import { createDatabase } from "@swiftdrop/db";
 import { createNotificationRuntime } from "./app.js";
 import { loadNotificationConfig } from "./config.js";
 import { createNotificationLogger } from "./logger.js";
-import { RabbitMqEventConsumerSkeleton } from "./rabbit.js";
+import { ServiceJwtContactLookupClient } from "./lookup.js";
+import { RabbitNotificationConsumer } from "./rabbit.js";
+import { MockSmsSender, SmtpEmailSender } from "./senders.js";
+import { NotificationService } from "./service.js";
+import { PrismaNotificationProgress } from "./store.js";
 
 const config = loadNotificationConfig();
 const logger = createNotificationLogger(config);
 const database = createDatabase(config.DATABASE_URL);
-const eventConsumer = new RabbitMqEventConsumerSkeleton(
+const notificationService = new NotificationService(
+  new PrismaNotificationProgress(database),
+  new ServiceJwtContactLookupClient(
+    config.INTERNAL_API_URL,
+    config.signerMetadataFile,
+  ),
+  new SmtpEmailSender(config.SMTP_URL, config.NOTIFICATION_FROM),
+  new MockSmsSender(logger),
+);
+const eventConsumer = new RabbitNotificationConsumer(
   config.RABBITMQ_URL,
+  notificationService,
   logger,
+  config.NOTIFICATION_PREFETCH,
 );
 const runtime = createNotificationRuntime({
   database,

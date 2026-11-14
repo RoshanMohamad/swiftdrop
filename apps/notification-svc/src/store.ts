@@ -42,6 +42,11 @@ export interface NotificationLogStore {
 
 type Clock = () => Date;
 
+function sanitizedErrorMessage(value?: string) {
+  if (!value) return null;
+  return /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : "NOTIFICATION_FAILED";
+}
+
 export class PrismaProcessedEventStore implements ProcessedEventStore {
   constructor(
     private readonly db: Database,
@@ -164,17 +169,28 @@ export class PrismaNotificationLogStore implements NotificationLogStore {
     if (!input.recipientMasked.includes("***")) {
       throw new Error("Notification logs require a masked recipient.");
     }
+    const existing = await this.db.notificationLog.findFirst({
+      where: { eventId: input.eventId, channel: input.channel },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    const data = {
+      templateId: input.templateId,
+      recipientMasked: input.recipientMasked,
+      status: input.status,
+      providerMsgId: input.providerMessageId ?? null,
+      errorMsg: sanitizedErrorMessage(input.errorMessage),
+      sentAt: input.status === "SENT" ? new Date() : null,
+    };
+    if (existing) {
+      await this.db.notificationLog.update({
+        where: { id: existing.id },
+        data,
+      });
+      return;
+    }
     await this.db.notificationLog.create({
-      data: {
-        eventId: input.eventId,
-        channel: input.channel,
-        templateId: input.templateId,
-        recipientMasked: input.recipientMasked,
-        status: input.status,
-        providerMsgId: input.providerMessageId,
-        errorMsg: input.errorMessage,
-        sentAt: input.status === "SENT" ? new Date() : undefined,
-      },
+      data: { eventId: input.eventId, channel: input.channel, ...data },
     });
   }
 }

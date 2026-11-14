@@ -28,6 +28,7 @@ const environmentSchema = z
       .min(100)
       .max(10_000)
       .default(2_000),
+    NOTIFICATION_PREFETCH: z.coerce.number().int().min(1).max(32).default(4),
     INTERNAL_API_URL: z.url().default("http://127.0.0.1:3001"),
     NOTIFICATION_FROM: z.string().email().default("no-reply@swiftdrop.test"),
     NOTIFICATION_SIGNER_METADATA_FILE: z

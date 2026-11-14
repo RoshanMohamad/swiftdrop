@@ -7,9 +7,14 @@ import type {
   NotificationChannel,
   NotificationEvent,
   NotificationProgress,
+  NotificationRecipient,
+  NotificationSendResult,
   NotificationTemplateRenderer,
+  RenderedNotification,
   SmsSender,
 } from "./types.js";
+
+const MASKED_UNAVAILABLE_RECIPIENT = "***unavailable";
 
 export class NotificationProcessingError extends Error {
   constructor(public readonly attempts: number) {
@@ -48,13 +53,62 @@ export class NotificationService {
   }
 
   private async deliver(event: NotificationEvent) {
-    const recipient = await this.lookup.lookup(event);
+    let recipient: NotificationRecipient;
+    try {
+      recipient = await this.lookup.lookup(event);
+    } catch {
+      await this.recordUnavailableChannels(
+        event,
+        event.type === "parcel.created"
+          ? "booking_confirmation"
+          : "status_update",
+        "CONTACT_LOOKUP_FAILED",
+      );
+      throw new Error("Notification contact lookup failed.");
+    }
     if (
       recipient.eventId !== event.eventId ||
       recipient.parcelId !== event.data.parcelId
-    )
+    ) {
+      await this.recordUnavailableChannels(
+        event,
+        event.type === "parcel.created"
+          ? "booking_confirmation"
+          : "status_update",
+        "CONTACT_LOOKUP_MISMATCH",
+      );
       throw new Error("Notification lookup did not match the event.");
-    const rendered = this.templates.render(event, recipient);
+    }
+    let rendered: RenderedNotification;
+    try {
+      rendered = this.templates.render(event, recipient);
+    } catch {
+      await Promise.all([
+        this.progress.record({
+          eventId: event.eventId,
+          channel: "EMAIL",
+          templateId:
+            event.type === "parcel.created"
+              ? "booking_confirmation"
+              : "status_update",
+          recipientMasked: maskEmail(recipient.customerEmail),
+          status: "SKIPPED",
+          errorMessage: "TEMPLATE_RENDER_FAILED",
+        }),
+        this.progress.record({
+          eventId: event.eventId,
+          channel: "SMS",
+          templateId:
+            event.type === "parcel.created"
+              ? "booking_confirmation"
+              : "status_update",
+          recipientMasked: maskPhone(recipient.recipientPhone),
+          status: "SKIPPED",
+          errorMessage: "TEMPLATE_RENDER_FAILED",
+        }),
+      ]);
+      throw new Error("Notification template rendering failed.");
+    }
     let failed = false;
     failed =
       (await this.deliverChannel({
@@ -92,22 +146,14 @@ export class NotificationService {
   }) {
     if (await this.progress.wasSent(input.event.eventId, input.channel))
       return false;
+    let result: NotificationSendResult;
     try {
-      const result = await input.sender.send({
+      result = await input.sender.send({
         recipient: input.recipient,
         subject: input.subject,
         body: input.body,
         eventId: input.event.eventId,
       });
-      await this.progress.record({
-        eventId: input.event.eventId,
-        channel: input.channel,
-        templateId: input.templateId,
-        recipientMasked: input.recipientMasked,
-        status: "SENT",
-        providerMessageId: result.providerMessageId,
-      });
-      return false;
     } catch {
       await this.progress.record({
         eventId: input.event.eventId,
@@ -119,5 +165,33 @@ export class NotificationService {
       });
       return true;
     }
+    await this.progress.record({
+      eventId: input.event.eventId,
+      channel: input.channel,
+      templateId: input.templateId,
+      recipientMasked: input.recipientMasked,
+      status: "SENT",
+      providerMessageId: result.providerMessageId,
+    });
+    return false;
+  }
+
+  private async recordUnavailableChannels(
+    event: NotificationEvent,
+    templateId: "booking_confirmation" | "status_update",
+    errorMessage: "CONTACT_LOOKUP_FAILED" | "CONTACT_LOOKUP_MISMATCH",
+  ) {
+    await Promise.all(
+      (["EMAIL", "SMS"] as const).map((channel) =>
+        this.progress.record({
+          eventId: event.eventId,
+          channel,
+          templateId,
+          recipientMasked: MASKED_UNAVAILABLE_RECIPIENT,
+          status: "SKIPPED",
+          errorMessage,
+        }),
+      ),
+    );
   }
 }
