@@ -37,8 +37,19 @@ import {
   merchantSchema,
   merchantRegistrationResultSchema,
   type MerchantRegistration,
+  createMerchantApiClientSchema,
+  merchantApiClientPageSchema,
+  merchantApiClientSecretSchema,
+  merchantOrderPageSchema,
+  type MerchantOrderStatus,
+  type CreateMerchantApiClient,
+  emptySchema,
+  merchantWebhookSettingsSchema,
+  saveMerchantWebhookSchema,
+  saveMerchantWebhookResponseSchema,
+  merchantWebhookSecretSchema,
 } from "@swiftdrop/contracts";
-const api = createClient<paths>({
+export const api = createClient<paths>({
   baseUrl: window.location.origin,
   credentials: "same-origin",
   cache: "no-store",
@@ -97,7 +108,7 @@ async function authLock<T>(operation: () => Promise<T>): Promise<T> {
   // shortcut: older browsers have no cross-tab lock; a rotation race requires signing in again.
   return operation();
 }
-async function csrf() {
+export async function csrf() {
   return checked(await api.GET("/api/v1/auth/csrf"));
 }
 export async function register(input: Registration) {
@@ -122,7 +133,7 @@ export async function resendVerification(email: string) {
     );
   });
 }
-const bearer = async () => current ?? refreshSession();
+export const bearer = async () => current ?? refreshSession();
 export async function realtimeAccessToken() {
   return (await bearer()).accessToken;
 }
@@ -467,6 +478,124 @@ export async function reviewMerchant(
         await api.PATCH("/api/v1/admin/merchants/{id}/review", {
           params: { path: { id } },
           body: merchantReviewSchema.parse({ status }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function listMerchantApiClients() {
+  return authenticated(
+    async (session) =>
+      merchantApiClientPageSchema.parse(
+        await checked(
+          await api.GET("/api/v1/merchant/clients", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function listMerchantOrders(status?: MerchantOrderStatus) {
+  return authenticated(
+    async (session) =>
+      merchantOrderPageSchema.parse(
+        await checked(
+          await api.GET("/api/v1/merchant/orders", {
+            params: { query: status ? { status } : {} },
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function createMerchantApiClient(input: CreateMerchantApiClient) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return merchantApiClientSecretSchema.parse(
+      await checked(
+        await api.POST("/api/v1/merchant/clients", {
+          body: createMerchantApiClientSchema.parse(input),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function rotateMerchantApiClient(id: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return merchantApiClientSecretSchema.parse(
+      await checked(
+        await api.POST("/api/v1/merchant/clients/{id}/rotate", {
+          params: { path: { id } },
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function revokeMerchantApiClient(id: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    await checked(
+      await api.POST("/api/v1/merchant/clients/{id}/revoke", {
+        params: { path: { id } },
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "X-CSRF-Token": context.csrfToken,
+        },
+      }),
+    );
+  });
+}
+export async function getMerchantWebhookSettings() {
+  return authenticated(
+    async (session) =>
+      merchantWebhookSettingsSchema.parse(
+        await checked(
+          await api.GET("/api/v1/merchant/webhook", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function saveMerchantWebhookSettings(url: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return saveMerchantWebhookResponseSchema.parse(
+      await checked(
+        await api.PUT("/api/v1/merchant/webhook", {
+          body: saveMerchantWebhookSchema.parse({ url }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function rotateMerchantWebhookSecret() {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return merchantWebhookSecretSchema.parse(
+      await checked(
+        await api.POST("/api/v1/merchant/webhook/rotate-secret", {
+          body: emptySchema.parse({}),
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
             "X-CSRF-Token": context.csrfToken,

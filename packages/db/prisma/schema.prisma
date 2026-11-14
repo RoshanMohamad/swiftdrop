@@ -72,8 +72,37 @@ model Merchant {
   reviewedBy   User?          @relation("MerchantReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  apiClients   MerchantApiClient[]
+  parcels      Parcel[]             @relation("MerchantOrders")
+  webhookConfig MerchantWebhookConfig?
   @@index([status, createdAt, id])
   @@map("merchants")
+}
+
+model MerchantApiClient {
+  id           String    @id @default(uuid()) @db.Uuid
+  merchantId   String    @map("merchant_id") @db.Uuid
+  merchant     Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  clientId     String    @unique @map("client_id") @db.VarChar(64)
+  name         String    @db.VarChar(80)
+  secretHash   String    @map("secret_hash") @db.Char(64)
+  scopes       String[]  @default([])
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  rotatedAt    DateTime? @map("rotated_at") @db.Timestamptz(3)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
+  accessGrants AccessGrant[]
+  @@index([merchantId, createdAt, id])
+  @@map("merchant_api_clients")
+}
+
+model MerchantWebhookConfig {
+  merchantId String   @id @map("merchant_id") @db.Uuid
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  url        String   @db.VarChar(2048)
+  encryptedSecret String @map("encrypted_secret") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@map("merchant_webhook_configs")
 }
 
 model StaffInvitation {
@@ -151,6 +180,8 @@ model Parcel {
   trackingNumber String @unique @map("tracking_number") @db.VarChar(16)
   userId Int @map("user_id")
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  merchantId String? @map("merchant_id") @db.Uuid
+  merchant Merchant? @relation("MerchantOrders", fields: [merchantId], references: [id], onDelete: Restrict)
   quoteId String @unique @map("quote_id") @db.Uuid
   quote Quote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   originZoneId Int @map("origin_zone_id")
@@ -168,6 +199,7 @@ model Parcel {
   history ParcelHistory[]
   receipt Receipt?
   @@index([userId, createdAt, id])
+  @@index([merchantId, createdAt, id])
   @@map("parcels")
 }
 
@@ -218,6 +250,85 @@ model OutboxEvent {
   attempts Int @default(0)
   @@index([publishedAt, createdAt])
   @@map("outbox_events")
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+enum WebhookAttemptState {
+  CLAIMED
+  DONE
+}
+enum WebhookAttemptOutcome {
+  SUCCESS
+  FAILURE
+  SKIPPED
+}
+enum WebhookHandoff {
+  NONE
+  RETRY
+  DLQ
+}
+
+// M08: one row per (event, merchant). `envelope` is the original PII-free event, re-signed on
+// every attempt. A replay is a new run (`current_run`) of the same row, keeping the eventId.
+model WebhookDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  eventId String @map("event_id") @db.Uuid
+  merchantId Int @map("merchant_id")
+  eventType String @map("event_type") @db.VarChar(100)
+  envelope Json
+  status WebhookDeliveryStatus @default(PENDING)
+  currentRun Int @default(0) @map("current_run")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+  attempts WebhookAttempt[]
+  replays WebhookReplay[]
+  @@unique([eventId, merchantId])
+  @@index([status, createdAt, id])
+  @@index([merchantId, createdAt, id])
+  @@map("webhook_deliveries")
+}
+
+// The unique (delivery, run, attempt) key is the claim: a duplicate message cannot start a
+// second attempt, and a redelivered one resumes the stored result instead of re-sending.
+model WebhookAttempt {
+  id BigInt @id @default(autoincrement())
+  deliveryId String @map("delivery_id") @db.Uuid
+  delivery WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  runNumber Int @map("run_number")
+  attempt Int
+  state WebhookAttemptState @default(CLAIMED)
+  leaseUntil DateTime @map("lease_until") @db.Timestamptz(3)
+  outcome WebhookAttemptOutcome?
+  statusCode Int? @map("status_code")
+  latencyMs Int? @map("latency_ms")
+  errorCode String? @map("error_code") @db.VarChar(64)
+  handoff WebhookHandoff @default(NONE)
+  nextRetryAt DateTime? @map("next_retry_at") @db.Timestamptz(3)
+  handoffConfirmedAt DateTime? @map("handoff_confirmed_at") @db.Timestamptz(3)
+  startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
+  @@unique([deliveryId, runNumber, attempt])
+  @@map("webhook_attempts")
+}
+
+// Audit record of an Admin replay. requested_by_user_id is deliberately not a foreign key so
+// the audit row survives user changes and this slice does not edit the identity model.
+model WebhookReplay {
+  id String @id @default(uuid()) @db.Uuid
+  deliveryId String @map("delivery_id") @db.Uuid
+  delivery WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  runNumber Int @map("run_number")
+  requestedByUserId Int @map("requested_by_user_id")
+  reason String @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@unique([deliveryId, runNumber])
+  @@map("webhook_replays")
 }
 
 model ConsumerProgress {
@@ -313,10 +424,13 @@ model RefreshToken {
 }
 model AccessGrant {
   jti       String @id @db.Uuid
-  familyId  String @map("family_id") @db.Uuid
-  family    AuthSession @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  familyId  String? @map("family_id") @db.Uuid
+  family    AuthSession? @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  clientId  String? @map("client_id") @db.Uuid
+  client    MerchantApiClient? @relation(fields: [clientId], references: [id], onDelete: Cascade)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   @@index([familyId])
+  @@index([clientId])
   @@index([expiresAt])
   @@map("access_grants")
 }

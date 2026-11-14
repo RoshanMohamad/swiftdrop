@@ -100,6 +100,145 @@ export const merchantPageSchema = z.object({
 export const merchantRegistrationResultSchema = z.object({
   message: z.string(),
 });
+export const merchantApiClientScopeSchema = z.enum([
+  "orders:read",
+  "orders:write",
+]);
+export type MerchantApiClientScope = z.infer<
+  typeof merchantApiClientScopeSchema
+>;
+export const merchantOrderRequestSchema = z
+  .object({
+    originDistrict: z.string().trim().min(1).max(80),
+    destinationDistrict: z.string().trim().min(1).max(80),
+    weightGrams: z.number().int().min(1).max(30000),
+    lengthMm: z.number().int().min(1).max(1500),
+    widthMm: z.number().int().min(1).max(1500),
+    heightMm: z.number().int().min(1).max(1500),
+    recipientName: z
+      .string()
+      .trim()
+      .min(2)
+      .max(120)
+      .regex(/^[^\p{Cc}]+$/u),
+    recipientPhone: z
+      .string()
+      .trim()
+      .regex(/^(?:0|\+94)[1-9]\d{8}$/)
+      .transform((value) =>
+        value.startsWith("0") ? `+94${value.slice(1)}` : value,
+      ),
+    recipientAddress: z
+      .string()
+      .trim()
+      .min(5)
+      .max(300)
+      .regex(/^[^\p{Cc}]+$/u),
+  })
+  .strict();
+export type MerchantOrderRequest = z.infer<typeof merchantOrderRequestSchema>;
+export const merchantOrderStatusSchema = z.enum([
+  "CREATED",
+  "PICKED_UP",
+  "IN_TRANSIT",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "FAILED",
+  "CANCELLED",
+]);
+export const merchantOrderSummarySchema = z.object({
+  trackingNumber: z.string(),
+  status: merchantOrderStatusSchema,
+  originDistrict: z.string(),
+  destinationDistrict: z.string(),
+  recipientName: z.string(),
+  recipientPhone: z.string(),
+  feeCents: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+});
+export const merchantOrderPageSchema = z.object({
+  items: z.array(merchantOrderSummarySchema),
+});
+export type MerchantOrderStatus = z.infer<typeof merchantOrderStatusSchema>;
+export const merchantWebhookSettingsSchema = z.object({
+  configured: z.boolean(),
+  url: z.url().nullable(),
+  updatedAt: z.string().datetime().nullable(),
+});
+export const saveMerchantWebhookSchema = z
+  .object({ url: z.string().trim().url().max(2048) })
+  .strict();
+export type SaveMerchantWebhook = z.infer<typeof saveMerchantWebhookSchema>;
+export const saveMerchantWebhookResponseSchema = z.object({
+  settings: merchantWebhookSettingsSchema,
+  signingSecret: z.string().nullable(),
+});
+export const merchantWebhookSecretSchema = z.object({
+  signingSecret: z.string().min(32).max(128),
+});
+export const createMerchantApiClientSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2)
+      .max(80)
+      .regex(/^[^\p{Cc}]+$/u),
+    scopes: z
+      .array(merchantApiClientScopeSchema)
+      .min(1)
+      .max(2)
+      .refine((scopes) => new Set(scopes).size === scopes.length),
+  })
+  .strict();
+export type CreateMerchantApiClient = z.infer<
+  typeof createMerchantApiClientSchema
+>;
+export const merchantApiClientSchema = z.object({
+  id: z.string().uuid(),
+  clientId: z.string().regex(/^sd_cli_[A-Za-z0-9_-]{24}$/),
+  name: z.string(),
+  scopes: z.array(merchantApiClientScopeSchema),
+  createdAt: z.string().datetime(),
+  rotatedAt: z.string().datetime().nullable(),
+  revokedAt: z.string().datetime().nullable(),
+});
+export const merchantApiClientPageSchema = z.object({
+  items: z.array(merchantApiClientSchema).max(100),
+});
+export const merchantApiClientSecretSchema = z.object({
+  client: merchantApiClientSchema,
+  clientSecret: z.string().regex(/^sd_sec_[A-Za-z0-9_-]{43}$/),
+});
+export const merchantOAuthTokenRequestSchema = z
+  .object({
+    grant_type: z.literal("client_credentials"),
+    scope: z.string().max(200).optional(),
+  })
+  .strict();
+export const merchantOAuthTokenResponseSchema = z
+  .object({
+    access_token: z.string().min(1),
+    token_type: z.literal("Bearer"),
+    expires_in: z.literal(900),
+    scope: z.string().min(1),
+  })
+  .strict();
+export const merchantOAuthErrorSchema = z
+  .object({
+    error: z.enum([
+      "invalid_request",
+      "invalid_client",
+      "invalid_grant",
+      "unauthorized_client",
+      "unsupported_grant_type",
+      "invalid_scope",
+      "server_error",
+      "temporarily_unavailable",
+    ]),
+    error_description: z.string().optional(),
+  })
+  .strict();
 export const loginSchema = z
   .object({
     email: emailSchema,
@@ -256,6 +395,17 @@ export const cancelParcelSchema = z
   .object({ version: z.number().int().positive() })
   .strict();
 export type CancelParcel = z.infer<typeof cancelParcelSchema>;
+export const lifecycleResultSchema = z.object({
+  status: parcelStatusSchema,
+  version: z.number().int().positive(),
+  attemptCount: z.number().int().nonnegative(),
+});
+export type LifecycleResult = z.infer<typeof lifecycleResultSchema>;
+export const cancelResultSchema = z.object({
+  status: z.literal("CANCELLED"),
+  version: z.number().int().positive(),
+});
+export type CancelResult = z.infer<typeof cancelResultSchema>;
 export const zoneSchema = z.object({
   id: z.number().int(),
   district: z.string(),
@@ -443,7 +593,11 @@ export type Principal =
   | {
       kind: "merchant-client";
       clientId: string;
-      merchantId: number;
+      merchantId: string;
       scopes: string[];
     }
   | { kind: "service"; serviceId: string; scopes: string[] };
+
+export * from "./messaging.js";
+// M08 (transport) and M09 (events/) both export EventEnvelope; the root name is the M08 runtime schema type.
+export type { EventEnvelope } from "./messaging.js";

@@ -11,8 +11,8 @@ Implemented in this module:
 - `GET /api/v1/admin/merchants` and
   `PATCH /api/v1/admin/merchants/:id/review`: Admin-only application review.
 
-The additive merchant schema is in `packages/db/prisma/schema.prisma` and
-`202611100001_merchants`. Reuse the shared auth and contracts. The merchant
-order path must use M04's `ParcelsService` rather than duplicate parcel logic;
-webhook delivery and attempt logs depend on M08. API clients, OAuth, orders,
-webhook configuration and the remaining dashboard views are still pending.
+The additive merchant schema is in `packages/db/prisma/schema.prisma` and the
+merchant migrations. Reuse shared auth and contracts. Merchant order creation
+uses M04's `ParcelsService`; merchant order listing is scoped by `merchantId`.
+Webhook configuration is implemented; webhook delivery and attempt logs depend
+on M08. The delivery-log dashboard remains pending that integration.

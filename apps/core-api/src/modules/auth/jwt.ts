@@ -1,8 +1,13 @@
 import { createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 import { importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
-import { roleSchema, type Role } from "@swiftdrop/contracts";
+import {
+  merchantApiClientScopeSchema,
+  roleSchema,
+  type Role,
+} from "@swiftdrop/contracts";
 import type { Config } from "../../shared/config.js";
 import { unauthorised } from "../../shared/problem.js";
+export const MERCHANT_AUDIENCE = "swiftdrop-merchant-api";
 export async function createTokenService(
   config: Pick<
     Config,
@@ -66,6 +71,35 @@ export async function createTokenService(
         .sign(signingKey);
       return { accessToken, jti, expiresAt: new Date((now + 900) * 1000) };
     },
+    async issueMerchantClient(clientId: string, scopes: string[]) {
+      const parsedScopes = scopes.map((scope) =>
+        merchantApiClientScopeSchema.parse(scope),
+      );
+      if (
+        parsedScopes.length === 0 ||
+        new Set(parsedScopes).size !== parsedScopes.length
+      )
+        throw new Error("Merchant tokens require unique granted scopes.");
+      const jti = randomUUID();
+      const now = Math.floor(Date.now() / 1000);
+      const accessToken = await new SignJWT({
+        kind: "merchant-client",
+        scope: parsedScopes.join(" "),
+      })
+        .setProtectedHeader({
+          alg: "RS256",
+          kid: config.AUTH_KEY_ID,
+          typ: "JWT",
+        })
+        .setSubject(clientId)
+        .setJti(jti)
+        .setIssuer(config.API_ISSUER)
+        .setAudience(MERCHANT_AUDIENCE)
+        .setIssuedAt(now)
+        .setExpirationTime(now + 900)
+        .sign(signingKey);
+      return { accessToken, jti, expiresAt: new Date((now + 900) * 1000) };
+    },
     async verify(token: string) {
       try {
         const { payload } = await jwtVerify(
@@ -100,6 +134,49 @@ export async function createTokenService(
           role: roleSchema.parse(payload.role),
           jti: payload.jti,
         };
+      } catch {
+        throw unauthorised();
+      }
+    },
+    async verifyMerchantClient(token: string) {
+      try {
+        const { payload } = await jwtVerify(
+          token,
+          (header) => {
+            const key = keys.get(header.kid ?? "");
+            if (!key) throw unauthorised();
+            return key;
+          },
+          {
+            algorithms: ["RS256"],
+            issuer: config.API_ISSUER,
+            audience: MERCHANT_AUDIENCE,
+            typ: "JWT",
+            requiredClaims: ["sub", "jti", "iat", "exp", "kind", "scope"],
+          },
+        );
+        if (
+          payload.kind !== "merchant-client" ||
+          !/^sd_cli_[A-Za-z0-9_-]{24}$/.test(payload.sub ?? "") ||
+          !payload.jti ||
+          !/^[0-9a-f-]{36}$/i.test(payload.jti) ||
+          typeof payload.iat !== "number" ||
+          typeof payload.exp !== "number" ||
+          payload.exp - payload.iat !== 900 ||
+          payload.iat > Math.floor(Date.now() / 1000) ||
+          typeof payload.scope !== "string"
+        )
+          throw unauthorised();
+        const scopes = payload.scope.split(" ");
+        if (
+          scopes.length === 0 ||
+          scopes.some(
+            (scope) => !merchantApiClientScopeSchema.safeParse(scope).success,
+          ) ||
+          new Set(scopes).size !== scopes.length
+        )
+          throw unauthorised();
+        return { clientId: payload.sub, jti: payload.jti, scopes };
       } catch {
         throw unauthorised();
       }
