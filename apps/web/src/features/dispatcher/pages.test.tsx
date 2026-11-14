@@ -160,4 +160,19 @@ describe("DispatcherConsole (FR-F8)", () => {
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("SD-AAAA1111-X")).toBeInTheDocument();
   });
+
+  it("keeps Tab focus inside the dialog and closes on Escape", async () => {
+    const user = userEvent.setup();
+    render(<DispatcherConsole />);
+    await user.click(await screen.findByRole("button", { name: "Assign" }));
+    const dialog = screen.getByRole("dialog");
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    cancel.focus();
+    await user.tab(); // wraps from the last control back to the first
+    expect(within(dialog).getByLabelText("Courier")).toHaveFocus();
+    await user.tab({ shift: true }); // and back to the last
+    expect(cancel).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });

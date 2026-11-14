@@ -19,7 +19,7 @@ import type { PricingService } from "./service.js";
 export function createPricingRouter(
   service: PricingService,
   auth: AuthService,
-  _limiter: RateLimiter,
+  limiter: RateLimiter,
   config: Config,
 ) {
   const router = Router();

@@ -24,7 +24,7 @@ Every path that changes who carries a parcel, or whether it still counts against
 
 Paths using it: assign/reassign (`DispatchService.assign`), duty and capacity changes, courier duty toggle, `LifecycleService.transition` and `LifecycleService.cancel` (release on DELIVERED, CANCELLED and final FAILED after three attempts). Choosing the current courier is a no-op. A stale `version` returns `409 VERSION_CONFLICT`; off-duty and full couriers return `409 COURIER_OFF_DUTY` / `COURIER_AT_CAPACITY`. Reassignment emits `parcel.assignment.changed` with `oldCourierId`/`newCourierId` (ids only).
 
-Open point: courier invitation acceptance still returns setup-pending (C-04/X-15). Until M01 and M06 agree the activation contract, a dispatcher creates the capacity profile (`PATCH /dispatch/couriers/{id}`); the demo seed creates one for `courier@swiftdrop.test`.
+Courier activation (C-04/X-15): accepting an invitation activates the account and creates the profile (off duty, capacity 10) in the same transaction; no `COURIER_SETUP_PENDING` response remains. A dispatcher adjusts capacity with `PATCH /dispatch/couriers/{id}` and the courier toggles duty. The demo seed creates an on-duty profile for `courier@swiftdrop.test`. M01 and M06 have not yet reviewed this contract.
 
 ## Courier delivery (FR-K1..K3, FR-F6)
 
@@ -72,3 +72,40 @@ Authorisation is re-evaluated in the database at every join and returns an autho
 - Web: `features/{dispatcher,courier}` Vitest suites including the offline queue rules.
 
 Run `DISPATCH_TEST_DATABASE_URL` / `NOTIFICATION_TEST_DATABASE_URL` against a throwaway migrated database to skip Testcontainers; the suites truncate tables, so never point them at a database you care about.
+
+## Containers, gateway and Kubernetes
+
+Every deployable has its own multi-stage Dockerfile (compiled JS plus production dependencies only):
+`apps/{core-api,outbox-relay,webhook-svc,notification-svc,ai-assistant,web}/Dockerfile`, plus
+`packages/db/Dockerfile` (migrations job) and `deploy/nginx/Dockerfile` (compose gateway).
+
+`docker compose up` starts the infrastructure and the whole application: `init-secrets` creates the
+auth keys in a volume, `migrate` applies Prisma migrations, `provision-notification-svc` creates the
+notification signing key once, then `core-api`, `outbox-relay`, `webhook-svc`, `notification-svc`,
+`ai-assistant`, `web` and the `nginx` gateway come up on <http://localhost> (`SD_HTTP_PORT` to move
+it). `docker compose --profile demo up` also seeds the demo users, zones and prices (the seed still
+refuses anything but a local disposable `swiftdrop` database; the job shares postgres' network
+namespace to satisfy that guard). `SD_ENABLE_TLS=true` serves :443 with a self-signed certificate;
+set `SD_APP_ORIGIN=https://localhost` and `SD_COOKIE_SECURE=true` to browse it.
+
+- **Probes.** Every service answers `GET /healthz` (liveness, no dependencies). core-api's
+  `GET /api/ready` also checks PostgreSQL and Redis and, when `OUTBOX_RELAY_URL` is set, probes the
+  relay's `/readyz`: a stopped relay now returns 503 `{"status":"degraded","outboxRelay":"unreachable"}`.
+  Unset, the relay check is reported as `not-configured`, never as healthy.
+- **Bind addresses.** core-api binds loopback by default; containers set `HOST=0.0.0.0` and
+  `INTERNAL_HOST=0.0.0.0`. The internal port (3001) is only reachable on the cluster/compose
+  network: nginx and the Ingress never route it. Workers use `HEALTH_HOST` for their health server.
+- **Proxy hops.** `TRUST_PROXY=1` behind nginx/Ingress so `req.ip` (and the per-IP rate limits) see
+  the client, not the proxy. Leave it `0` when nothing proxies in front.
+- **AI assistant.** `apps/ai-assistant` (:5000) is an MCP server (`POST /mcp`, streamable HTTP).
+  Its four tools (`quote_delivery_fee`, `get_parcel_status`, `list_my_parcels`, `find_zone`) call
+  core-api's REST API with the caller's own `Authorization: Bearer` JWT and issue GET requests only.
+  `quote_delivery_fee` uses the read-only `GET /api/v1/quotes/estimate` (nothing is stored; booking
+  still needs `POST /quotes` and the Idempotency-Key flow). The older in-process chat module in
+  core-api (`/assistant/chat`, used by the web chat widget) is unchanged.
+- **Pricing.** `ExpressPricing` and `MerchantContractPricing` exist next to `StandardPricing`.
+  claude.md gives no formula for them, so no number is hard-coded: Express takes a multiplier
+  (basis points, ≥ 10000) from configuration and MerchantContract takes the merchant's contract rates
+  from the caller. Neither is wired into booking yet; `PricingStrategyFactory` refuses to build them
+  without their inputs.
+- **Helm.** See [deploy/helm/README.md](../deploy/helm/README.md).

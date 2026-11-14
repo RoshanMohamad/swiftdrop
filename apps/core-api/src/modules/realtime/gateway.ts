@@ -80,8 +80,18 @@ export function createRealtimeGateway(options: {
     serveClient: false,
     maxHttpBufferSize: 10_000,
   });
+  // The API's own Redis client fails fast (no offline queue) so requests report a clean error.
+  // The adapter's pub/sub connections must instead queue commands and keep reconnecting, so
+  // starting the API before Redis, or losing Redis later, never crashes the process.
+  const adapterOptions = {
+    enableOfflineQueue: true,
+    maxRetriesPerRequest: null,
+  };
   const clients = options.redis
-    ? [options.redis.duplicate(), options.redis.duplicate()]
+    ? [
+        options.redis.duplicate(adapterOptions),
+        options.redis.duplicate(adapterOptions),
+      ]
     : [];
   for (const client of clients)
     client.on("error", () => {

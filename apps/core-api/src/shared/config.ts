@@ -19,6 +19,18 @@ export function loadConfig() {
         .default("development"),
       PORT: z.coerce.number().int().min(1).max(65535).default(3000),
       INTERNAL_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+      // Bind addresses. Loopback by default; containers set HOST=0.0.0.0. The internal listener
+      // must never be published or routed through nginx/Ingress.
+      HOST: z.string().min(1).default("127.0.0.1"),
+      INTERNAL_HOST: z.string().min(1).default("127.0.0.1"),
+      // Number of trusted reverse-proxy hops (nginx / Ingress) in front of the API, so req.ip and
+      // the per-IP rate limits see the real client. 0 = no proxy (default for local dev).
+      TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+      // Base URL of outbox-relay's health server; when set, /api/ready reports the relay.
+      OUTBOX_RELAY_URL: z.preprocess(
+        (value) => (value === "" ? undefined : value),
+        z.url().optional(),
+      ),
       APP_ORIGIN: z.url(),
       API_ISSUER: z.url(),
       HUMAN_AUDIENCE: z.string().min(1),

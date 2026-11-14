@@ -1,4 +1,43 @@
 name: swiftdrop
+
+# Shared by core-api and its one-shot jobs (init-secrets, provision-notification-svc).
+x-core-api-image: &core-api-image
+  build:
+    context: .
+    dockerfile: apps/core-api/Dockerfile
+  image: swiftdrop/core-api:dev
+
+# core-api settings for local compose. Secrets are files in the auth-secrets volume.
+# HOST/INTERNAL_HOST are 0.0.0.0 inside the container network only: the internal port (3001) is
+# not published and not routed by nginx. TRUST_PROXY=1 because nginx is the single proxy hop.
+x-core-env: &core-env
+  NODE_ENV: development
+  HOST: 0.0.0.0
+  INTERNAL_HOST: 0.0.0.0
+  PORT: 3000
+  INTERNAL_PORT: 3001
+  TRUST_PROXY: 1
+  APP_ORIGIN: ${SD_APP_ORIGIN:-http://localhost}
+  API_ISSUER: http://core-api:3000
+  HUMAN_AUDIENCE: swiftdrop-web
+  SERVICE_ISSUER: http://core-api:3001
+  DATABASE_URL: postgresql://swiftdrop:local-development-only@postgres:5432/swiftdrop
+  REDIS_URL: redis://redis:6379
+  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+  SMTP_URL: smtp://mailpit:1025
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: swiftdrop
+  MINIO_SECRET_KEY: local-development-only
+  MINIO_BUCKET: swiftdrop-receipts
+  AUTH_PRIVATE_KEY_FILE: /run/swiftdrop/auth/private.pem
+  AUTH_PUBLIC_KEYS_FILE: /run/swiftdrop/auth/public-keys.json
+  AUTH_KEY_ID: local-1
+  CSRF_SECRET_FILE: /run/swiftdrop/auth/csrf.key
+  RATE_LIMIT_SECRET_FILE: /run/swiftdrop/auth/rate-limit.key
+  OAUTH_TRANSACTION_SECRET_FILE: /run/swiftdrop/auth/oauth.key
+  COOKIE_SECURE: ${SD_COOKIE_SECURE:-false}
+  OUTBOX_RELAY_URL: http://outbox-relay:3101
+
 services:
   postgres:
     image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
@@ -59,7 +98,233 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # ---------------------------------------------------------------------------------------------
+  # Application stack: `docker compose up` brings up everything below (and the infrastructure
+  # above) with no extra manual step. Local development only: secrets are generated into a
+  # volume and the settings below use the local-development-only credentials.
+  # Demo data (users, zones, prices) is optional:  docker compose --profile demo up
+  # ---------------------------------------------------------------------------------------------
+
+  # One-shot: generates the auth signing keys / CSRF / rate-limit / OAuth secrets if missing.
+  init-secrets:
+    <<: *core-api-image
+    user: root
+    command: ['node', '/app/scripts/init-secrets.mjs']
+    environment:
+      NODE_ENV: development
+      SECRETS_DIR: /run/swiftdrop/auth
+      AUTH_KEY_ID: local-1
+    volumes:
+      - auth-secrets:/run/swiftdrop/auth
+    restart: 'no'
+
+  # One-shot: applies Prisma migrations before any service starts.
+  migrate:
+    build:
+      context: .
+      dockerfile: packages/db/Dockerfile
+    image: swiftdrop/db:dev
+    environment:
+      DATABASE_URL: &database-url postgresql://swiftdrop:local-development-only@postgres:5432/swiftdrop
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  # One-shot, only with `--profile demo`. It joins postgres' network namespace so the seed's
+  # "local disposable database on localhost" guard stays intact.
+  seed:
+    profiles: ['demo']
+    image: swiftdrop/db:dev
+    network_mode: 'service:postgres'
+    environment:
+      DATABASE_URL: postgresql://swiftdrop:local-development-only@localhost:5432/swiftdrop
+    command: ['pnpm', 'exec', 'tsx', 'src/seed.ts']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  # One-shot: provisions notification-svc's service-JWT signing key and principal once.
+  provision-notification-svc:
+    <<: *core-api-image
+    command:
+      - sh
+      - -c
+      - >-
+        test -f /app/.local/services/notification-svc/signer.json
+        && echo 'notification-svc already provisioned'
+        || node dist/services-cli.js provision --service notification-svc
+    environment: *core-env
+    volumes:
+      - auth-secrets:/run/swiftdrop/auth:ro
+      - service-keys:/app/.local/services
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      init-secrets:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  core-api:
+    <<: *core-api-image
+    environment: *core-env
+    volumes:
+      - auth-secrets:/run/swiftdrop/auth:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      init-secrets:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Events only flow while the relay is running; core-api /api/ready reports it.
+  outbox-relay:
+    build:
+      context: .
+      dockerfile: apps/outbox-relay/Dockerfile
+    image: swiftdrop/outbox-relay:dev
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: *database-url
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      OUTBOX_RELAY_PORT: 3101
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3101/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  webhook-svc:
+    build:
+      context: .
+      dockerfile: apps/webhook-svc/Dockerfile
+    image: swiftdrop/webhook-svc:dev
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: *database-url
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      WEBHOOK_SVC_PORT: 3102
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3102/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  notification-svc:
+    build:
+      context: .
+      dockerfile: apps/notification-svc/Dockerfile
+    image: swiftdrop/notification-svc:dev
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: *database-url
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SMTP_URL: smtp://mailpit:1025
+      CORE_INTERNAL_URL: http://core-api:3001
+      APP_ORIGIN: ${SD_APP_ORIGIN:-http://localhost}
+      NOTIFICATION_SVC_PORT: 3103
+      NOTIFICATION_SIGNER_FILE: /app/.local/services/notification-svc/signer.json
+    volumes:
+      - service-keys:/app/.local/services:ro
+    depends_on:
+      provision-notification-svc:
+        condition: service_completed_successfully
+      core-api:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3103/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # MCP server (read-only tools). Calls core-api's REST API with the caller's own JWT.
+  ai-assistant:
+    build:
+      context: .
+      dockerfile: apps/ai-assistant/Dockerfile
+    image: swiftdrop/ai-assistant:dev
+    environment:
+      CORE_API_URL: http://core-api:3000
+      AI_ASSISTANT_PORT: 5000
+    depends_on:
+      core-api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:5000/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: swiftdrop/web:dev
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Gateway on :80 (and :443 with ENABLE_TLS=true). On Kubernetes the Ingress replaces it.
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+    image: swiftdrop/nginx:dev
+    environment:
+      ENABLE_TLS: ${SD_ENABLE_TLS:-false}
+    ports:
+      - '127.0.0.1:${SD_HTTP_PORT:-80}:80'
+      - '127.0.0.1:${SD_HTTPS_PORT:-443}:443'
+    depends_on:
+      core-api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      ai-assistant:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   postgres-data:
   redis-data:
   minio-data:
+  auth-secrets:
+  service-keys:

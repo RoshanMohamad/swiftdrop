@@ -1,0 +1,43 @@
+# Hosted cluster. Replace the placeholders; no real secret belongs in this file.
+# Create the Secrets named below out of band (sealed-secrets, external-secrets, kubectl).
+
+image:
+  registry: registry.example.lk
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+config:
+  nodeEnv: production
+  appOrigin: https://swiftdrop.example.lk
+  cookieSecure: "true"
+  smtpUrl: smtps://smtp.example.lk:465 # approved mail relay; credentials belong in a Secret
+
+credentials:
+  create: false
+  existingSecret: swiftdrop-credentials
+
+auth:
+  existingSecret: swiftdrop-auth
+notificationSigner:
+  existingSecret: swiftdrop-notification-signer
+
+ingress:
+  className: nginx
+  host: swiftdrop.example.lk
+  tls:
+    enabled: true
+    secretName: swiftdrop-tls
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+postgres:
+  storage: 50Gi
+  storageClassName: "" # set to a fast, backed-up class
+rabbitmq:
+  storage: 10Gi
+minio:
+  storage: 100Gi

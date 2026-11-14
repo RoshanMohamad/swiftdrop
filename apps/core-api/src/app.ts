@@ -8,6 +8,7 @@ import type { Redis } from "ioredis";
 import type { Config } from "./shared/config.js";
 import { errorHandler, HttpError } from "./shared/problem.js";
 import { RateLimiter } from "./shared/rate-limit.js";
+import { checkRelay } from "./shared/relay-health.js";
 import { logger as defaultLogger } from "./shared/logger.js";
 import { correlationMiddleware } from "./shared/correlation.js";
 import {
@@ -71,7 +72,7 @@ export function createApp(deps: {
   const logger = deps.logger ?? defaultLogger;
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", false);
+  app.set("trust proxy", config.TRUST_PROXY > 0 ? config.TRUST_PROXY : false);
   app.use(helmet({ referrerPolicy: { policy: "no-referrer" } }));
   app.use(correlationMiddleware(logger));
   const service = new AuthService(
@@ -99,11 +100,19 @@ export function createApp(deps: {
   app.use(createProofUploadRouter(courier, service, limiter, config));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  // Liveness/readiness probe path used by Kubernetes and Docker (claude.md, Deployment).
+  app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/ready", async (_req, res) => {
     await Promise.all([db.$queryRaw`SELECT 1`, redis.ping()]);
-    // Event publication is the outbox relay's job (apps/outbox-relay, own /readyz);
-    // booking stays available while the broker is down because events wait in the outbox.
-    res.json({ status: "ready" });
+    // Event publication is the outbox relay's job (apps/outbox-relay, own /readyz). A stopped
+    // relay silently stops every event, so readiness reports it; booking itself still works
+    // because events wait in the outbox, but the instance must not look fully healthy.
+    const relay = await checkRelay(config.OUTBOX_RELAY_URL);
+    const ready = relay === "ready" || relay === "not-configured";
+    res.status(ready ? 200 : 503).json({
+      status: ready ? "ready" : "degraded",
+      outboxRelay: relay,
+    });
   });
 
   app.get("/api/docs", (_req, res) =>

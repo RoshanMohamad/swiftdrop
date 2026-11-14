@@ -1,0 +1,140 @@
+# Defaults describe a hosted cluster. See values-local.yaml (kind / minikube) and
+# values-hosted.yaml. Everything deploys to the `swiftdrop` namespace.
+
+namespace: swiftdrop
+createNamespace: false # `helm install --create-namespace` is the usual way
+
+image:
+  registry: "" # e.g. ghcr.io/your-org ; empty = local images (kind load docker-image)
+  tag: dev
+  pullPolicy: IfNotPresent
+
+# ConfigMap: non-secret settings.
+config:
+  nodeEnv: production
+  appOrigin: https://swiftdrop.example.lk # exact origin, https in production
+  cookieSecure: "true"
+  trustProxy: "1" # the Ingress is the single proxy hop in front of core-api
+  smtpUrl: smtp://mailpit:1025 # replace with the approved relay in production
+  minioBucket: swiftdrop-receipts
+  humanAudience: swiftdrop-web
+  # Identifier (not dialled) embedded in service JWTs; provision notification-svc with the same value.
+  serviceIssuer: https://core-api.swiftdrop.svc.cluster.local:3001
+
+# Credentials (Secret). Hosted clusters create this Secret out of band (sealed secrets, external
+# secrets, ...) and point at it with existingSecret. Required keys:
+#   postgres-password, rabbitmq-user, rabbitmq-password, minio-access-key, minio-secret-key
+credentials:
+  existingSecret: swiftdrop-credentials
+  create: false # true only for local clusters, using `credentials.data`
+  data: {}
+
+# Secret holding the human-auth key material, mounted at /run/swiftdrop/auth. Required keys:
+#   private.pem, public-keys.json, csrf.key, rate-limit.key, oauth.key
+auth:
+  existingSecret: swiftdrop-auth
+  keyId: key-1
+
+# Secret from `services-cli provision --service notification-svc`: signer.json and <keyId>.pem,
+# mounted at /app/.local/services/notification-svc.
+notificationSigner:
+  existingSecret: swiftdrop-notification-signer
+
+postgres:
+  image: postgres:16-alpine
+  user: swiftdrop
+  database: swiftdrop
+  storage: 10Gi
+  storageClassName: ""
+  resources: {}
+
+rabbitmq:
+  image: rabbitmq:3.13-management-alpine
+  storage: 2Gi
+  storageClassName: ""
+  resources: {}
+
+minio:
+  image: minio/minio:latest # pin a release tag or digest for production
+  storage: 10Gi
+  storageClassName: ""
+  resources: {}
+
+redis:
+  image: redis:7-alpine
+  resources: {}
+
+# Local mail catcher (Mailpit). Hosted clusters use a real relay via config.smtpUrl.
+mailpit:
+  enabled: false
+  image: axllent/mailpit:v1.27
+
+# Stateless services: Deployments with /healthz liveness and readiness probes.
+coreApi:
+  name: core-api
+  image: swiftdrop/core-api
+  replicas: 2
+  port: 3000
+  internalPort: 3001 # cluster-internal only; never exposed by the Ingress
+  probePath: /healthz
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits: { memory: 512Mi }
+outboxRelay:
+  name: outbox-relay
+  image: swiftdrop/outbox-relay
+  replicas: 1 # claims rows with SKIP LOCKED; more replicas are safe but unnecessary
+  port: 3101
+  probePath: /healthz
+  resources: {}
+webhookSvc:
+  name: webhook-svc
+  image: swiftdrop/webhook-svc
+  replicas: 1
+  port: 3102
+  probePath: /healthz
+  resources: {}
+notificationSvc:
+  name: notification-svc
+  image: swiftdrop/notification-svc
+  replicas: 1
+  port: 3103
+  probePath: /healthz
+  resources: {}
+aiAssistant:
+  name: ai-assistant
+  image: swiftdrop/ai-assistant
+  replicas: 1
+  port: 5000
+  probePath: /healthz
+  resources: {}
+web:
+  name: web
+  image: swiftdrop/web
+  replicas: 2
+  port: 8080
+  probePath: /healthz
+  resources: {}
+
+# Horizontal Pod Autoscaler for core-api, on CPU.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# The Ingress replaces the compose nginx gateway.
+ingress:
+  enabled: true
+  className: nginx
+  host: swiftdrop.example.lk
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 3m
+  tls:
+    enabled: true
+    secretName: swiftdrop-tls
+
+# Run `prisma migrate deploy` after install/upgrade.
+migrate:
+  enabled: true
+  image: swiftdrop/db

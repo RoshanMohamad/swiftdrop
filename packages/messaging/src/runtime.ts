@@ -71,8 +71,11 @@ export function startHealthServer(options: {
   });
   return new Promise((resolveStart, reject) => {
     server.once("error", reject);
-    server.listen(options.port, options.host ?? "127.0.0.1", () =>
-      resolveStart(server),
+    // Containers set HEALTH_HOST=0.0.0.0 so kubelet/Docker probes can reach /healthz.
+    server.listen(
+      options.port,
+      options.host ?? process.env.HEALTH_HOST ?? "127.0.0.1",
+      () => resolveStart(server),
     );
   });
 }

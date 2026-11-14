@@ -89,7 +89,26 @@ function AssignDialog({
       aria-modal="true"
       aria-labelledby="assign-title"
       className="dispatch-dialog"
-      onKeyDown={(event) => event.key === "Escape" && onClose()}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") return onClose();
+        if (event.key !== "Tab") return;
+        // Keep keyboard focus inside the modal: wrap at the first and last control.
+        const controls = [
+          ...event.currentTarget.querySelectorAll<HTMLElement>(
+            "select, button, input, [href]",
+          ),
+        ].filter((element) => !element.hasAttribute("disabled"));
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
     >
       <form onSubmit={(event) => void submit(event)} noValidate>
         <h2 id="assign-title">

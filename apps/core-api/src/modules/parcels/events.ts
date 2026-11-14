@@ -1,6 +1,6 @@
 import { connect, type ChannelModel, type ConfirmChannel } from "amqplib";
 import type { Logger } from "pino";
-import { Prisma, type Database } from "@swiftdrop/db";
+import type { Database } from "@swiftdrop/db";
 import { isSwiftDropEvent, ROUTING_KEYS } from "@swiftdrop/contracts";
 import type { ReceiptService } from "../receipts/service.js";
 
@@ -19,7 +19,6 @@ export function startParcelEventWorkers(
 ) {
   let stopped = false;
   let connection: ChannelModel | undefined;
-  let relay: ConfirmChannel | undefined;
   let consumer: ConfirmChannel | undefined;
   const run = async () => {
     let delay = 1000;
@@ -38,13 +37,8 @@ export function startParcelEventWorkers(
           state.connected = false;
           linkOpen = false;
         });
-        const relayChannel = await linked.createConfirmChannel();
         const consumerChannel = await linked.createConfirmChannel();
-        relay = relayChannel;
         consumer = consumerChannel;
-        await relayChannel.assertExchange(EXCHANGE, "topic", {
-          durable: true,
-        });
         await consumerChannel.assertExchange(EXCHANGE, "topic", {
           durable: true,
         });
@@ -79,17 +73,10 @@ export function startParcelEventWorkers(
         });
         state.connected = true;
         delay = 1000;
-        while (!stopped && linkOpen) {
-          await publishPending(db, relayChannel);
-          await wait(1000);
-        }
+        // Publication belongs to apps/outbox-relay (C-14); this process only consumes.
+        while (!stopped && linkOpen) await wait(1000);
       } catch {
         state.connected = false;
-        try {
-          await relay?.close();
-        } catch {
-          /* connection may already be closed */
-        }
         try {
           await consumer?.close();
         } catch {
@@ -100,7 +87,6 @@ export function startParcelEventWorkers(
         } catch {
           /* connection may already be closed */
         }
-        relay = undefined;
         consumer = undefined;
         connection = undefined;
         if (!stopped) {
@@ -148,11 +134,6 @@ export function startParcelEventWorkers(
     async stop() {
       stopped = true;
       try {
-        await relay?.close();
-      } catch {
-        /* connection may already be closed */
-      }
-      try {
         await consumer?.close();
       } catch {
         /* connection may already be closed */
@@ -165,41 +146,4 @@ export function startParcelEventWorkers(
       await task;
     },
   };
-}
-
-async function publishPending(db: Database, channel: ConfirmChannel) {
-  await db.$transaction(
-    async (tx) => {
-      const events = await tx.$queryRaw<
-        Array<{
-          id: string;
-          event_id: string;
-          event_type: string;
-          payload: Prisma.JsonValue;
-        }>
-      >`
-      SELECT id, event_id, event_type, payload FROM outbox_events
-      WHERE published_at IS NULL ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 50`;
-      if (!events.length) return;
-      for (const event of events)
-        channel.publish(
-          EXCHANGE,
-          event.event_type,
-          Buffer.from(JSON.stringify(event.payload)),
-          {
-            persistent: true,
-            contentType: "application/json",
-            messageId: event.event_id,
-          },
-        );
-      await channel.waitForConfirms();
-      const publishedAt = new Date();
-      for (const event of events)
-        await tx.outboxEvent.update({
-          where: { id: event.id },
-          data: { publishedAt, attempts: { increment: 1 } },
-        });
-    },
-    { timeout: 15000 },
-  );
 }

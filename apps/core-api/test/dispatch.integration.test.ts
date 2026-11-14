@@ -20,6 +20,8 @@ import { LifecycleService } from "../src/modules/lifecycle/index.js";
 import { CourierService } from "../src/modules/courier/service.js";
 import type { ProofStorage } from "../src/modules/courier/storage.js";
 import { HttpError } from "../src/shared/problem.js";
+import { UsersService } from "../src/modules/users/service.js";
+import { tokenHash } from "../src/modules/auth/service.js";
 
 /**
  * M06/M07 behaviour against a real PostgreSQL: capacity locks, reassignment atomicity, capacity
@@ -647,5 +649,52 @@ describe("courier delivery (FR-K1, FR-K2, FR-K3)", () => {
       onDuty: true,
       capacity: 4,
     });
+  });
+});
+
+describe("courier invitation activation (C-04 / X-15)", () => {
+  it("activates the courier and creates an off-duty capacity profile in one transaction", async () => {
+    const invited = await db.user.create({
+      data: {
+        email: "invited-courier@example.test",
+        fullName: "Invited Courier",
+        phone: "+94771234567",
+        roleId: "COURIER",
+        status: "INVITED",
+      },
+    });
+    const raw = "invite-token-for-courier-activation-test";
+    await db.staffInvitation.create({
+      data: {
+        userId: invited.id,
+        tokenHash: tokenHash(raw),
+        generation: 1,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    await new UsersService(db, "http://localhost:5173").accept(
+      raw,
+      "A sufficiently long private passphrase 2026",
+    );
+    expect(
+      (await db.user.findUniqueOrThrow({ where: { id: invited.id } })).status,
+    ).toBe("ACTIVE");
+    expect(
+      await db.courierProfile.findUniqueOrThrow({
+        where: { userId: invited.id },
+      }),
+    ).toMatchObject({ onDuty: false, capacity: 10, workload: 0 });
+    // The profile makes the courier visible to dispatch but not assignable until on duty.
+    const listed = (await dispatch.listCouriers()).find(
+      (c) => c.userId === invited.id,
+    );
+    expect(listed).toMatchObject({ hasProfile: true, onDuty: false });
+    expect(
+      (
+        await problem(
+          dispatch.assign(dispatcherId, (await newParcel()).id, invited.id, 1),
+        )
+      ).code,
+    ).toBe("COURIER_OFF_DUTY");
   });
 });

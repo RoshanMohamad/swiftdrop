@@ -6,12 +6,12 @@
     "node": ">=24.11 <25"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter core-api --filter web --filter outbox-relay --filter webhook-svc --filter notification-svc dev",
+    "dev": "pnpm --parallel --filter core-api --filter web --filter outbox-relay --filter webhook-svc --filter notification-svc --filter ai-assistant dev",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter core-api test && pnpm --filter web test && pnpm --filter @swiftdrop/messaging test && pnpm --filter outbox-relay test && pnpm --filter webhook-svc test && pnpm --filter notification-svc test",
+    "test": "pnpm --filter core-api test && pnpm --filter web test && pnpm --filter @swiftdrop/messaging test && pnpm --filter outbox-relay test && pnpm --filter webhook-svc test && pnpm --filter notification-svc test && pnpm --filter ai-assistant test",
     "test:integration": "pnpm --filter core-api test:integration && pnpm --filter webhook-svc test:integration && pnpm --filter notification-svc test:integration",
-    "build": "pnpm --filter web build && pnpm --filter core-api build && pnpm --filter outbox-relay build && pnpm --filter webhook-svc build && pnpm --filter notification-svc build",
+    "build": "pnpm --filter web build && pnpm --filter core-api build && pnpm --filter outbox-relay build && pnpm --filter webhook-svc build && pnpm --filter notification-svc build && pnpm --filter ai-assistant build",
     "auth:keys:generate": "node scripts/auth-keys.mjs",
     "db:generate": "pnpm --filter @swiftdrop/db generate",
     "db:migrate": "pnpm --filter @swiftdrop/db migrate",

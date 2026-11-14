@@ -146,6 +146,9 @@ beforeAll(async () => {
     NODE_ENV: "test",
     PORT: 3000,
     INTERNAL_PORT: 3001,
+    HOST: "127.0.0.1",
+    INTERNAL_HOST: "127.0.0.1",
+    TRUST_PROXY: 0,
     APP_ORIGIN: "http://localhost:5173",
     SMTP_URL: "smtp://localhost:1025",
     API_ISSUER: "http://localhost:3000",
@@ -379,7 +382,7 @@ describe("customer HTTP boundary", () => {
     ).toBe(200);
   });
 
-  it("keeps courier invitations unconsumed until operational setup is ready", async () => {
+  it("activates a courier invitation together with an off-duty capacity profile", async () => {
     const admin = await user("ADMIN", "admin@example.test");
     const agent = request.agent(api.app);
     const logged = await post(agent, "login", { email: admin.email, password });
@@ -399,19 +402,20 @@ describe("customer HTTP boundary", () => {
     const courier = await db.user.findUniqueOrThrow({
       where: { email: "courier@example.test" },
     });
+    expect(await db.courierProfile.count()).toBe(0);
     const rawToken = new URL(invitationLink).hash.slice("#token=".length);
     expect(
       (await post(agent, "accept-invite", { token: rawToken, password }))
         .status,
-    ).toBe(409);
-    expect(
-      await db.staffInvitation.findFirstOrThrow({
-        where: { userId: courier.id },
-      }),
-    ).toMatchObject({ consumedAt: null, revokedAt: null });
+    ).toBeLessThan(300);
     expect(
       (await db.user.findUniqueOrThrow({ where: { id: courier.id } })).status,
-    ).toBe("INVITED");
+    ).toBe("ACTIVE");
+    expect(
+      await db.courierProfile.findUniqueOrThrow({
+        where: { userId: courier.id },
+      }),
+    ).toMatchObject({ onDuty: false, capacity: 10, workload: 0 });
   });
 
   it("filters staff and rotates/revokes invitations while retaining mail-failed accounts", async () => {

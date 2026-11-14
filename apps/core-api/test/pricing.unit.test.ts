@@ -345,3 +345,49 @@ describe("PricingService quote creation & validation (FR-P1, FR-P2, X-04)", () =
     ).rejects.toThrow();
   });
 });
+
+describe("PricingService.estimate (read-only, backs the AI assistant)", () => {
+  it("returns the strategy fee without storing a quote", async () => {
+    let created = false;
+    const mockDb = {
+      zone: {
+        findFirst: async ({
+          where,
+        }: {
+          where: { district: { equals: string } };
+        }) => ({
+          id: where.district.equals === "Colombo" ? 1 : 2,
+          district: where.district.equals,
+          town: where.district.equals,
+          active: true,
+        }),
+      },
+      priceVersion: {
+        findFirst: async () => ({
+          id: 1,
+          originZoneId: 1,
+          destinationZoneId: 2,
+          baseCents: 45000,
+          perExtraKgCents: 12000,
+          effectiveFrom: new Date("2026-01-01T00:00:00Z"),
+        }),
+      },
+      quote: {
+        create: async () => {
+          created = true;
+          return {};
+        },
+      },
+    } as unknown as Database;
+    const result = await new PricingService(mockDb).estimate({
+      originDistrict: "Colombo",
+      destinationDistrict: "Kandy",
+      weightGrams: 2000,
+      lengthMm: 100,
+      widthMm: 100,
+      heightMm: 100,
+    });
+    expect(result.feeCents).toBe(57000); // claude.md fixture: LKR 570.00
+    expect(created).toBe(false);
+  });
+});

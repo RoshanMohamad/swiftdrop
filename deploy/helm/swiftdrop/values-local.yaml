@@ -1,0 +1,49 @@
+# Local cluster (kind or minikube). Development credentials only; never reuse them elsewhere.
+#   kind load docker-image swiftdrop/core-api:dev swiftdrop/web:dev ...   (see deploy/helm/README.md)
+#   helm upgrade --install swiftdrop deploy/helm/swiftdrop -n swiftdrop --create-namespace \
+#     -f deploy/helm/swiftdrop/values-local.yaml
+
+image:
+  registry: ""
+  tag: dev
+  pullPolicy: IfNotPresent
+
+config:
+  nodeEnv: development # allows plain-HTTP cookies on localhost
+  appOrigin: http://localhost
+  cookieSecure: "false"
+  smtpUrl: smtp://mailpit:1025
+
+credentials:
+  create: true
+  existingSecret: swiftdrop-credentials
+  data:
+    postgres-password: local-development-only
+    rabbitmq-user: guest
+    rabbitmq-password: guest
+    minio-access-key: swiftdrop
+    minio-secret-key: local-development-only
+
+mailpit:
+  enabled: true
+
+coreApi:
+  replicas: 1
+web:
+  replicas: 1
+
+autoscaling:
+  enabled: false
+
+ingress:
+  className: nginx
+  host: localhost
+  tls:
+    enabled: false
+
+postgres:
+  storage: 2Gi
+rabbitmq:
+  storage: 1Gi
+minio:
+  storage: 2Gi

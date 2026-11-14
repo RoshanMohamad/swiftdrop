@@ -62,15 +62,15 @@ const workers = startParcelEventWorkers(
   workerState,
   new ReceiptService(db, config),
 );
-const server = app.listen(config.PORT, "127.0.0.1", () =>
-  console.log(`SwiftDrop API listening at http://127.0.0.1:${config.PORT}`),
+const server = app.listen(config.PORT, config.HOST, () =>
+  console.log(`SwiftDrop API listening at http://${config.HOST}:${config.PORT}`),
 );
 const internalServer = internalApp.listen(
   config.INTERNAL_PORT,
-  "127.0.0.1",
+  config.INTERNAL_HOST,
   () =>
     console.log(
-      `SwiftDrop internal API listening at http://127.0.0.1:${config.INTERNAL_PORT}`,
+      `SwiftDrop internal API listening at http://${config.INTERNAL_HOST}:${config.INTERNAL_PORT}`,
     ),
 );
 const realtime = createRealtimeGateway({
