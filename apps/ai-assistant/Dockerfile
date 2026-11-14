@@ -5,6 +5,10 @@ ARG NODE_IMAGE=node:24-alpine
 
 FROM ${NODE_IMAGE} AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
+# Optional npm mirror: docker compose build --build-arg NPM_REGISTRY=https://registry.yarnpkg.com
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY}
+RUN echo "registry=${NPM_REGISTRY}" > /root/.npmrc
 RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
 WORKDIR /app
 COPY . .

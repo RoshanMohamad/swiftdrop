@@ -79,6 +79,10 @@ Every deployable has its own multi-stage Dockerfile (compiled JS plus production
 `apps/{core-api,outbox-relay,webhook-svc,notification-svc,ai-assistant,web}/Dockerfile`, plus
 `packages/db/Dockerfile` (migrations job) and `deploy/nginx/Dockerfile` (compose gateway).
 
+If `registry.npmjs.org` is unreachable from the build host, build through a mirror:
+`docker compose build --build-arg NPM_REGISTRY=https://registry.yarnpkg.com` (the argument defaults to
+the normal registry and is only used while installing dependencies).
+
 `docker compose up` starts the infrastructure and the whole application: `init-secrets` creates the
 auth keys in a volume, `migrate` applies Prisma migrations, `provision-notification-svc` creates the
 notification signing key once, then `core-api`, `outbox-relay`, `webhook-svc`, `notification-svc`,
