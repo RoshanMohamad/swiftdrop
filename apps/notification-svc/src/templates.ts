@@ -1,11 +1,9 @@
-import type { NotificationEvent, NotificationRecipient } from "./types.js";
-
-export interface RenderedNotification {
-  templateId: string;
-  subject: string;
-  emailBody: string;
-  smsBody: string;
-}
+import type {
+  NotificationEvent,
+  NotificationRecipient,
+  NotificationTemplateRenderer,
+  RenderedNotification,
+} from "./types.js";
 
 const humanStatus = (status: string) =>
   status
@@ -33,4 +31,10 @@ export function renderNotification(
     emailBody: `Your parcel ${recipient.trackingNumber} is now ${status}${place}.`,
     smsBody: `SwiftDrop ${recipient.trackingNumber}: ${status}${place}.`,
   };
+}
+
+export class DefaultNotificationTemplateRenderer implements NotificationTemplateRenderer {
+  render(event: NotificationEvent, recipient: NotificationRecipient) {
+    return renderNotification(event, recipient);
+  }
 }

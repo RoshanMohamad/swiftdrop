@@ -15,17 +15,47 @@ export interface NotificationRecipient {
   recipientPhone: string;
 }
 
-export interface RecipientLookup {
+export interface EventConsumer {
+  start(): Promise<void>;
+  checkReady(): Promise<boolean>;
+  stop(): Promise<void>;
+}
+
+export interface ContactLookupClient {
   lookup(event: NotificationEvent): Promise<NotificationRecipient>;
 }
 
-export interface MessageSender {
-  send(input: {
-    recipient: string;
-    subject?: string;
-    body: string;
-    eventId: string;
-  }): Promise<{ providerMessageId?: string }>;
+export interface NotificationMessage {
+  recipient: string;
+  subject?: string;
+  body: string;
+  eventId: string;
+}
+
+export interface NotificationSendResult {
+  providerMessageId?: string;
+}
+
+export interface EmailSender {
+  send(input: NotificationMessage): Promise<NotificationSendResult>;
+}
+
+export interface SmsSender {
+  send(input: NotificationMessage): Promise<NotificationSendResult>;
+}
+
+export interface RenderedNotification {
+  templateId: string;
+  subject: string;
+  emailBody: string;
+  smsBody: string;
+}
+
+export interface NotificationTemplateRenderer {
+  render(
+    event: NotificationEvent,
+    recipient: NotificationRecipient,
+  ): RenderedNotification;
 }
 
 export interface NotificationProgress {

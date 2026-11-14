@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { notificationLookupResultSchema } from "@swiftdrop/contracts";
 import { signServiceEventToken } from "@swiftdrop/contracts/service-auth";
 import { z } from "zod";
-import type { NotificationEvent, RecipientLookup } from "./types.js";
+import type { ContactLookupClient, NotificationEvent } from "./types.js";
 
 const signerSchema = z
   .object({
@@ -18,7 +18,7 @@ const signerSchema = z
   })
   .strict();
 
-export class ServiceJwtRecipientLookup implements RecipientLookup {
+export class ServiceJwtContactLookupClient implements ContactLookupClient {
   constructor(
     private readonly internalApiUrl: string,
     private readonly signerMetadataFile: string,

@@ -1,153 +1,103 @@
 import {
   connect,
+  type Channel,
   type ChannelModel,
-  type ConfirmChannel,
-  type ConsumeMessage,
+  type Options,
 } from "amqplib";
-import {
-  isSwiftDropEvent,
-  QUEUES,
-  type SwiftDropEvent,
-} from "@swiftdrop/contracts";
 import type { Logger } from "pino";
-import { NotificationProcessingError, NotificationService } from "./service.js";
+import type { EventConsumer } from "./types.js";
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const DLQ = "notifications.dlq";
+export type RabbitConnector = (
+  url: string | Options.Connect,
+) => Promise<ChannelModel>;
 
-export class RabbitNotificationConsumer {
-  readonly state = { connected: false };
-  private stopped = false;
+/**
+ * RabbitMQ connectivity skeleton for the notification worker.
+ *
+ * It opens a connection/channel for readiness only. It intentionally does not
+ * declare M08-owned topology, register a consumer, acknowledge, reject or
+ * republish messages. Message consumption is a later integration increment.
+ */
+export class RabbitMqEventConsumerSkeleton implements EventConsumer {
   private connection?: ChannelModel;
-  private channel?: ConfirmChannel;
+  private channel?: Channel;
+  private connecting?: Promise<boolean>;
+  private stopped = false;
+  private ready = false;
 
   constructor(
     private readonly url: string,
-    private readonly service: NotificationService,
-    private readonly logger: Logger,
+    private readonly logger: Pick<Logger, "info" | "warn">,
+    private readonly connector: RabbitConnector = connect,
   ) {}
 
-  start() {
-    const task = this.run();
-    return {
-      state: this.state,
-      stop: async () => {
-        this.stopped = true;
-        await this.close();
-        await task;
-      },
-    };
+  async start() {
+    this.stopped = false;
+    await this.ensureConnected();
   }
 
-  private async run() {
-    let delay = 1_000;
-    while (!this.stopped) {
-      try {
-        const connection = await connect(
-          `${this.url}${this.url.includes("?") ? "&" : "?"}heartbeat=10`,
-        );
-        this.connection = connection;
-        let open = true;
-        connection.on("error", () => {
-          open = false;
-          this.state.connected = false;
-        });
-        connection.on("close", () => {
-          open = false;
-          this.state.connected = false;
-        });
-        const channel = await connection.createConfirmChannel();
-        this.channel = channel;
-        // M08 owns declarations. M09 refuses readiness until that topology exists.
-        await channel.checkQueue(QUEUES.NOTIFICATIONS);
-        await channel.checkQueue(DLQ);
-        await channel.prefetch(1);
-        await channel.consume(QUEUES.NOTIFICATIONS, (message) => {
-          if (message) void this.handle(channel, message);
-        });
-        this.state.connected = true;
-        delay = 1_000;
-        while (!this.stopped && open) await wait(500);
-      } catch {
-        this.state.connected = false;
-        this.logger.warn(
-          { error: "BROKER_UNAVAILABLE" },
-          "Notification broker unavailable",
-        );
-        await this.close();
-        if (!this.stopped) {
-          await wait(delay);
-          delay = Math.min(delay * 2, 15_000);
-        }
-      }
-    }
+  async checkReady() {
+    if (this.stopped) return false;
+    if (this.ready) return true;
+    return this.ensureConnected();
   }
 
-  private async handle(channel: ConfirmChannel, message: ConsumeMessage) {
-    let event: SwiftDropEvent;
-    try {
-      const parsed: unknown = JSON.parse(message.content.toString("utf8"));
-      if (
-        !isSwiftDropEvent(parsed) ||
-        parsed.eventId !== message.properties.messageId
-      )
-        throw new Error("INVALID_EVENT");
-      event = parsed;
-    } catch {
-      await this.park(channel, message, "INVALID_EVENT");
-      return;
-    }
-    try {
-      const result = await this.service.process(event);
-      if (result === "busy") channel.nack(message, false, true);
-      else channel.ack(message);
-    } catch (error) {
-      if (!(error instanceof NotificationProcessingError)) {
-        channel.nack(message, false, true);
-        return;
-      }
-      if (error.attempts <= 3) {
-        channel.nack(message, false, true);
-        return;
-      }
-      await this.park(channel, message, "PROCESSING_FAILED");
-    }
-  }
-
-  private async park(
-    channel: ConfirmChannel,
-    message: ConsumeMessage,
-    failure: "INVALID_EVENT" | "PROCESSING_FAILED",
-  ) {
-    try {
-      channel.sendToQueue(DLQ, message.content, {
-        persistent: true,
-        contentType: "application/json",
-        messageId: message.properties.messageId,
-        headers: {
-          ...message.properties.headers,
-          "x-swiftdrop-failure": failure,
-        },
-      });
-      await channel.waitForConfirms();
-      channel.ack(message);
-    } catch {
-      channel.nack(message, false, true);
-    }
-  }
-
-  private async close() {
+  async stop() {
+    this.stopped = true;
+    this.ready = false;
     try {
       await this.channel?.close();
     } catch {
-      // Connection may already be closed.
+      // The broker may already have closed the channel.
     }
     try {
       await this.connection?.close();
     } catch {
-      // Connection may already be closed.
+      // The broker may already have closed the connection.
     }
     this.channel = undefined;
     this.connection = undefined;
+  }
+
+  private ensureConnected() {
+    if (!this.connecting) {
+      this.connecting = this.open().finally(() => {
+        this.connecting = undefined;
+      });
+    }
+    return this.connecting;
+  }
+
+  private async open() {
+    if (this.stopped) return false;
+    try {
+      const connection = await this.connector(
+        `${this.url}${this.url.includes("?") ? "&" : "?"}heartbeat=10`,
+      );
+      if (this.stopped) {
+        await connection.close();
+        return false;
+      }
+      this.connection = connection;
+      connection.on("error", () => {
+        this.ready = false;
+      });
+      connection.on("close", () => {
+        this.ready = false;
+        this.connection = undefined;
+        this.channel = undefined;
+      });
+      this.channel = await connection.createChannel();
+      this.ready = true;
+      this.logger.info("RabbitMQ readiness connection established");
+      return true;
+    } catch {
+      this.ready = false;
+      this.logger.warn(
+        { error: "BROKER_UNAVAILABLE" },
+        "RabbitMQ readiness check failed",
+      );
+      return false;
+    }
   }
 }

@@ -1,7 +1,9 @@
 import nodemailer from "nodemailer";
-import type { MessageSender } from "./types.js";
+import type { Logger } from "pino";
+import { maskPhone } from "./masking.js";
+import type { EmailSender, NotificationMessage, SmsSender } from "./types.js";
 
-export class SmtpEmailSender implements MessageSender {
+export class SmtpEmailSender implements EmailSender {
   private readonly transport;
 
   constructor(
@@ -28,9 +30,15 @@ export class SmtpEmailSender implements MessageSender {
   }
 }
 
-/** Development adapter: performs no external send and never logs the recipient. */
-export class MockSmsSender implements MessageSender {
-  async send(input: { eventId: string }) {
+/** Development adapter: performs no external send and logs only a masked phone. */
+export class MockSmsSender implements SmsSender {
+  constructor(private readonly logger: Pick<Logger, "info">) {}
+
+  async send(input: NotificationMessage) {
+    this.logger.info(
+      { eventId: input.eventId, recipientMasked: maskPhone(input.recipient) },
+      "Mock SMS accepted",
+    );
     return { providerMessageId: `mock:${input.eventId}` };
   }
 }

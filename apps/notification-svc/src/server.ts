@@ -1,75 +1,67 @@
-import { createServer } from "node:http";
-import pino from "pino";
 import { createDatabase } from "@swiftdrop/db";
+import { createNotificationRuntime } from "./app.js";
 import { loadNotificationConfig } from "./config.js";
-import { ServiceJwtRecipientLookup } from "./lookup.js";
-import { RabbitNotificationConsumer } from "./rabbit.js";
-import { MockSmsSender, SmtpEmailSender } from "./senders.js";
-import { NotificationService } from "./service.js";
-import { PrismaNotificationProgress } from "./store.js";
+import { createNotificationLogger } from "./logger.js";
+import { RabbitMqEventConsumerSkeleton } from "./rabbit.js";
 
 const config = loadNotificationConfig();
-const logger = pino({
-  redact: {
-    paths: ["email", "*.email", "phone", "*.phone", "recipient", "*.recipient"],
-    censor: "[REDACTED]",
-  },
-});
-const db = createDatabase(config.DATABASE_URL);
-const service = new NotificationService(
-  new PrismaNotificationProgress(db),
-  new ServiceJwtRecipientLookup(
-    config.INTERNAL_API_URL,
-    config.signerMetadataFile,
-  ),
-  new SmtpEmailSender(config.SMTP_URL, config.NOTIFICATION_FROM),
-  new MockSmsSender(),
-);
-const consumer = new RabbitNotificationConsumer(
+const logger = createNotificationLogger(config);
+const database = createDatabase(config.DATABASE_URL);
+const eventConsumer = new RabbitMqEventConsumerSkeleton(
   config.RABBITMQ_URL,
-  service,
   logger,
-).start();
-const health = createServer((request, response) => {
-  const path = new URL(request.url ?? "/", "http://localhost").pathname;
-  if (path === "/healthz") {
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ status: "ok" }));
-    return;
-  }
-  if (path === "/readyz") {
-    response.writeHead(consumer.state.connected ? 200 : 503, {
-      "content-type": "application/json",
-    });
-    response.end(
-      JSON.stringify({
-        status: consumer.state.connected ? "ready" : "not_ready",
-        rabbitmq: consumer.state.connected,
-      }),
-    );
-    return;
-  }
-  response.writeHead(404).end();
+);
+const runtime = createNotificationRuntime({
+  database,
+  eventConsumer,
+  logger,
+  host: config.NOTIFICATION_HOST,
+  port: config.NOTIFICATION_PORT,
+  readinessTimeoutMs: config.NOTIFICATION_READINESS_TIMEOUT_MS,
 });
-health.listen(config.NOTIFICATION_PORT, "127.0.0.1");
 
 let stopping = false;
-async function shutdown() {
+async function shutdown(signal: NodeJS.Signals) {
   if (stopping) return;
   stopping = true;
-  const timeout = setTimeout(() => process.exit(1), 10_000);
+  logger.info({ signal }, "Notification service stopping");
+  const timeout = setTimeout(() => {
+    logger.error("Notification service graceful shutdown timed out");
+    process.exit(1);
+  }, 10_000);
   timeout.unref();
   try {
-    await new Promise<void>((done, fail) =>
-      health.close((error) => (error ? fail(error) : done())),
-    );
-    await consumer.stop();
-    await db.$disconnect();
+    await runtime.stop();
     clearTimeout(timeout);
-    process.exit(0);
+    logger.info("Notification service stopped");
+    process.exitCode = 0;
   } catch {
-    process.exit(1);
+    clearTimeout(timeout);
+    logger.error(
+      { error: "SHUTDOWN_FAILED" },
+      "Notification service shutdown failed",
+    );
+    process.exitCode = 1;
   }
 }
-process.on("SIGINT", () => void shutdown());
-process.on("SIGTERM", () => void shutdown());
+
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+
+runtime.start().catch(async (error: unknown) => {
+  const code =
+    error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+  logger.fatal(
+    {
+      error: "STARTUP_FAILED",
+      code: code ?? "UNKNOWN",
+      host: config.NOTIFICATION_HOST,
+      port: config.NOTIFICATION_PORT,
+    },
+    code === "EADDRINUSE"
+      ? "Notification service address is already in use"
+      : "Notification service failed",
+  );
+  await runtime.stop().catch(() => undefined);
+  process.exitCode = 1;
+});

@@ -1,12 +1,14 @@
 import type { SwiftDropEvent } from "@swiftdrop/contracts";
 import { maskEmail, maskPhone } from "./masking.js";
-import { renderNotification } from "./templates.js";
+import { DefaultNotificationTemplateRenderer } from "./templates.js";
 import type {
-  MessageSender,
+  ContactLookupClient,
+  EmailSender,
   NotificationChannel,
   NotificationEvent,
   NotificationProgress,
-  RecipientLookup,
+  NotificationTemplateRenderer,
+  SmsSender,
 } from "./types.js";
 
 export class NotificationProcessingError extends Error {
@@ -18,9 +20,10 @@ export class NotificationProcessingError extends Error {
 export class NotificationService {
   constructor(
     private readonly progress: NotificationProgress,
-    private readonly lookup: RecipientLookup,
-    private readonly email: MessageSender,
-    private readonly sms: MessageSender,
+    private readonly lookup: ContactLookupClient,
+    private readonly email: EmailSender,
+    private readonly sms: SmsSender,
+    private readonly templates: NotificationTemplateRenderer = new DefaultNotificationTemplateRenderer(),
   ) {}
 
   async process(event: SwiftDropEvent) {
@@ -51,7 +54,7 @@ export class NotificationService {
       recipient.parcelId !== event.data.parcelId
     )
       throw new Error("Notification lookup did not match the event.");
-    const rendered = renderNotification(event, recipient);
+    const rendered = this.templates.render(event, recipient);
     let failed = false;
     failed =
       (await this.deliverChannel({
@@ -80,7 +83,7 @@ export class NotificationService {
   private async deliverChannel(input: {
     event: NotificationEvent;
     channel: NotificationChannel;
-    sender: MessageSender;
+    sender: EmailSender | SmsSender;
     recipient: string;
     recipientMasked: string;
     templateId: string;

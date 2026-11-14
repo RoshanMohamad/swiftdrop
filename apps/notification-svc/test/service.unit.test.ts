@@ -7,9 +7,10 @@ import { maskEmail, maskPhone } from "../src/masking.js";
 import { NotificationService } from "../src/service.js";
 import { renderNotification } from "../src/templates.js";
 import type {
-  MessageSender,
+  ContactLookupClient,
+  EmailSender,
   NotificationProgress,
-  RecipientLookup,
+  SmsSender,
 } from "../src/types.js";
 
 const created: ParcelCreatedEvent = {
@@ -65,14 +66,16 @@ function harness(options?: {
     complete: jest.fn(async () => undefined),
     fail: jest.fn(async () => 2),
   };
-  const lookup: RecipientLookup = { lookup: jest.fn(async () => recipient) };
-  const email: MessageSender = {
+  const lookup: ContactLookupClient = {
+    lookup: jest.fn(async () => recipient),
+  };
+  const email: EmailSender = {
     send: jest.fn(async () => {
       if (options?.failEmail) throw new Error("provider included private data");
       return { providerMessageId: "smtp-1" };
     }),
   };
-  const sms: MessageSender = {
+  const sms: SmsSender = {
     send: jest.fn(async () => ({ providerMessageId: "mock-1" })),
   };
   return {
