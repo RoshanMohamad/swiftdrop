@@ -135,8 +135,7 @@ async function mutation(
   )
     .map((cookie) => cookie.split(";")[0])
     .join("; ");
-  return request(api.app)
-    [method](path)
+  return request(api.app)[method](path)
     .set("Authorization", `Bearer ${token}`)
     .set("Origin", origin)
     .set("X-CSRF-Token", csrf.body.csrfToken)
