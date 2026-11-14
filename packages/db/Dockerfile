@@ -15,7 +15,7 @@ RUN echo "registry=${NPM_REGISTRY}" > /root/.npmrc
 # --frozen-lockfile installs on slow networks. The lockfile still pins every version and integrity hash.
 #   docker compose build --build-arg PNPM_FAST_INSTALL=true
 ARG PNPM_FAST_INSTALL=false
-RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@11.25.0 --activate
+RUN for i in 1 2 3 4 5; do apk add --no-cache openssl && corepack enable && corepack prepare pnpm@11.25.0 --activate && break; [ "$i" = 5 ] && exit 1; sleep 5; done
 WORKDIR /app
 COPY . .
 # "--filter ." adds the workspace root so tsx (used by the seed) is installed too.

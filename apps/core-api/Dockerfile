@@ -12,7 +12,7 @@ RUN echo "registry=${NPM_REGISTRY}" > /root/.npmrc
 # --frozen-lockfile installs on slow networks. The lockfile still pins every version and integrity hash.
 #   docker compose build --build-arg PNPM_FAST_INSTALL=true
 ARG PNPM_FAST_INSTALL=false
-RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@11.25.0 --activate
+RUN for i in 1 2 3 4 5; do apk add --no-cache openssl && corepack enable && corepack prepare pnpm@11.25.0 --activate && break; [ "$i" = 5 ] && exit 1; sleep 5; done
 WORKDIR /app
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
@@ -25,7 +25,7 @@ RUN if [ "$PNPM_FAST_INSTALL" = true ]; then export pnpm_config_minimum_release_
 
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
-RUN apk add --no-cache openssl
+RUN for i in 1 2 3 4 5; do apk add --no-cache openssl && break; [ "$i" = 5 ] && exit 1; sleep 5; done
 WORKDIR /app
 # loadConfig() finds the workspace root by walking up to pnpm-workspace.yaml.
 COPY --from=build /app/pnpm-workspace.yaml ./
