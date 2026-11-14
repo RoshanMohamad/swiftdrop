@@ -47,6 +47,9 @@ importers:
       '@swiftdrop/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@swiftdrop/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       amqplib:
         specifier: ^2.2.0
         version: 2.2.0

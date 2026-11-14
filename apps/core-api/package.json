@@ -16,6 +16,7 @@
   "dependencies": {
     "@swiftdrop/contracts": "workspace:*",
     "@swiftdrop/db": "workspace:*",
+    "@swiftdrop/messaging": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
     "amqplib": "^2.2.0",
     "bcrypt": "6.0.0",

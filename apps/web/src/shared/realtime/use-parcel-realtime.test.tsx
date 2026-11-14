@@ -66,6 +66,21 @@ describe("useParcelRealtime", () => {
     );
     expect(onUpdate).toHaveBeenCalledTimes(2);
     expect(onSnapshot).toHaveBeenCalledTimes(1);
+    act(() => socket.handlers.get("connect")?.());
+    expect(socket.emit).toHaveBeenLastCalledWith(
+      "room:join",
+      {
+        kind: "public",
+        trackingNumber: "SD00000000",
+        lastSequence: 4,
+      },
+      expect.any(Function),
+    );
+    act(() =>
+      socket.handlers
+        .get("parcel:reload")?.({ reason: "reconnect", sequence: 4 }),
+    );
+    expect(onSnapshot).toHaveBeenCalledTimes(2);
   });
 
   it("uses an access token for private rooms and stops after eviction", async () => {

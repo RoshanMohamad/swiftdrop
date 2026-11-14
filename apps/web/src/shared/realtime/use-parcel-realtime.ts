@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 import {
   privateRealtimeUpdateSchema,
   publicRealtimeUpdateSchema,
+  realtimeReloadSchema,
   type PrivateRealtimeUpdate,
   type PublicRealtimeUpdate,
 } from "@swiftdrop/contracts";
@@ -34,6 +35,7 @@ export function useParcelRealtime(options: PublicOptions | PrivateOptions) {
   );
   const snapshotRef = useRef(options.onSnapshot);
   const lastSequence = useRef(0);
+  const snapshotSequence = useRef<number>();
   updateRef.current = options.onUpdate as (
     update: PublicRealtimeUpdate | PrivateRealtimeUpdate,
   ) => void;
@@ -44,7 +46,6 @@ export function useParcelRealtime(options: PublicOptions | PrivateOptions) {
   useEffect(() => {
     let stopped = false;
     let socket: Socket | undefined;
-    let connectedOnce = false;
     void (async () => {
       try {
         const token =
@@ -56,12 +57,19 @@ export function useParcelRealtime(options: PublicOptions | PrivateOptions) {
           auth: token ? { token } : {},
         });
         socket.on("connect", () => {
-          if (connectedOnce) void snapshotRef.current();
-          connectedOnce = true;
+          snapshotSequence.current = undefined;
           const room =
             options.kind === "public"
-              ? { kind: "public", trackingNumber: roomId }
-              : { kind: "private", parcelId: roomId };
+              ? {
+                  kind: "public",
+                  trackingNumber: roomId,
+                  lastSequence: lastSequence.current,
+                }
+              : {
+                  kind: "private",
+                  parcelId: roomId,
+                  lastSequence: lastSequence.current,
+                };
           socket?.emit(
             "room:join",
             room,
@@ -79,10 +87,22 @@ export function useParcelRealtime(options: PublicOptions | PrivateOptions) {
           if (
             lastSequence.current > 0 &&
             parsed.data.sequence > lastSequence.current + 1
-          )
+          ) {
+            snapshotSequence.current = parsed.data.sequence;
             void snapshotRef.current();
+          }
           lastSequence.current = parsed.data.sequence;
           updateRef.current(parsed.data);
+        });
+        socket.on("parcel:reload", (raw: unknown) => {
+          const reload = realtimeReloadSchema.safeParse(raw);
+          if (
+            !reload.success ||
+            snapshotSequence.current === reload.data.sequence
+          )
+            return;
+          snapshotSequence.current = reload.data.sequence;
+          void snapshotRef.current();
         });
         socket.on("room:evicted", () => {
           setState("evicted");
