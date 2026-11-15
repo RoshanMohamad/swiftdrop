@@ -22,6 +22,10 @@ Recorded deviation from Table 9: `webhooks.q` has one extra binding, `webhook.re
 
 Queue arguments cannot change on a live queue. After pulling this change, delete an older broker's `swiftdrop.events` direct exchange and `swiftdrop.event-log` queue (`docker compose down -v` for a disposable dev broker).
 
+## Correlation ids (NFR-13)
+
+A request's `X-Correlation-ID` (accepted only as 8-64 characters of `A-Z a-z 0-9 . _ -`, otherwise a new UUID is generated) is stored in `outbox_events.correlation_id` by `outbox.add` and by the lifecycle writers, using the request-scoped context in `apps/core-api/src/shared/correlation.ts`. The relay re-validates it and publishes it as the AMQP header `x-correlation-id`. It is deliberately **not** part of the envelope, which stays the consumer contract. `notification-svc`, `webhook-svc`, the realtime consumer and the receipt worker log it; `webhook-svc` also copies it onto retry and DLQ hand-offs so it survives the retry queues. Events written outside an HTTP request, or before migration `202611140002`, have none. It is not sent to merchants in webhook requests.
+
 ## Delivery guarantees
 
 - **Producer:** state, history and outbox row commit together. The relay claims rows `FOR UPDATE SKIP LOCKED`, publishes `mandatory` + persistent with publisher confirms, and marks only the confirmed prefix. A crash between confirm and commit republishes the same `eventId` (at-least-once).
@@ -36,17 +40,22 @@ Queue arguments cannot change on a live queue. After pulling this change, delete
 
 Destination rules: HTTPS only, no embedded credentials, and every connection is checked against private, loopback, link-local, CGNAT, multicast, NAT64, 6to4/Teredo and IPv4-mapped ranges at connect time (so DNS rebinding cannot swap the target). `WEBHOOK_DEV_ALLOWED_HOSTS` permits plain HTTP to a local mock receiver and is refused in production.
 
+## Merchant webhook configuration (X-11, C-14)
+
+`merchantId` is the merchant's UUID everywhere: event `data`, `webhook_deliveries.merchant_id` (migration `202611140001_webhook_merchant_uuid`, which deletes old integer-keyed delivery rows) and the Admin filter.
+
+`webhook-svc` reloads the target on every attempt from core-api's internal listener: `GET /internal/v1/webhooks/merchants/{merchantId}/config?eventId=<id>`, authenticated with a five-minute service JWT bound to that event and parcel (scope `webhooks:config`; the notification principal is refused). The merchant in the path must be the merchant named in the persisted event, and an unconfigured, unapproved or suspended merchant returns the same 404, which webhook-svc records as `SKIPPED` (`NOT_CONFIGURED`). Any other failure is `CONFIG_UNAVAILABLE` and retried. Enable it with `WEBHOOK_SIGNER_FILE` (output of `pnpm services:provision --service webhook-svc`) plus `CORE_INTERNAL_URL`; without `WEBHOOK_SIGNER_FILE` deliveries are SKIPPED. Compose runs the provisioning job automatically. The Helm chart does not yet mount a webhook-svc signer Secret.
+
 ## Implemented
 
-FR-I1 relay, FR-I2 topology, FR-I4 dispatcher, FR-I5 Admin-only audited replay, Admin delivery-log/replay screen, `outbox.add`, health/readiness (`/healthz`, `/readyz` on ports 3101 and 3102).
+FR-I1 relay, FR-I2 topology, FR-I4 dispatcher, X-11 merchant webhook configuration lookup (below), FR-I5 Admin-only audited replay, Admin delivery-log/replay screen, `outbox.add`, health/readiness (`/healthz`, `/readyz` on ports 3101 and 3102).
 
 ## Not implemented / blocked
 
-- **X-11 merchant webhook configuration (M02) and X-03 service JWT (M01/M09)** do not exist. Without `WEBHOOK_DEV_CONFIG_FILE`, `webhook-svc` records every delivery as SKIPPED (`NOT_CONFIGURED`). No real merchant can receive webhooks until M02's lookup is wired into `WebhookConfigSource`.
-- Nothing publishes events with a `merchantId` yet (merchant orders are M02/M04). The dispatcher is exercised by tests and the manual plan below using hand-written events.
-- Only `parcel.created` is produced today; status-change events need M05's `LifecycleService` to call `outbox.add`.
+- Merchant-facing events are `parcel.created` and `parcel.status.changed`, and they carry `merchantId` only for merchant-owned parcels. Assignment events carry internal courier ids and never carry `merchantId`, so they are not delivered by webhook.
+- Status events still include the courier's internal numeric `courierId` in `data`, which webhook merchants receive. Decide whether to drop it from merchant payloads.
 - Merchant-scoped delivery log: `WebhooksService.list({ merchantId })` exists for M02 to mount; there is no merchant-facing route yet.
-- Correlation-id propagation API → outbox → consumers (NFR-13, M10) is not done. Dockerfiles, Compose entries and CI path filters for the two new services (X-14) are not added.
+- Dockerfiles and Compose entries for the two services now exist (see [operations.md](operations.md)); CI path filters (X-14) were not checked.
 - Graceful shutdown (finish in-flight messages on SIGTERM) is implemented but not verified: no automated test covers it, and the only local run was on Windows, where `kill` does not deliver a catchable signal. Check it on Linux/CI or in a container.
 
 ## Manual test: retries, DLQ and replay
@@ -58,10 +67,10 @@ cp -n .env.example .env && pnpm install --frozen-lockfile && pnpm auth:keys:gene
 pnpm db:generate && docker compose up -d --wait && pnpm db:migrate && pnpm db:seed
 ```
 
-1. Create `.local/webhooks/targets.json`: `{"7":{"url":"http://localhost:4010/hook","secret":"local-dev-secret-0123456789"}}` and set `WEBHOOK_DEV_CONFIG_FILE=.local/webhooks/targets.json` and `WEBHOOK_DEV_ALLOWED_HOSTS=localhost` in `.env`.
+1. Create `.local/webhooks/targets.json`: `{"<merchant-uuid>":{"url":"http://localhost:4010/hook","secret":"local-dev-secret-0123456789"}}` and set `WEBHOOK_DEV_CONFIG_FILE=.local/webhooks/targets.json` and `WEBHOOK_DEV_ALLOWED_HOSTS=localhost` in `.env`.
 2. Start a receiver that returns 500 (for example `node -e "require('http').createServer((q,r)=>{r.statusCode=500;r.end()}).listen(4010)"`), then `pnpm dev`.
 3. Insert a merchant event (replace the two UUIDs with any new ones):
-   `docker compose exec postgres psql -U swiftdrop -d swiftdrop -c "INSERT INTO outbox_events (id,event_id,event_type,aggregate_id,payload) VALUES ('<E>','<E>','parcel.created','<P>','{\"eventId\":\"<E>\",\"type\":\"parcel.created\",\"version\":1,\"occurredAt\":\"2026-11-07T10:00:00.000Z\",\"sequence\":1,\"data\":{\"parcelId\":\"<P>\",\"trackingNo\":\"SD-TEST0001-1\",\"merchantId\":7,\"to\":\"CREATED\"}}');"`
+   `docker compose exec postgres psql -U swiftdrop -d swiftdrop -c "INSERT INTO outbox_events (id,event_id,event_type,aggregate_id,payload) VALUES ('<E>','<E>','parcel.created','<P>','{\"eventId\":\"<E>\",\"type\":\"parcel.created\",\"version\":1,\"occurredAt\":\"2026-11-07T10:00:00.000Z\",\"sequence\":1,\"data\":{\"parcelId\":\"<P>\",\"trackingNo\":\"SD-TEST0001-1\",\"merchantId\":\"<merchant-uuid>\",\"to\":\"CREATED\"}}');"`
 4. Expect: `outbox_events.published_at` set within ~2 s; `webhook_deliveries.status = PENDING`; a new row in `webhook_attempts` after each of 0, 30, 60, … seconds. After 31.5 minutes plus request time the status is `FAILED` with attempts 0..6 and one message in `webhooks.dlq` (RabbitMQ UI at http://localhost:15672, guest/guest).
 4a. To avoid waiting, make the receiver return 200 after a few hits: the delivery turns `SUCCESS` and retries stop. Check the signature with the verification rule above.
 5. Sign in at http://localhost:5173/auth/login as `admin@swiftdrop.test`, open **Webhook deliveries** (`/admin/webhooks`), filter Failed, **View details**, enter a reason (3+ characters) and **Replay delivery**. Expect "Replay run 1 queued", status Pending, then (receiver returning 200) Delivered; the receiver sees the **original** `X-SwiftDrop-Event-Id` with attempt 0. Replay history lists your reason and user id.
@@ -70,3 +79,5 @@ pnpm db:generate && docker compose up -d --wait && pnpm db:migrate && pnpm db:se
 ## Checks run for this slice
 
 `pnpm --filter @swiftdrop/messaging test`, `pnpm --filter outbox-relay test`, `pnpm --filter webhook-svc test` (unit: topology, envelope privacy, relay batching/quarantine/ordering, signing, SSRF guard, HTTP sender, full processor state machine including crash/resume and replay); `pnpm --filter webhook-svc test:integration` (real RabbitMQ 4 + PostgreSQL via Testcontainers: delivery, ladder through the retry queues, seven attempts then DLQ, replay, no fan-out, mandatory-routing rejection); core-api integration (envelope on booking; Admin list/detail/replay, concurrency, role/CSRF/origin denial); web tests with axe on the new page.
+
+Cross-service checks in `apps/core-api/test` (real PostgreSQL, RabbitMQ and, for receipts, MinIO via Testcontainers; run on Node 24, which Jest needs to load `minio`): `eventflow.integration.test.ts` drives the real `LifecycleService`, outbox, relay `publishBatch`, production topology, webhook consumer/processor and notification processor, and asserts that one status update gives exactly one notification and one signed webhook (verified signature, original `eventId`), stays at one each when the broker redelivers the event, sends no webhook for a parcel without a merchant, keeps two parcels independent, and carries the request's correlation id across the broker. The merchant URL there comes from a stub config source, not the HTTP source, and the receiver and email/SMS senders are recorders. `receipts.integration.test.ts` covers PDF generation, signed download and regeneration against a live MinIO.

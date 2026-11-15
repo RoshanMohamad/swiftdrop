@@ -19,6 +19,18 @@ export function loadConfig() {
         .default("development"),
       PORT: z.coerce.number().int().min(1).max(65535).default(3000),
       INTERNAL_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+      // Bind addresses. Loopback by default; containers set HOST=0.0.0.0. The internal listener
+      // must never be published or routed through nginx/Ingress.
+      HOST: z.string().min(1).default("127.0.0.1"),
+      INTERNAL_HOST: z.string().min(1).default("127.0.0.1"),
+      // Number of trusted reverse-proxy hops (nginx / Ingress) in front of the API, so req.ip and
+      // the per-IP rate limits see the real client. 0 = no proxy (default for local dev).
+      TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+      // Base URL of outbox-relay's health server; when set, /api/ready reports the relay.
+      OUTBOX_RELAY_URL: z.preprocess(
+        (value) => (value === "" ? undefined : value),
+        z.url().optional(),
+      ),
       APP_ORIGIN: z.url(),
       API_ISSUER: z.url(),
       HUMAN_AUDIENCE: z.string().min(1),
@@ -49,6 +61,31 @@ export function loadConfig() {
         .string()
         .min(1)
         .default(".local/auth/oauth.key"),
+      // Separate key for encrypting TOTP secrets at rest (auth plan 4.7). Rotating it needs a
+      // new MFA_KEY_VERSION and a re-encryption run; losing it forces everyone to re-enrol.
+      MFA_SECRET_FILE: z.string().min(1).default(".local/auth/mfa.key"),
+      MFA_KEY_VERSION: z.coerce.number().int().min(1).default(1),
+      // Comma-separated roles that must have a second factor before using privileged routes.
+      // Empty by default so a local demo works; the proposed production policy is
+      // ADMIN,DISPATCHER (plus merchants before credential management).
+      MFA_REQUIRED_ROLES: z
+        .string()
+        .default("")
+        .transform((value) =>
+          value
+            .split(",")
+            .map((role) => role.trim())
+            .filter(Boolean),
+        )
+        .pipe(
+          z.array(
+            z.enum(["CUSTOMER", "MERCHANT", "COURIER", "DISPATCHER", "ADMIN"]),
+          ),
+        ),
+      // How recently a sensitive action needs a fresh password (and code) proof.
+      RECENT_AUTH_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+      // Security audit events older than this are deleted by `pnpm auth:cleanup`.
+      AUDIT_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(365),
       GOOGLE_CLIENT_ID: z.preprocess(
         (value) => (value === "" ? undefined : value),
         z.string().min(1).optional(),
@@ -129,11 +166,13 @@ export function loadConfig() {
   const csrfSecret = read(env.CSRF_SECRET_FILE).trim();
   const rateSecret = read(env.RATE_LIMIT_SECRET_FILE).trim();
   const oauthSecret = read(env.OAUTH_TRANSACTION_SECRET_FILE).trim();
+  const mfaSecret = read(env.MFA_SECRET_FILE).trim();
   if (
     csrfSecret.length < 43 ||
     rateSecret.length < 43 ||
     oauthSecret.length < 43 ||
-    new Set([csrfSecret, rateSecret, oauthSecret]).size !== 3
+    mfaSecret.length < 43 ||
+    new Set([csrfSecret, rateSecret, oauthSecret, mfaSecret]).size !== 4
   )
     throw new Error(
       "Independent strong CSRF and rate-limit secrets are required.",
@@ -145,6 +184,7 @@ export function loadConfig() {
       env.CSRF_SECRET_FILE,
       env.RATE_LIMIT_SECRET_FILE,
       env.OAUTH_TRANSACTION_SECRET_FILE,
+      env.MFA_SECRET_FILE,
     ].some((path) => path.includes(".local"))
   )
     throw new Error("Production refuses generated demo keys.");
@@ -169,6 +209,7 @@ export function loadConfig() {
     csrfSecret,
     rateSecret,
     oauthSecret,
+    mfaSecret,
     privateKey: read(env.AUTH_PRIVATE_KEY_FILE),
     publicKeys: z
       .record(z.string(), z.string())

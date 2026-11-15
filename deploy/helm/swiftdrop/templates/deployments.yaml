@@ -1,0 +1,106 @@
+{{- /*
+  Stateless services: one Deployment + Service each, with /healthz liveness and readiness probes.
+*/ -}}
+{{- range $key := list "coreApi" "outboxRelay" "webhookSvc" "notificationSvc" "aiAssistant" "web" }}
+{{- $svc := index $.Values $key }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.name }}
+  namespace: {{ $.Values.namespace }}
+  labels: { app.kubernetes.io/name: {{ $svc.name }}, app.kubernetes.io/part-of: swiftdrop }
+spec:
+  {{- if not (and (eq $key "coreApi") $.Values.autoscaling.enabled) }}
+  replicas: {{ $svc.replicas }}
+  {{- end }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: {{ $svc.name }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: {{ $svc.name }}, app.kubernetes.io/part-of: swiftdrop }
+    spec:
+      {{- if ne $key "web" }}
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000 }
+      {{- else }}
+      securityContext: { runAsNonRoot: true }
+      {{- end }}
+      containers:
+        - name: {{ $svc.name }}
+          image: {{ include "sd.image" (dict "root" $ "image" $svc.image) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: {{ $svc.port }} }
+            {{- if eq $key "coreApi" }}
+            - { name: internal, containerPort: {{ $svc.internalPort }} }
+            {{- end }}
+          {{- if ne $key "web" }}
+          envFrom:
+            - configMapRef: { name: swiftdrop-config }
+          env:
+            {{- if eq $key "coreApi" }}
+            {{- include "sd.credEnv" $ | nindent 12 }}
+            {{- include "sd.coreEnv" $ | nindent 12 }}
+            {{- else if eq $key "aiAssistant" }}
+            - { name: HOST, value: "0.0.0.0" }
+            - { name: CORE_API_URL, value: "http://core-api:{{ $.Values.coreApi.port }}" }
+            - { name: AI_ASSISTANT_PORT, value: {{ $svc.port | quote }} }
+            {{- else }}
+            {{- include "sd.credEnv" $ | nindent 12 }}
+            - { name: HEALTH_HOST, value: "0.0.0.0" }
+            {{- if eq $key "outboxRelay" }}
+            - { name: OUTBOX_RELAY_PORT, value: {{ $svc.port | quote }} }
+            {{- else if eq $key "webhookSvc" }}
+            - { name: WEBHOOK_SVC_PORT, value: {{ $svc.port | quote }} }
+            {{- else if eq $key "notificationSvc" }}
+            - { name: NOTIFICATION_SVC_PORT, value: {{ $svc.port | quote }} }
+            - { name: CORE_INTERNAL_URL, value: "http://core-api:{{ $.Values.coreApi.internalPort }}" }
+            - { name: NOTIFICATION_SIGNER_FILE, value: /app/.local/services/notification-svc/signer.json }
+            {{- end }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet: { path: {{ $svc.probePath }}, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: {{ $svc.probePath }}, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          {{- with $svc.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if or (eq $key "coreApi") (eq $key "notificationSvc") }}
+          volumeMounts:
+            {{- if eq $key "coreApi" }}
+            - { name: auth, mountPath: /run/swiftdrop/auth, readOnly: true }
+            {{- else }}
+            - { name: signer, mountPath: /app/.local/services/notification-svc, readOnly: true }
+            {{- end }}
+          {{- end }}
+      {{- if or (eq $key "coreApi") (eq $key "notificationSvc") }}
+      volumes:
+        {{- if eq $key "coreApi" }}
+        - name: auth
+          secret: { secretName: {{ $.Values.auth.existingSecret }} }
+        {{- else }}
+        - name: signer
+          secret: { secretName: {{ $.Values.notificationSigner.existingSecret }} }
+        {{- end }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  namespace: {{ $.Values.namespace }}
+  labels: { app.kubernetes.io/name: {{ $svc.name }}, app.kubernetes.io/part-of: swiftdrop }
+spec:
+  selector: { app.kubernetes.io/name: {{ $svc.name }} }
+  ports:
+    - { name: http, port: {{ $svc.port }}, targetPort: http }
+    {{- if eq $key "coreApi" }}
+    # Cluster-internal only (notification-svc). The Ingress never routes to this port.
+    - { name: internal, port: {{ $svc.internalPort }}, targetPort: internal }
+    {{- end }}
+{{- end }}

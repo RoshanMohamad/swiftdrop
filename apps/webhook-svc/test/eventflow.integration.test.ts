@@ -51,7 +51,8 @@ const until = async (check: () => Promise<boolean> | boolean, ms = 30_000) => {
   }
   throw new Error("Timed out waiting for condition.");
 };
-const envelope = (merchantId: number | null = 7) => {
+const MERCHANT = "33333333-3333-4333-8333-333333333333";
+const envelope = (merchantId: string | null = MERCHANT) => {
   const eventId = randomUUID();
   return {
     eventId,

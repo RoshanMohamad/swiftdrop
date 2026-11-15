@@ -5,6 +5,7 @@ import {
   type EventEnvelope,
 } from "@swiftdrop/contracts";
 import type { Prisma } from "@swiftdrop/db";
+import { currentCorrelationId } from "../correlation.js";
 
 export type OutboxTransaction = Pick<Prisma.TransactionClient, "outboxEvent">;
 
@@ -48,6 +49,7 @@ export async function addOutboxEvent(
       eventType: envelope.type,
       aggregateId: input.aggregateId,
       payload: envelope as Prisma.InputJsonObject,
+      correlationId: currentCorrelationId() ?? null,
     },
   });
   return envelope;

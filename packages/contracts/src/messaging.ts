@@ -49,12 +49,28 @@ export const eventEnvelopeSchema = z
   .strict();
 export type EventEnvelope = z.infer<typeof eventEnvelopeSchema>;
 
+/**
+ * Correlation id (NFR-13). It travels beside the envelope, never inside it: an HTTP request
+ * stores it on its outbox row, the relay publishes it as this AMQP header, and every consumer
+ * logs it. Values arriving from outside are untrusted, so only this safe shape is accepted.
+ */
+export const CORRELATION_HEADER = "x-correlation-id";
+export const CORRELATION_PATTERN = /^[A-Za-z0-9._-]{8,64}$/;
+export const correlationIdSchema = z.string().regex(CORRELATION_PATTERN);
+/** The valid correlation id in an AMQP headers object, or undefined (never throws). */
+export const correlationIdFromHeaders = (
+  headers: Record<string, unknown> | null | undefined,
+): string | undefined => {
+  const parsed = correlationIdSchema.safeParse(headers?.[CORRELATION_HEADER]);
+  return parsed.success ? parsed.data : undefined;
+};
+
 /** Fields every `parcel.*` event carries; extra type-specific fields are allowed. */
 export const parcelEventDataSchema = z
   .object({
     parcelId: z.uuid(),
     trackingNo: z.string().min(1).max(32),
-    merchantId: z.number().int().positive().nullable().optional(),
+    merchantId: z.uuid().nullable().optional(),
   })
   .loose();
 
@@ -91,7 +107,7 @@ export const webhookDeliverySchema = z.object({
   id: z.uuid(),
   eventId: z.uuid(),
   eventType: z.string(),
-  merchantId: z.number().int().positive(),
+  merchantId: z.uuid(),
   status: webhookDeliveryStatusSchema,
   currentRun: z.number().int().min(0),
   lastErrorCode: z.string().nullable(),

@@ -56,9 +56,99 @@ export class StandardPricingStrategy implements PricingStrategy {
   }
 }
 
+const MAX_FEE_CENTS = 2_147_483_647;
+
+function assertFee(feeCents: number): number {
+  if (!Number.isSafeInteger(feeCents) || feeCents < 0 || feeCents > MAX_FEE_CENTS) {
+    throw new HttpError(
+      503,
+      "PRICE_UNAVAILABLE",
+      "The current price configuration cannot be used. Please contact support.",
+    );
+  }
+  return feeCents;
+}
+
+/**
+ * ExpressPricing
+ * The Standard fee scaled by a multiplier. claude.md gives no Express formula, so no number is
+ * hard-coded: the multiplier (in basis points, 10000 = 1.0x) must be supplied by configuration.
+ * Integer arithmetic only; no floats for currency.
+ */
+export class ExpressPricingStrategy implements PricingStrategy {
+  private readonly standard = new StandardPricingStrategy();
+  constructor(private readonly multiplierBasisPoints: number) {
+    if (
+      !Number.isSafeInteger(multiplierBasisPoints) ||
+      multiplierBasisPoints < 10_000
+    )
+      throw new RangeError(
+        "Express multiplier must be an integer number of basis points of at least 10000.",
+      );
+  }
+
+  calculate(input: QuoteCalculationInput, rule: PricingRuleSnapshot): number {
+    const standard = this.standard.calculate(input, rule);
+    const scaled =
+      (BigInt(standard) * BigInt(this.multiplierBasisPoints) + 5_000n) /
+      10_000n;
+    return assertFee(Number(scaled));
+  }
+}
+
+export interface MerchantContractRate {
+  baseCents: number;
+  perExtraKgCents: number;
+}
+
+/**
+ * MerchantContractPricing
+ * Applies the same weight formula as Standard but with the merchant's negotiated rates, which
+ * the caller passes in. The zone rule is only the route reference and is not used for the fee.
+ */
+export class MerchantContractPricingStrategy implements PricingStrategy {
+  constructor(private readonly contract: MerchantContractRate) {
+    for (const value of [contract.baseCents, contract.perExtraKgCents])
+      if (!Number.isSafeInteger(value) || value < 0)
+        throw new RangeError("Contract rates must be non-negative integer cents.");
+  }
+
+  calculate(input: QuoteCalculationInput, rule: PricingRuleSnapshot): number {
+    return new StandardPricingStrategy().calculate(input, {
+      ...rule,
+      baseCents: this.contract.baseCents,
+      perExtraKgCents: this.contract.perExtraKgCents,
+    });
+  }
+}
+
+export type PricingStrategyOptions = {
+  expressMultiplierBasisPoints?: number;
+  merchantContract?: MerchantContractRate;
+};
+
 export class PricingStrategyFactory {
-  static getStrategy(type: "STANDARD" = "STANDARD"): PricingStrategy {
+  static getStrategy(
+    type: "STANDARD" | "EXPRESS" | "MERCHANT_CONTRACT" = "STANDARD",
+    options: PricingStrategyOptions = {},
+  ): PricingStrategy {
     switch (type) {
+      case "EXPRESS":
+        if (options.expressMultiplierBasisPoints === undefined)
+          throw new HttpError(
+            503,
+            "PRICE_UNAVAILABLE",
+            "Express pricing is not configured.",
+          );
+        return new ExpressPricingStrategy(options.expressMultiplierBasisPoints);
+      case "MERCHANT_CONTRACT":
+        if (!options.merchantContract)
+          throw new HttpError(
+            503,
+            "PRICE_UNAVAILABLE",
+            "No contract rate was supplied for this merchant.",
+          );
+        return new MerchantContractPricingStrategy(options.merchantContract);
       case "STANDARD":
       default:
         return new StandardPricingStrategy();

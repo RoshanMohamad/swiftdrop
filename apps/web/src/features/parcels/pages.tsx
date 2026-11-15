@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useLiveRefresh } from "../../shared/realtime/index.js";
 import {
   ApiError,
   createParcel,
@@ -652,6 +653,10 @@ export function ParcelDetail() {
       active = false;
     };
   }, [id, retry]);
+  useLiveRefresh({
+    parcelId: id,
+    onChange: () => setRetry((value) => value + 1),
+  });
   async function prepareReceipt() {
     setReceiptPending(true);
     setReceiptError("");
@@ -830,6 +835,10 @@ export function PublicTracking() {
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [trackingNumber, retry]);
+  useLiveRefresh({
+    trackingNumber,
+    onChange: () => setRetry((value) => value + 1),
+  });
   return (
     <section className="auth-panel">
       <span className="eyebrow">SwiftDrop tracking</span>

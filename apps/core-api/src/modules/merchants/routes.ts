@@ -11,7 +11,7 @@ import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
 import { protectMutations } from "../../shared/mutations.js";
 import type { RateLimiter } from "../../shared/rate-limit.js";
-import { authenticate, requireRole } from "../auth/index.js";
+import { authenticate, requireRecentAuth, requireRole } from "../auth/index.js";
 import type { AuthService } from "../auth/service.js";
 import { MerchantsService } from "./service.js";
 import {
@@ -97,6 +97,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) =>
       res
         .status(201)
@@ -112,6 +113,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) => {
       const id = String(req.params.id);
       if (!isUuid(id))
@@ -124,6 +126,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) => {
       const id = String(req.params.id);
       if (!isUuid(id))
@@ -144,6 +147,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) =>
       res.json(
         await merchants.saveWebhookSettings(
@@ -157,6 +161,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (_req, res) =>
       res.json(await merchants.rotateWebhookSecret(res.locals.user.id)),
   );
@@ -165,6 +170,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("ADMIN"),
+    requireRecentAuth(auth),
     async (req, res) => {
       const id = String(req.params.id);
       if (

@@ -41,7 +41,7 @@ export class PricingService {
    * Generates a 15-minute quote for delivery between two active districts.
    * Conforms to FR-P2.
    */
-  async createQuote(userId: number, input: QuoteInput) {
+  private async priceRoute(input: QuoteInput) {
     const [origin, destination] = await Promise.all([
       this.db.zone.findFirst({
         where: {
@@ -99,6 +99,31 @@ export class PricingService {
       price,
     );
 
+    return { origin, destination, price, feeCents, now };
+  }
+
+  /**
+   * Read-only fee estimate: same route lookup and strategy as createQuote, but nothing is stored.
+   * Backs GET /quotes/estimate so the AI assistant can quote through the REST API (claude.md).
+   */
+  async estimate(input: QuoteInput) {
+    const { origin, destination, feeCents } = await this.priceRoute(input);
+    return {
+      ...input,
+      feeCents,
+      currency: "LKR" as const,
+      originTown: origin.town,
+      destinationTown: destination.town,
+    };
+  }
+
+  /**
+   * Generates a 15-minute quote for delivery between two active districts.
+   * Conforms to FR-P2.
+   */
+  async createQuote(userId: number, input: QuoteInput) {
+    const { origin, destination, price, feeCents, now } =
+      await this.priceRoute(input);
     const expiresAt = new Date(now.getTime() + 15 * 60_000);
     const quote = await this.db.quote.create({
       data: {

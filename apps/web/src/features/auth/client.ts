@@ -44,6 +44,20 @@ import {
   type MerchantOrderStatus,
   type CreateMerchantApiClient,
   emptySchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  sessionListSchema,
+  loginResultSchema,
+  mfaChallengeVerifySchema,
+  mfaChallengeRecoverSchema,
+  mfaConfirmSchema,
+  mfaEnrolResultSchema,
+  mfaRecoveryCodesSchema,
+  mfaStatusSchema,
+  reauthenticateSchema,
+  reauthenticateResultSchema,
+  type LoginResult,
   merchantWebhookSettingsSchema,
   saveMerchantWebhookSchema,
   saveMerchantWebhookResponseSchema,
@@ -134,6 +148,16 @@ export async function resendVerification(email: string) {
   });
 }
 export const bearer = async () => current ?? refreshSession();
+/**
+ * The UI registers one handler that asks the user for their password (and code) and resolves
+ * true once the server accepted it, or false if they cancel. Without a handler, a
+ * REAUTH_REQUIRED answer simply reaches the caller as an error.
+ */
+type ReauthHandler = () => Promise<boolean>;
+let reauthHandler: ReauthHandler | null = null;
+export function setReauthHandler(handler: ReauthHandler | null) {
+  reauthHandler = handler;
+}
 export const sessionExpiredEvents = new EventTarget();
 function expireSession() {
   blockBootstrap();
@@ -148,6 +172,17 @@ async function authenticated<T>(
   try {
     return await operation(session);
   } catch (error) {
+    // A sensitive action needs a fresh password proof. The server refused it before doing
+    // anything, so after the user confirms, repeating it once is safe.
+    if (
+      error instanceof ApiError &&
+      error.problem.status === 403 &&
+      error.problem.code === "REAUTH_REQUIRED" &&
+      reauthHandler
+    ) {
+      if (!(await reauthHandler())) throw error;
+      return operation(await bearer());
+    }
     if (!(error instanceof ApiError) || error.problem.status !== 401)
       throw error;
     const renewed = await refreshSession();
@@ -624,6 +659,180 @@ export async function verifyEmail(token: string) {
     );
   });
 }
+export async function requestPasswordReset(email: string) {
+  return authLock(async () => {
+    const context = await csrf();
+    return checked(
+      await api.POST("/api/v1/auth/forgot-password", {
+        body: forgotPasswordSchema.parse({ email }),
+        headers: { "X-CSRF-Token": context.csrfToken },
+      }),
+    );
+  });
+}
+export async function resetPassword(token: string, password: string) {
+  return authLock(async () => {
+    const context = await csrf();
+    return checked(
+      await api.POST("/api/v1/auth/reset-password", {
+        body: resetPasswordSchema.parse({ token, password }),
+        headers: { "X-CSRF-Token": context.csrfToken },
+      }),
+    );
+  });
+}
+/**
+ * The server revokes every session, this one included, and answers with one new session. Other
+ * tabs find out on their next request, so only this tab keeps the new token.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  const result = await authenticated(async (session) => {
+    const context = await csrf();
+    return sessionSchema.parse(
+      await checked(
+        await api.POST("/api/v1/auth/change-password", {
+          body: changePasswordSchema.parse({ currentPassword, newPassword }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+  current = result;
+  return result;
+}
+export async function listSessions(cursor?: string) {
+  return authenticated(
+    async (session) =>
+      sessionListSchema.parse(
+        await checked(
+          await api.GET("/api/v1/auth/sessions", {
+            params: { query: { ...(cursor ? { cursor } : {}), limit: 20 } },
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+/** Revoking this browser's own session also signs it out; the caller then clears its state. */
+export async function revokeSession(id: string, isCurrent: boolean) {
+  await authenticated(async (session) => {
+    const context = await csrf();
+    await checked(
+      await api.DELETE("/api/v1/auth/sessions/{id}", {
+        params: { path: { id } },
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "X-CSRF-Token": context.csrfToken,
+        },
+      }),
+    );
+  });
+  if (isCurrent) {
+    clearSession();
+    sessionEvents?.postMessage("signed-out");
+  }
+}
+export async function getMfaStatus() {
+  return authenticated(
+    async (session) =>
+      mfaStatusSchema.parse(
+        await checked(
+          await api.GET("/api/v1/auth/mfa", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function enrolMfa() {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return mfaEnrolResultSchema.parse(
+      await checked(
+        await api.POST("/api/v1/auth/mfa/enrol", {
+          body: {},
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function confirmMfa(code: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return mfaRecoveryCodesSchema.parse(
+      await checked(
+        await api.POST("/api/v1/auth/mfa/confirm", {
+          body: mfaConfirmSchema.parse({ code }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function regenerateRecoveryCodes() {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return mfaRecoveryCodesSchema.parse(
+      await checked(
+        await api.POST("/api/v1/auth/mfa/recovery-codes", {
+          body: {},
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
+export async function disableMfa() {
+  await authenticated(async (session) => {
+    const context = await csrf();
+    await checked(
+      await api.DELETE("/api/v1/auth/mfa", {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "X-CSRF-Token": context.csrfToken,
+        },
+      }),
+    );
+  });
+}
+/** Confirms the password (and, with a second factor, a code) for sensitive actions. */
+export async function reauthenticate(password: string, code?: string) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    return reauthenticateResultSchema.parse(
+      await checked(
+        await api.POST("/api/v1/auth/reauthenticate", {
+          body: reauthenticateSchema.parse({
+            password,
+            ...(code ? { code } : {}),
+          }),
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "X-CSRF-Token": context.csrfToken,
+          },
+        }),
+      ),
+    );
+  });
+}
 export async function googleProviders() {
   return checked(await api.GET("/api/v1/auth/providers"));
 }
@@ -661,10 +870,13 @@ export async function beginGoogleLink(password: string) {
     }),
   );
 }
-export async function login(email: string, password: string) {
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResult> {
   const result = await authLock(async () => {
     const context = await csrf();
-    return sessionSchema.parse(
+    return loginResultSchema.parse(
       await checked(
         await api.POST("/api/v1/auth/login", {
           body: { email, password },
@@ -673,10 +885,53 @@ export async function login(email: string, password: string) {
       ),
     );
   });
+  // An account with a second factor gets only a challenge: no session exists yet.
+  if (result.state === "mfa_required") return result;
   logoutPending = false;
   current = result;
   sessionEvents?.postMessage("signed-in");
   return result;
+}
+function adopt(result: Session) {
+  logoutPending = false;
+  current = result;
+  sessionEvents?.postMessage("signed-in");
+  return result;
+}
+/** Second step of sign-in with an authenticator code. */
+export async function completeMfa(challengeToken: string, code: string) {
+  return adopt(
+    await authLock(async () => {
+      const context = await csrf();
+      return sessionSchema.parse(
+        await checked(
+          await api.POST("/api/v1/auth/mfa/challenge/verify", {
+            body: mfaChallengeVerifySchema.parse({ challengeToken, code }),
+            headers: { "X-CSRF-Token": context.csrfToken },
+          }),
+        ),
+      );
+    }),
+  );
+}
+/** Second step of sign-in with a one-use recovery code. */
+export async function recoverMfa(challengeToken: string, recoveryCode: string) {
+  return adopt(
+    await authLock(async () => {
+      const context = await csrf();
+      return sessionSchema.parse(
+        await checked(
+          await api.POST("/api/v1/auth/mfa/challenge/recover", {
+            body: mfaChallengeRecoverSchema.parse({
+              challengeToken,
+              recoveryCode,
+            }),
+            headers: { "X-CSRF-Token": context.csrfToken },
+          }),
+        ),
+      );
+    }),
+  );
 }
 export function refreshSession(): Promise<Session> {
   if (refreshing) return refreshing;

@@ -1149,3 +1149,136 @@ footer {
   margin-top: 0;
   border-radius: 6px;
 }
+
+/* Dispatcher console and courier PWA (M06/M07) */
+.dispatch-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 28, 22, 0.55);
+}
+.dispatch-dialog form {
+  width: min(480px, 100%);
+  padding: 22px;
+  border-radius: 12px;
+  background: #fff;
+}
+.courier-tap {
+  min-height: 44px;
+  min-width: 44px;
+}
+.courier-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.courier-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dce3dc;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.courier-detail,
+.courier-action {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dce3dc;
+  border-radius: 10px;
+  background: #fff;
+}
+.courier-detail dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+}
+.courier-detail dd {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .courier-detail dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Security settings: sessions, two-step verification and the re-authentication dialog */
+.session-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.session-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line, #d8dfda);
+  border-radius: 8px;
+}
+.session-list p {
+  margin: 0;
+}
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10ch, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+.secret-key {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  word-break: break-all;
+  border: 1px solid var(--line, #d8dfda);
+  border-radius: 6px;
+}
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+.dialog {
+  width: min(28rem, 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: inherit;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+@media (max-width: 480px) {
+  .session-list li {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

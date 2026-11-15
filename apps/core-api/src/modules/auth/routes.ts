@@ -7,6 +7,15 @@ import {
   registrationSchema,
   resendVerificationSchema,
   verifyEmailSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  sessionListQuerySchema,
+  mfaChallengeVerifySchema,
+  mfaChallengeRecoverSchema,
+  mfaConfirmSchema,
+  reauthenticateSchema,
+  MFA_CHALLENGE_SECONDS,
   completeProfileSchema,
   googleLinkSchema,
   acceptInvitationSchema,
@@ -15,7 +24,7 @@ import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
 import type { RateLimiter } from "../../shared/rate-limit.js";
 import { AuthService } from "./service.js";
-import { authenticate, requireRole } from "./index.js";
+import { authenticate, requireRecentAuth, requireRole } from "./index.js";
 import { publicUser } from "./service.js";
 import type { UsersService } from "../users/service.js";
 export const cookieNames = (secure: boolean) => ({
@@ -69,7 +78,8 @@ export function createAuthRouter(
       return next(
         new HttpError(403, "ORIGIN", "Request origin is not allowed."),
       );
-    if (!req.is("application/json"))
+    // A DELETE carries no body, so only a request that sends one must declare JSON.
+    if (req.method !== "DELETE" && !req.is("application/json"))
       return next(new HttpError(415, "CONTENT_TYPE", "Send application/json."));
     next();
   };
@@ -86,7 +96,9 @@ export function createAuthRouter(
   });
   router.use(
     (req, res, next) =>
-      req.method === "POST" ? originCheck(req, res, next) : next(),
+      req.method === "POST" || req.method === "DELETE"
+        ? originCheck(req, res, next)
+        : next(),
     csrf.doubleCsrfProtection,
   );
   router.get("/providers", (_req, res) =>
@@ -186,6 +198,90 @@ export function createAuthRouter(
     },
   );
   router.post(
+    "/forgot-password",
+    limiter.middleware("forgot-password", 10, 3600),
+    async (req, res) => {
+      const { email } = forgotPasswordSchema.parse(req.body);
+      // Three requests per address per hour. Beyond that the request is still accepted with
+      // the same answer, so the limit itself reveals nothing about the address.
+      const hit = await limiter.hit(`forgot-password:email:${email}`, 3, 3600);
+      if (!hit.blocked) await service.requestPasswordReset(email);
+      res.status(202).json({
+        message:
+          "If an account can be reset, an email with a reset link will arrive shortly.",
+      });
+    },
+  );
+  router.post(
+    "/reset-password",
+    limiter.middleware("reset-password", 10, 900),
+    async (req, res) => {
+      const input = resetPasswordSchema.parse(req.body);
+      await service.resetPassword(input.token, input.password);
+      res.json({
+        message: "Your password was changed. Sign in with the new password.",
+      });
+    },
+  );
+  router.post(
+    "/change-password",
+    limiter.middleware("change-password", 30, 900),
+    authenticate(service),
+    async (req, res) => {
+      const input = changePasswordSchema.parse(req.body);
+      const attempts = await limiter.hit(
+        `change-password:user:${res.locals.user.id}`,
+        5,
+        900,
+      );
+      if (attempts.blocked) {
+        res.setHeader("Retry-After", attempts.retryAfter);
+        throw new HttpError(
+          429,
+          "RATE_LIMITED",
+          "Too many password change attempts. Please try again later.",
+        );
+      }
+      const result = await service.changePassword(
+        res.locals.user.id,
+        input.currentPassword,
+        input.newPassword,
+      );
+      res.cookie(names.refresh, result.refreshToken, {
+        ...options,
+        expires: result.cookieExpires,
+      });
+      res.clearCookie(names.csrf, options);
+      res.json(result.response);
+    },
+  );
+  router.get("/sessions", authenticate(service), async (req, res) => {
+    const page = sessionListQuerySchema.parse(req.query);
+    res.json(
+      await service.listSessions(
+        res.locals.user.id,
+        res.locals.authFamilyId,
+        page,
+      ),
+    );
+  });
+  router.delete(
+    "/sessions/:id",
+    limiter.middleware("session-revoke", 60, 60),
+    authenticate(service),
+    async (req, res) => {
+      const id = String(req.params.id);
+      await service.revokeSession(res.locals.user.id, id);
+      // Revoking the session this browser is using signs it out.
+      if (id === res.locals.authFamilyId)
+        res
+          .clearCookie(names.refresh, options)
+          .clearCookie(names.csrf, options)
+          .clearCookie(names.context, options);
+      res.status(204).end();
+    },
+  );
+  router.post(
     "/complete-profile",
     authenticate(service),
     requireRole("CUSTOMER"),
@@ -226,7 +322,7 @@ export function createAuthRouter(
       }
       let result;
       try {
-        result = await service.login(input.email, input.password);
+        result = await service.beginLogin(input.email, input.password);
       } catch (error) {
         if (error instanceof HttpError && error.status === 401) {
           await limiter.failed(input.email);
@@ -239,12 +335,145 @@ export function createAuthRouter(
         throw error;
       }
       await limiter.succeeded(input.email);
+      // A password alone is not a session for an account with a second factor: no cookie, no
+      // token, only an opaque challenge to complete with a code.
+      if ("challengeToken" in result)
+        return res.json({
+          state: "mfa_required",
+          challengeToken: result.challengeToken,
+          expiresIn: MFA_CHALLENGE_SECONDS,
+        });
       res.cookie(names.refresh, result.refreshToken, {
         ...options,
         expires: result.cookieExpires,
       });
       res.clearCookie(names.csrf, options);
       res.json(result.response);
+    },
+  );
+  const startSessionCookies = (
+    res: Parameters<RequestHandler>[1],
+    result: { refreshToken: string; cookieExpires: Date },
+  ) => {
+    res.cookie(names.refresh, result.refreshToken, {
+      ...options,
+      expires: result.cookieExpires,
+    });
+    res.clearCookie(names.csrf, options);
+  };
+  router.post(
+    "/mfa/challenge/verify",
+    limiter.middleware("mfa-challenge", 30, 900),
+    async (req, res) => {
+      const input = mfaChallengeVerifySchema.parse(req.body);
+      const result = await service.verifyMfaChallenge(
+        input.challengeToken,
+        input.code,
+      );
+      startSessionCookies(res, result);
+      res.json(result.response);
+    },
+  );
+  router.post(
+    "/mfa/challenge/recover",
+    limiter.middleware("mfa-challenge", 30, 900),
+    async (req, res) => {
+      const input = mfaChallengeRecoverSchema.parse(req.body);
+      const result = await service.recoverMfaChallenge(
+        input.challengeToken,
+        input.recoveryCode,
+      );
+      startSessionCookies(res, result);
+      res.json(result.response);
+    },
+  );
+  const mfa = () => {
+    if (!service.mfa)
+      throw new HttpError(404, "NOT_FOUND", "This route does not exist.");
+    return service.mfa;
+  };
+  router.get("/mfa", authenticate(service), async (_req, res) => {
+    res.json(await mfa().status(res.locals.user.id, res.locals.user.role));
+  });
+  router.post(
+    "/mfa/enrol",
+    limiter.middleware("mfa-enrol", 20, 900),
+    authenticate(service),
+    requireRecentAuth(service),
+    async (req, res) => {
+      emptySchema.parse(req.body);
+      res.json(await mfa().enrol(res.locals.user.id, res.locals.user.email));
+    },
+  );
+  router.post(
+    "/mfa/confirm",
+    limiter.middleware("mfa-confirm", 20, 900),
+    authenticate(service),
+    async (req, res) => {
+      const { code } = mfaConfirmSchema.parse(req.body);
+      const attempts = await limiter.hit(
+        `mfa-confirm:user:${res.locals.user.id}`,
+        10,
+        900,
+      );
+      if (attempts.blocked) {
+        res.setHeader("Retry-After", attempts.retryAfter);
+        throw new HttpError(429, "RATE_LIMITED", "Too many attempts. Please try again later.");
+      }
+      const recoveryCodes = await mfa().confirm(res.locals.user.id, code);
+      // The code just proved the factor works, which also counts as this session's proof.
+      await service.markMfaVerified(res.locals.authFamilyId);
+      res.json({ recoveryCodes });
+    },
+  );
+  router.post(
+    "/mfa/recovery-codes",
+    limiter.middleware("mfa-recovery-codes", 10, 900),
+    authenticate(service),
+    requireRecentAuth(service),
+    async (req, res) => {
+      emptySchema.parse(req.body);
+      res.json({
+        recoveryCodes: await mfa().regenerateRecoveryCodes(res.locals.user.id),
+      });
+    },
+  );
+  router.delete(
+    "/mfa",
+    limiter.middleware("mfa-disable", 10, 900),
+    authenticate(service),
+    requireRecentAuth(service),
+    async (_req, res) => {
+      await mfa().disable(res.locals.user.id, res.locals.user.role);
+      res.status(204).end();
+    },
+  );
+  router.post(
+    "/reauthenticate",
+    limiter.middleware("reauthenticate", 30, 900),
+    authenticate(service),
+    async (req, res) => {
+      const input = reauthenticateSchema.parse(req.body);
+      const attempts = await limiter.hit(
+        `reauthenticate:user:${res.locals.user.id}`,
+        5,
+        900,
+      );
+      if (attempts.blocked) {
+        res.setHeader("Retry-After", attempts.retryAfter);
+        throw new HttpError(
+          429,
+          "RATE_LIMITED",
+          "Too many confirmation attempts. Please try again later.",
+        );
+      }
+      const at = await service.reauthenticate(
+        res.locals.user.id,
+        res.locals.authFamilyId,
+        input.password,
+        input.code,
+      );
+      res.json({ reauthenticatedAt: at.toISOString() });
     },
   );
   router.post(

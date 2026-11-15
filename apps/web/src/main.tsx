@@ -16,4 +16,10 @@ async function bootstrap() {
   );
 }
 
+// Offline app shell for the courier PWA (production only; dev uses the MSW worker).
+if (import.meta.env.PROD && "serviceWorker" in navigator)
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  });
+
 void bootstrap();

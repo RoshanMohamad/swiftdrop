@@ -12,6 +12,7 @@ export function createServiceAuthenticator(
   db: Database,
   config: Config,
   clock: () => Date = () => new Date(),
+  requiredScope = "notifications:lookup",
 ): RequestHandler {
   const humanKeys = new Set(
     Object.values(config.publicKeys ?? {}).map((pem) =>
@@ -114,7 +115,7 @@ export function createServiceAuthenticator(
       const signed = new Set(payload.scope.split(/\s+/).filter(Boolean));
       if ([...signed].some((scope) => !granted.has(scope)))
         throw unauthorized();
-      if (!signed.has("notifications:lookup"))
+      if (!signed.has(requiredScope))
         throw new HttpError(
           403,
           "FORBIDDEN",

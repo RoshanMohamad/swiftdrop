@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isValidTrackingNumber } from "@swiftdrop/contracts";
 import {
   handlers,
   mockAdminUser,
@@ -42,7 +43,7 @@ describe("MSW Mock Handlers", () => {
   it("exports valid parcel fixture matching tracking number format", () => {
     expect(mockParcels.length).toBeGreaterThan(0);
     const parcel = mockParcels[0]!;
-    expect(parcel.trackingNumber).toMatch(/^SD[A-Z0-9]{8}$/);
+    expect(isValidTrackingNumber(parcel.trackingNumber)).toBe(true);
     expect(parcel.currency).toBe("LKR");
     expect(parcel.history.length).toBeGreaterThan(0);
   });

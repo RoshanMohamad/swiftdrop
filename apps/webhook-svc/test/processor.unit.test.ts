@@ -15,6 +15,8 @@ import {
 import type { SendResult, Sender } from "../src/sender.js";
 import { HEADERS, verify } from "../src/signing.js";
 
+const MERCHANT = "33333333-3333-4333-8333-333333333333";
+
 const logger = pino({ enabled: false });
 const secret = "k".repeat(32);
 
@@ -155,7 +157,7 @@ class Harness {
       data: {
         parcelId: randomUUID(),
         trackingNo: "SD-AAAAAAAA-1",
-        merchantId: 7,
+        merchantId: MERCHANT,
         to: "PICKED_UP",
         ...overrides,
       },
@@ -286,6 +288,45 @@ describe("WebhookProcessor (FR-I4, Design Doc §7.7)", () => {
     expect(h.retries).toHaveLength(1);
   });
 
+  it("keeps the correlation id on the retry hand-off and in the logs (NFR-13)", async () => {
+    const h = new Harness();
+    const event = h.event();
+    h.results = [fail(503)];
+    const logs: Array<Record<string, unknown>> = [];
+    const spied = pino(
+      { level: "info" },
+      { write: (line: string) => void logs.push(JSON.parse(line)) },
+    );
+    const processor = new WebhookProcessor({
+      store: h.store,
+      config: { get: async () => h.target as { url: string; secret: string } },
+      sender: h.sender,
+      handoff: h.handoff,
+      logger: spied,
+      now: () => h.clock,
+    });
+    await processor.handle({
+      ...h.message(event),
+      correlationId: "req-1234-abcd",
+    });
+    expect(h.retries[0]!.message.correlationId).toBe("req-1234-abcd");
+    // A message that logs: every line is scoped to the originating request.
+    await processor.handle({
+      content: Buffer.from("not json"),
+      attempt: 0,
+      run: 0,
+      redelivered: false,
+      correlationId: "req-1234-abcd",
+    });
+    expect(logs.length).toBeGreaterThan(0);
+    expect(logs.every((l) => l.correlationId === "req-1234-abcd")).toBe(true);
+    // No id: handoff carries none and nothing is invented.
+    const plain = new Harness();
+    plain.results = [fail(503)];
+    await plain.processor.handle(plain.message(plain.event()));
+    expect(plain.retries[0]!.message.correlationId).toBeUndefined();
+  });
+
   it("records SKIPPED when the merchant has no webhook configured", async () => {
     const h = new Harness();
     h.target = null;
@@ -360,7 +401,7 @@ describe("WebhookProcessor (FR-I4, Design Doc §7.7)", () => {
     const second = busy.event();
     const delivery = await busy.store.ensureDelivery({
       eventId: second.eventId,
-      merchantId: 7,
+      merchantId: MERCHANT,
       eventType: second.type,
       envelope: second,
     });

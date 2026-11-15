@@ -47,17 +47,25 @@ export class ReceiptService {
     });
   }
 
-  async generateForDelivered(parcelId: string) {
+  /**
+   * Idempotent. With `regenerate`, an existing receipt row whose stored PDF has gone missing
+   * is re-uploaded under the same key instead of being returned as is.
+   */
+  async generateForDelivered(
+    parcelId: string,
+    options: { regenerate?: boolean } = {},
+  ) {
     const parcel = await this.findParcel(parcelId);
     if (parcel.status !== "DELIVERED") return null;
-    if (parcel.receipt) return parcel.receipt;
+    if (parcel.receipt && !options.regenerate) return parcel.receipt;
 
     await this.ensureBucket();
-    const objectKey = `receipts/${parcel.id}.pdf`;
+    const objectKey = parcel.receipt?.objectKey ?? `receipts/${parcel.id}.pdf`;
     const pdf = await this.createPdf(parcel);
     await this.storage.putObject(this.config.MINIO_BUCKET, objectKey, pdf, pdf.length, {
       "Content-Type": "application/pdf",
     });
+    if (parcel.receipt) return parcel.receipt;
     try {
       return await this.db.receipt.create({
         data: {
@@ -96,14 +104,18 @@ export class ReceiptService {
       );
 
     let receipt = parcel.receipt;
+    let missing = false;
     if (receipt) {
       try {
         await this.storage.statObject(this.config.MINIO_BUCKET, receipt.objectKey);
       } catch {
-        receipt = null;
+        missing = true;
       }
     }
-    if (!receipt) receipt = await this.generateForDelivered(parcel.id);
+    if (!receipt || missing)
+      receipt = await this.generateForDelivered(parcel.id, {
+        regenerate: missing,
+      });
     if (!receipt)
       throw new HttpError(503, "RECEIPT_UNAVAILABLE", "The receipt is not available yet.");
     const downloadUrl = await this.storage.presignedGetObject(

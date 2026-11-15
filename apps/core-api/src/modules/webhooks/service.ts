@@ -38,7 +38,7 @@ export class WebhooksService {
 
   async list(filters: {
     status?: WebhookDeliveryStatus;
-    merchantId?: number;
+    merchantId?: string;
     cursor?: string;
     limit?: number;
   }) {

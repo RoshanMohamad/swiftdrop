@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+.git
+.github
+.env
+.env.*
+!.env.example
+.local
+packages/db/src/generated
+packages/db/.agents
+packages/db/.claude
+packages/db/.windsurf
+output
+*.pdf
+docs

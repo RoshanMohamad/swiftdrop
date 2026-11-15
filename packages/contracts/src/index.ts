@@ -1,9 +1,11 @@
 import { z } from "zod";
 import commonPasswords from "./common-passwords.json" with { type: "json" };
 export * from "./lifecycle";
+export * from "./tracking";
 export * from "./events/index";
 export * from "./events/routing-keys";
 import { parcelStatusSchema } from "./lifecycle";
+import { TRACKING_PATTERN, isValidTrackingNumber } from "./tracking";
 const blocked = new Set(commonPasswords);
 export const roleSchema = z.enum([
   "CUSTOMER",
@@ -256,6 +258,45 @@ export const resendVerificationSchema = z
 export const verifyEmailSchema = z
   .object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
   .strict();
+export const forgotPasswordSchema = z.object({ email: emailSchema }).strict();
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    password: passwordSchema,
+  })
+  .strict();
+export const changePasswordSchema = z
+  .object({
+    // Not subject to the new-password policy: it only has to match what is stored.
+    currentPassword: z
+      .string()
+      .min(1)
+      .refine(
+        (value) => new TextEncoder().encode(value).length <= 72,
+        "Password exceeds 72 UTF-8 bytes.",
+      ),
+    newPassword: passwordSchema,
+  })
+  .strict();
+export const sessionSummarySchema = z.object({
+  id: z.string().uuid(),
+  authenticatedAt: z.string().datetime(),
+  lastRefreshedAt: z.string().datetime(),
+  idleExpiresAt: z.string().datetime(),
+  absoluteExpiresAt: z.string().datetime(),
+  current: z.boolean(),
+});
+export const sessionListSchema = z.object({
+  items: z.array(sessionSummarySchema),
+  nextCursor: z.string().nullable(),
+});
+export const sessionListQuerySchema = z
+  .object({
+    cursor: z.string().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  })
+  .strict();
+export type SessionSummary = z.infer<typeof sessionSummarySchema>;
 export const completeProfileSchema = z
   .object({
     fullName: z
@@ -328,7 +369,7 @@ export const bookingRequestSchema = z
 export type BookingRequest = z.infer<typeof bookingRequestSchema>;
 export const parcelSchema = z.object({
   id: z.string().uuid(),
-  trackingNumber: z.string().regex(/^SD[A-Z0-9]{8}$/),
+  trackingNumber: z.string().regex(TRACKING_PATTERN),
   status: parcelStatusSchema,
   feeCents: z.number().int().nonnegative(),
   currency: z.literal("LKR"),
@@ -442,17 +483,8 @@ export const zoneListSchema = z.array(zoneSchema);
 export const priceListSchema = z.array(priceSchema);
 export const trackingNumberSchema = z
   .string()
-  .regex(/^SD[A-Z0-9]{8}$/)
-  .refine((value) => {
-    const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const body = value.slice(2, -1);
-    const check =
-      [...body].reduce(
-        (sum, character) => sum + alphabet.indexOf(character),
-        0,
-      ) % alphabet.length;
-    return alphabet[check] === value.at(-1);
-  }, "Tracking number is invalid.");
+  .regex(TRACKING_PATTERN)
+  .refine(isValidTrackingNumber, "Tracking number is invalid.");
 export const publicUserSchema = z.object({
   id: z.number().int().positive(),
   email: z.string().email(),
@@ -576,6 +608,110 @@ export const sessionSchema = z.object({
   user: publicUserSchema,
 });
 export type Session = z.infer<typeof sessionSchema>;
+
+// ---- Second factor, re-authentication and the audit trail (auth plan 4.7, section 6) ----
+export const MFA_CHALLENGE_SECONDS = 300;
+/** Returned by login instead of a session when the account has a second factor. */
+export const mfaChallengeSchema = z.object({
+  state: z.literal("mfa_required"),
+  challengeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  expiresIn: z.literal(MFA_CHALLENGE_SECONDS),
+});
+export type MfaChallenge = z.infer<typeof mfaChallengeSchema>;
+export const loginResultSchema = z.union([sessionSchema, mfaChallengeSchema]);
+export type LoginResult = z.infer<typeof loginResultSchema>;
+export const mfaCodeSchema = z.string().regex(/^\d{6}$/, "Enter the 6 digit code.");
+export const mfaChallengeVerifySchema = z
+  .object({
+    challengeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    code: mfaCodeSchema,
+  })
+  .strict();
+export const mfaChallengeRecoverSchema = z
+  .object({
+    challengeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    recoveryCode: z
+      .string()
+      .trim()
+      .min(10)
+      .max(14)
+      .regex(/^[A-Za-z0-9 -]+$/),
+  })
+  .strict();
+export const mfaEnrolResultSchema = z.object({
+  secret: z.string(),
+  otpauthUri: z.string(),
+});
+export const mfaConfirmSchema = z.object({ code: mfaCodeSchema }).strict();
+export const mfaRecoveryCodesSchema = z.object({
+  recoveryCodes: z.array(z.string()).length(10),
+});
+export const mfaStatusSchema = z.object({
+  enabled: z.boolean(),
+  pendingEnrolment: z.boolean(),
+  recoveryCodesRemaining: z.number().int().nonnegative(),
+  /** True when the account's role must have a second factor before privileged routes. */
+  required: z.boolean(),
+});
+export type MfaStatus = z.infer<typeof mfaStatusSchema>;
+export const reauthenticateSchema = z
+  .object({
+    password: z
+      .string()
+      .min(1)
+      .refine(
+        (value) => new TextEncoder().encode(value).length <= 72,
+        "Password exceeds 72 UTF-8 bytes.",
+      ),
+    code: mfaCodeSchema.optional(),
+  })
+  .strict();
+export const reauthenticateResultSchema = z.object({
+  reauthenticatedAt: z.string().datetime(),
+});
+export const auditEventTypes = [
+  "LOGIN",
+  "LOGOUT",
+  "LOGOUT_ALL",
+  "REFRESH_REUSE",
+  "PASSWORD_RESET_REQUESTED",
+  "PASSWORD_RESET",
+  "PASSWORD_CHANGE",
+  "SESSION_REVOKED",
+  "REAUTHENTICATE",
+  "MFA_CHALLENGE",
+  "MFA_RECOVERY_CODE_USED",
+  "MFA_ENROL_STARTED",
+  "MFA_ENABLED",
+  "MFA_DISABLED",
+  "MFA_RECOVERY_CODES_REGENERATED",
+] as const;
+export const auditEventTypeSchema = z.enum(auditEventTypes);
+export const auditEventSchema = z.object({
+  id: z.string().uuid(),
+  occurredAt: z.string().datetime(),
+  eventType: auditEventTypeSchema,
+  outcome: z.enum(["SUCCESS", "FAILURE"]),
+  actorUserId: z.number().int().nullable(),
+  targetUserId: z.number().int().nullable(),
+  correlationId: z.string().nullable(),
+  metadata: z.record(
+    z.string(),
+    z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  ),
+});
+export const auditPageSchema = z.object({
+  items: z.array(auditEventSchema),
+  nextCursor: z.string().nullable(),
+});
+export const auditQuerySchema = z
+  .object({
+    cursor: z.string().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    eventType: auditEventTypeSchema.optional(),
+    userId: z.coerce.number().int().positive().optional(),
+  })
+  .strict();
 export const problemSchema = z.object({
   type: z.string(),
   title: z.string(),
@@ -598,5 +734,8 @@ export type Principal =
   | { kind: "service"; serviceId: string; scopes: string[] };
 
 export * from "./messaging.js";
+export * from "./dispatch.js";
+export * from "./courier.js";
+export * from "./realtime.js";
 // M08 (transport) and M09 (events/) both export EventEnvelope; the root name is the M08 runtime schema type.
 export type { EventEnvelope } from "./messaging.js";

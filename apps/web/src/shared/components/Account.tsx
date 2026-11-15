@@ -105,11 +105,9 @@ export function Account() {
           <Link to="/admin/reports">Operations Reports</Link>
         </div>
       )}
-      {state.user?.role === "CUSTOMER" && (
-        <p>
-          <Link to="/settings/security">Security settings · link Google</Link>
-        </p>
-      )}
+      <p>
+        <Link to="/settings/security">Security settings</Link>
+      </p>
       <button
         className="secondary"
         disabled={pending}

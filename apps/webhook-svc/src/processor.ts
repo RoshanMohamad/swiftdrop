@@ -25,13 +25,15 @@ export type InboundMessage = {
   /** Run from the `x-swiftdrop-run` header: 0 original, n for the nth Admin replay. */
   run: number;
   redelivered: boolean;
+  /** Originating request's correlation id (NFR-13), kept across retry hand-offs. */
+  correlationId?: string | undefined;
 };
 
 export type DeliveryStatus = "PENDING" | "SUCCESS" | "FAILED" | "SKIPPED";
 export type DeliveryRecord = {
   id: string;
   eventId: string;
-  merchantId: number;
+  merchantId: string;
   eventType: string;
   envelope: EventEnvelope;
   status: DeliveryStatus;
@@ -51,7 +53,7 @@ export type Claim =
 export interface DeliveryStore {
   ensureDelivery(input: {
     eventId: string;
-    merchantId: number;
+    merchantId: string;
     eventType: string;
     envelope: EventEnvelope;
   }): Promise<DeliveryRecord>;
@@ -84,6 +86,7 @@ export type HandoffMessage = {
   messageId: string;
   attempt: number;
   run: number;
+  correlationId?: string | undefined;
 };
 /** Publishes with broker confirms; resolves only once the broker has the message. */
 export interface HandoffPublisher {
@@ -124,6 +127,19 @@ export class WebhookProcessor {
   }
 
   async handle(message: InboundMessage): Promise<Disposition> {
+    // Scope every log line of this message to the originating request's correlation id.
+    const scoped = message.correlationId
+      ? new WebhookProcessor({
+          ...this.deps,
+          logger: this.deps.logger.child({
+            correlationId: message.correlationId,
+          }),
+        })
+      : this;
+    return scoped.run(message);
+  }
+
+  private async run(message: InboundMessage): Promise<Disposition> {
     try {
       return await this.process(message);
     } catch (error) {
@@ -212,6 +228,7 @@ export class WebhookProcessor {
       messageId: envelope.eventId,
       attempt: message.attempt + 1,
       run: message.run,
+      correlationId: message.correlationId,
     };
     if (claim.kind === "done")
       return this.finishHandoff(claim.attempt, handoffMessage, message.attempt);
@@ -247,7 +264,10 @@ export class WebhookProcessor {
 
     let target;
     try {
-      target = await config.get(delivery.merchantId);
+      target = await config.get(delivery.merchantId, {
+        eventId: delivery.eventId,
+        parcelId: delivery.envelope.data["parcelId"] as string,
+      });
     } catch {
       return finish(this.failure(attempt, "CONFIG_UNAVAILABLE"));
     }

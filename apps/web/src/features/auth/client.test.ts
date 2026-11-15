@@ -183,3 +183,88 @@ it("does not refresh or discard the session on permission and offline errors", a
   await expect(client.listUsers({})).rejects.toThrow("offline");
   expect(expired).not.toHaveBeenCalled();
 });
+
+describe("re-authentication for sensitive actions", () => {
+  const problem = (code: string, status: number) =>
+    new Response(JSON.stringify({ code, detail: "d", title: "t", type: "x", status }), {
+      status,
+      headers: { "Content-Type": "application/problem+json" },
+    });
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  /** Answers csrf and the session, and refuses the first MFA enrolment with REAUTH_REQUIRED. */
+  function refuseFirstEnrolment() {
+    let enrolCalls = 0;
+    fetcher.mockImplementation(async (req: Request) => {
+      if (req.url.endsWith("/csrf")) return json({ csrfToken: "csrf" });
+      if (req.url.endsWith("/auth/mfa/enrol")) {
+        enrolCalls++;
+        return enrolCalls === 1
+          ? problem("REAUTH_REQUIRED", 403)
+          : json({ secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", otpauthUri: "otpauth://totp/x" });
+      }
+      return json(session);
+    });
+    return () => enrolCalls;
+  }
+
+  it("asks the handler, then repeats the refused action exactly once", async () => {
+    const calls = refuseFirstEnrolment();
+    const client = await import("./client.js");
+    const handler = vi.fn(async () => true);
+    client.setReauthHandler(handler);
+    await client.refreshSession();
+    await expect(client.enrolMfa()).resolves.toMatchObject({ secret: expect.any(String) });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(calls()).toBe(2);
+  });
+
+  it("does not repeat the action when the user cancels, and surfaces the original error", async () => {
+    const calls = refuseFirstEnrolment();
+    const client = await import("./client.js");
+    client.setReauthHandler(async () => false);
+    await client.refreshSession();
+    await expect(client.enrolMfa()).rejects.toMatchObject({
+      problem: { code: "REAUTH_REQUIRED", status: 403 },
+    });
+    expect(calls()).toBe(1);
+  });
+
+  it("without a handler the refusal reaches the caller untouched", async () => {
+    const calls = refuseFirstEnrolment();
+    const client = await import("./client.js");
+    client.setReauthHandler(null);
+    await client.refreshSession();
+    await expect(client.enrolMfa()).rejects.toMatchObject({ problem: { code: "REAUTH_REQUIRED" } });
+    expect(calls()).toBe(1);
+  });
+
+  it("does not treat other 403s as a reason to ask for the password", async () => {
+    fetcher.mockImplementation(async (req: Request) =>
+      req.url.endsWith("/csrf") ? json({ csrfToken: "csrf" }) : req.url.endsWith("/auth/mfa/enrol") ? problem("FORBIDDEN", 403) : json(session),
+    );
+    const client = await import("./client.js");
+    const handler = vi.fn(async () => true);
+    client.setReauthHandler(handler);
+    await client.refreshSession();
+    await expect(client.enrolMfa()).rejects.toMatchObject({ problem: { code: "FORBIDDEN" } });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("login returns a challenge without adopting a session", async () => {
+    const challenge = { state: "mfa_required", challengeToken: "C".repeat(43), expiresIn: 300 };
+    fetcher.mockImplementation(async (req: Request) =>
+      req.url.endsWith("/csrf") ? json({ csrfToken: "csrf" }) : json(challenge),
+    );
+    const client = await import("./client.js");
+    const result = await client.login("c@example.test", "a long enough passphrase");
+    expect(result).toEqual(challenge);
+    // No session was stored: the next bearer() has to refresh, which fetches again.
+    const before = fetcher.mock.calls.length;
+    fetcher.mockImplementation(async (req: Request) =>
+      req.url.endsWith("/csrf") ? json({ csrfToken: "csrf" }) : json(session),
+    );
+    await client.bearer();
+    expect(fetcher.mock.calls.length).toBeGreaterThan(before);
+  });
+});

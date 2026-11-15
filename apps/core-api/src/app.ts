@@ -8,11 +8,14 @@ import type { Redis } from "ioredis";
 import type { Config } from "./shared/config.js";
 import { errorHandler, HttpError } from "./shared/problem.js";
 import { RateLimiter } from "./shared/rate-limit.js";
+import { checkRelay } from "./shared/relay-health.js";
 import { logger as defaultLogger } from "./shared/logger.js";
 import { correlationMiddleware } from "./shared/correlation.js";
 import {
   AuthService,
+  MfaService,
   authenticate,
+  createAuditRouter,
   createAuthRouter,
 } from "./modules/auth/index.js";
 import type { TokenService } from "./modules/auth/jwt.js";
@@ -47,6 +50,14 @@ import {
   WebhooksService,
   createWebhooksRouter,
 } from "./modules/webhooks/index.js";
+import { DispatchService, createDispatchRouter } from "./modules/dispatch/index.js";
+import {
+  CourierService,
+  MinioProofStorage,
+  createCourierRouter,
+  createProofUploadRouter,
+  type ProofStorage,
+} from "./modules/courier/index.js";
 export function createApp(deps: {
   db: Database;
   redis: Redis;
@@ -57,12 +68,13 @@ export function createApp(deps: {
   google?: GoogleOidc;
   workerState?: { connected: boolean };
   receipts?: ReceiptService;
+  proofStorage?: ProofStorage;
 }) {
   const { db, redis, config, tokens } = deps;
   const logger = deps.logger ?? defaultLogger;
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", false);
+  app.set("trust proxy", config.TRUST_PROXY > 0 ? config.TRUST_PROXY : false);
   app.use(helmet({ referrerPolicy: { policy: "no-referrer" } }));
   app.use(correlationMiddleware(logger));
   const service = new AuthService(
@@ -72,21 +84,38 @@ export function createApp(deps: {
     deps.mailer,
     deps.google,
     logger,
+    new MfaService(db, config),
   );
   const users = new UsersService(db, config.APP_ORIGIN, deps.mailer);
   const limiter = new RateLimiter(redis, config.rateSecret);
   const pricing = new PricingService(db);
   const parcels = new ParcelService(db, pricing);
   const merchants = new MerchantsService(db, tokens, config.oauthSecret);
-  // The OAuth token endpoint parses its own body, so it is mounted before express.json.
+  const lifecycle = new LifecycleService(db);
+  const courier = new CourierService(
+    db,
+    lifecycle,
+    deps.proofStorage ?? new MinioProofStorage(config),
+  );
+  // The OAuth token endpoint and the proof photo upload parse their own bodies, so they are
+  // mounted before express.json.
   app.use(createMerchantOAuthRouter(merchants, limiter, logger));
+  app.use(createProofUploadRouter(courier, service, limiter, config));
   app.use(express.json({ limit: "8kb", strict: true }), cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  // Liveness/readiness probe path used by Kubernetes and Docker (claude.md, Deployment).
+  app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/ready", async (_req, res) => {
     await Promise.all([db.$queryRaw`SELECT 1`, redis.ping()]);
-    // Event publication is the outbox relay's job (apps/outbox-relay, own /readyz);
-    // booking stays available while the broker is down because events wait in the outbox.
-    res.json({ status: "ready" });
+    // Event publication is the outbox relay's job (apps/outbox-relay, own /readyz). A stopped
+    // relay silently stops every event, so readiness reports it; booking itself still works
+    // because events wait in the outbox, but the instance must not look fully healthy.
+    const relay = await checkRelay(config.OUTBOX_RELAY_URL);
+    const ready = relay === "ready" || relay === "not-configured";
+    res.status(ready ? 200 : 503).json({
+      status: ready ? "ready" : "degraded",
+      outboxRelay: relay,
+    });
   });
 
   app.get("/api/docs", (_req, res) =>
@@ -132,6 +161,7 @@ export function createApp(deps: {
     res.json(res.locals.user),
   );
   app.use("/api/v1/auth", createAuthRouter(service, limiter, config, users));
+  app.use("/api/v1/admin/audit-events", createAuditRouter(db, service));
   app.use("/api/v1/admin/users", createUsersRouter(users, service, config));
   app.use(
     "/api/v1/admin/webhook-deliveries",
@@ -145,11 +175,15 @@ export function createApp(deps: {
   const reports = new ReportsService(db);
   app.use("/api/v1", createReportsRouter(reports, service, limiter, config));
   app.use("/api/v1", createParcelRouter(parcels, service, limiter, config));
-  const lifecycle = new LifecycleService(db);
   app.use(
     "/api/v1",
     createLifecycleRouter(lifecycle, service, limiter, config),
   );
+  app.use(
+    "/api/v1",
+    createDispatchRouter(new DispatchService(db), service, config),
+  );
+  app.use("/api/v1", createCourierRouter(courier, service, config));
   if (deps.receipts)
     app.use("/api/v1", createReceiptRouter(deps.receipts, service, config));
   const assistant = new AssistantService(db, pricing, parcels);
@@ -161,5 +195,5 @@ export function createApp(deps: {
     next(new HttpError(404, "NOT_FOUND", "This route does not exist.")),
   );
   app.use(errorHandler(logger));
-  return { app, service, users, limiter };
+  return { app, service, users, limiter, parcels };
 }

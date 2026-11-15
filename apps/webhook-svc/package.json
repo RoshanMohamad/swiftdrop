@@ -15,6 +15,7 @@
     "@swiftdrop/db": "workspace:*",
     "@swiftdrop/messaging": "workspace:*",
     "amqplib": "^2.2.0",
+    "jose": "^6.2.14",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
   },

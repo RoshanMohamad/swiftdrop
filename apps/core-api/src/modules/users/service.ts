@@ -393,12 +393,6 @@ export class UsersService {
           "INVITATION_INVALID",
           "This invitation is invalid or expired.",
         );
-      if (user.roleId === "COURIER")
-        throw new HttpError(
-          409,
-          "COURIER_SETUP_PENDING",
-          "Courier setup is not ready yet. Ask an administrator to complete courier setup.",
-        );
       await tx.staffInvitation.update({
         where: { id: invitation.id },
         data: { consumedAt: now },
@@ -407,6 +401,14 @@ export class UsersService {
         where: { id: user.id },
         data: { passwordHash, emailVerifiedAt: now, status: "ACTIVE" },
       });
+      // X-15: a courier is never activated without a capacity profile. It starts off duty with
+      // the default capacity; a dispatcher sets capacity and the courier toggles duty (M06/M07).
+      if (user.roleId === "COURIER")
+        await tx.courierProfile.upsert({
+          where: { userId: user.id },
+          update: {},
+          create: { userId: user.id, onDuty: false },
+        });
     });
   }
 }

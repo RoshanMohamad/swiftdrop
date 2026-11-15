@@ -50,7 +50,7 @@ export const mockPrices = [
 export const mockParcels = [
   {
     id: "22222222-2222-4222-8222-222222222222",
-    trackingNumber: "SD1234567A",
+    trackingNumber: "SD-7KQ2M9XA-Y",
     status: "IN_TRANSIT" as const,
     feeCents: 57000,
     currency: "LKR" as const,
@@ -209,6 +209,98 @@ export const handlers = [
     });
   }),
 
+  // Same answer for every address, exactly like the real endpoint.
+  http.post("/api/v1/auth/forgot-password", () =>
+    HttpResponse.json(
+      {
+        message:
+          "If an account can be reset, an email with a reset link will arrive shortly.",
+      },
+      { status: 202 },
+    ),
+  ),
+
+  http.post("/api/v1/auth/reset-password", () =>
+    HttpResponse.json({
+      message: "Your password was changed. Sign in with the new password.",
+    }),
+  ),
+
+  http.post("/api/v1/auth/change-password", () =>
+    HttpResponse.json({
+      state: "authenticated",
+      accessToken: "mock-access-token-after-password-change",
+      tokenType: "Bearer",
+      expiresIn: 900,
+      user: mockCustomerUser,
+    }),
+  ),
+
+  http.get("/api/v1/auth/sessions", () => {
+    const now = new Date().toISOString();
+    const later = new Date(Date.now() + 86_400_000).toISOString();
+    return HttpResponse.json({
+      items: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          authenticatedAt: now,
+          lastRefreshedAt: now,
+          idleExpiresAt: later,
+          absoluteExpiresAt: later,
+          current: true,
+        },
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          authenticatedAt: now,
+          lastRefreshedAt: now,
+          idleExpiresAt: later,
+          absoluteExpiresAt: later,
+          current: false,
+        },
+      ],
+    });
+  }),
+
+  http.delete(
+    "/api/v1/auth/sessions/:id",
+    () => new HttpResponse(null, { status: 204 }),
+  ),
+
+  http.get("/api/v1/auth/mfa", () =>
+    HttpResponse.json({
+      enabled: false,
+      pendingEnrolment: false,
+      recoveryCodesRemaining: 0,
+      required: false,
+    }),
+  ),
+
+  http.post("/api/v1/auth/mfa/enrol", () =>
+    HttpResponse.json({
+      secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+      otpauthUri:
+        "otpauth://totp/SwiftDrop:mock%40example.test?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=SwiftDrop",
+    }),
+  ),
+
+  http.post("/api/v1/auth/mfa/confirm", () =>
+    HttpResponse.json({
+      recoveryCodes: Array.from({ length: 10 }, (_, i) => `MOCK${i}-ABCDE`),
+    }),
+  ),
+
+  http.post("/api/v1/auth/mfa/recovery-codes", () =>
+    HttpResponse.json({
+      recoveryCodes: Array.from({ length: 10 }, (_, i) => `NEW${i}K-FGHJK`),
+    }),
+  ),
+
+  http.delete("/api/v1/auth/mfa", () => new HttpResponse(null, { status: 204 })),
+
+  http.post("/api/v1/auth/reauthenticate", () =>
+    HttpResponse.json({ reauthenticatedAt: new Date().toISOString() }),
+  ),
+
   http.post("/api/v1/auth/complete-profile", async ({ request }) => {
     const body = (await request.json()) as Record<string, string>;
     return HttpResponse.json({
@@ -256,7 +348,7 @@ export const handlers = [
     const newParcel = {
       ...mockParcels[0]!,
       id: "44444444-4444-4444-8444-444444444444",
-      trackingNumber: "SD1234567A",
+      trackingNumber: "SD-7KQ2M9XA-Y",
       recipientName: (body["recipientName"] as string) || "Recipient",
       recipientPhone: (body["recipientPhone"] as string) || "+94771234567",
       recipientAddress: (body["recipientAddress"] as string) || "Address",
@@ -280,7 +372,7 @@ export const handlers = [
 
   http.get("/api/v1/parcels/:id/receipt", () => {
     return HttpResponse.json({
-      receiptReference: "SDR-SD1234567A",
+      receiptReference: "SDR-SD-7KQ2M9XA-Y",
       downloadUrl: "http://localhost:5173/receipt.pdf",
       expiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
@@ -419,6 +511,104 @@ export const handlers = [
     return HttpResponse.json({
       reply: "Hello! I am your SwiftDrop Assistant. I can help answer questions about deliveries, rates, or schedules.",
       toolsUsed: [],
+    });
+  }),
+
+  // ── Dispatch and courier (M06 / M07) ────────────────────────────────────────
+  http.get("/api/v1/dispatch/parcels", ({ request }) => {
+    const state = new URL(request.url).searchParams.get("state") ?? "unassigned";
+    return HttpResponse.json({
+      items: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          trackingNumber: "SD-4HNP6RTD-N",
+          status: "CREATED",
+          version: 1,
+          attemptCount: 0,
+          originZoneId: 1,
+          originTown: "Colombo Fort",
+          destinationTown: "Kandy Town",
+          courierId: state === "assigned" ? 10 : null,
+          createdAt: new Date(Date.now() - 20 * 60000).toISOString(),
+        },
+      ],
+      nextCursor: null,
+    });
+  }),
+
+  http.get("/api/v1/dispatch/couriers", () => {
+    return HttpResponse.json({
+      items: [
+        { userId: 10, fullName: "Demo Courier", onDuty: true, capacity: 5, workload: 1, hasProfile: true },
+        { userId: 11, fullName: "Night Courier", onDuty: false, capacity: 5, workload: 0, hasProfile: true },
+      ],
+    });
+  }),
+
+  http.patch("/api/v1/dispatch/couriers/:courierId", async ({ params, request }) => {
+    const body = (await request.json()) as { onDuty?: boolean; capacity?: number };
+    return HttpResponse.json({
+      userId: Number(params["courierId"]),
+      fullName: "Demo Courier",
+      onDuty: body.onDuty ?? true,
+      capacity: body.capacity ?? 5,
+      workload: 1,
+      hasProfile: true,
+    });
+  }),
+
+  http.post("/api/v1/dispatch/parcels/:id/assign", async ({ params, request }) => {
+    const body = (await request.json()) as { courierId: number; version: number };
+    return HttpResponse.json({
+      parcelId: params["id"],
+      courierId: body.courierId,
+      version: body.version + 1,
+      changed: true,
+    });
+  }),
+
+  http.get("/api/v1/courier/jobs", () => {
+    return HttpResponse.json({
+      profile: { userId: 10, fullName: "Demo Courier", onDuty: true, capacity: 5, workload: 1, hasProfile: true },
+      items: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          trackingNumber: "SD-4HNP6RTD-N",
+          status: "OUT_FOR_DELIVERY",
+          version: 4,
+          attemptCount: 1,
+          originTown: "Colombo Fort",
+          destinationTown: "Kandy Town",
+          recipientName: "Kamal Perera",
+          recipientPhone: "+94771234567",
+          recipientAddress: "12 Lake Road, Kandy",
+          assignedAt: new Date().toISOString(),
+        },
+      ],
+    });
+  }),
+
+  http.patch("/api/v1/courier/jobs/:id/status", async ({ request }) => {
+    const body = (await request.json()) as { to: string; version: number };
+    return HttpResponse.json({
+      status: body.to,
+      version: body.version + 1,
+      attemptCount: 1,
+      replayed: false,
+    });
+  }),
+
+  http.post("/api/v1/courier/jobs/:id/proof", () => {
+    return HttpResponse.json(
+      { proofObjectKey: `proofs/${crypto.randomUUID()}/${crypto.randomUUID()}.jpg` },
+      { status: 201 },
+    );
+  }),
+
+  http.patch("/api/v1/courier/duty", async ({ request }) => {
+    const body = (await request.json()) as { onDuty: boolean };
+    return HttpResponse.json({
+      userId: 10, fullName: "Demo Courier", onDuty: body.onDuty, capacity: 5, workload: 1, hasProfile: true,
     });
   }),
 ];

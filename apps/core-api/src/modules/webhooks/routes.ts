@@ -13,7 +13,7 @@ import type { WebhooksService } from "./service.js";
 const filtersSchema = z
   .object({
     status: webhookDeliveryStatusSchema.optional(),
-    merchantId: z.coerce.number().int().positive().optional(),
+    merchantId: z.uuid().optional(),
     cursor: z.string().max(256).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })

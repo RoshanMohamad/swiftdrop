@@ -9,20 +9,23 @@ const names = [
   "csrf.key",
   "rate-limit.key",
   "oauth.key",
+  "mfa.key",
 ];
 const existing = names.filter((name) => existsSync(new URL(name, dir)));
+// Older local setups lack the keys added later: add only the missing ones, never touch the rest.
+const added = ["oauth.key", "mfa.key"].filter((name) => !existing.includes(name));
 if (
   existing.length &&
-  existing.length === names.length - 1 &&
-  !existing.includes("oauth.key")
+  added.length &&
+  names.length - existing.length === added.length
 ) {
-  writeFileSync(
-    new URL("oauth.key", dir),
-    randomBytes(48).toString("base64url"),
-    { mode: 0o600, flag: "wx" },
-  );
+  for (const name of added)
+    writeFileSync(new URL(name, dir), randomBytes(48).toString("base64url"), {
+      mode: 0o600,
+      flag: "wx",
+    });
   console.log(
-    "Added the OAuth transaction key without changing existing development keys.",
+    `Added ${added.join(", ")} without changing existing development keys.`,
   );
   process.exit(0);
 }
@@ -42,10 +45,11 @@ const values = [
   randomBytes(48).toString("base64url"),
   randomBytes(48).toString("base64url"),
   randomBytes(48).toString("base64url"),
+  randomBytes(48).toString("base64url"),
 ];
 names.forEach((name, index) =>
   writeFileSync(new URL(name, dir), values[index], { mode: 0o600, flag: "wx" }),
 );
 console.log(
-  "Development signing, CSRF and OAuth transaction keys created in ignored .local/auth.",
+  "Development signing, CSRF, OAuth transaction and MFA keys created in ignored .local/auth.",
 );
