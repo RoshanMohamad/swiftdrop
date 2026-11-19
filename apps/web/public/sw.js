@@ -1,13 +1,20 @@
 /* SwiftDrop courier service worker: caches the app shell so the PWA opens offline.
    API calls are never cached (private data); the page keeps its own offline queue. */
-const SHELL = "swiftdrop-shell-v1";
+const SHELL = "swiftdrop-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
       .then((cache) =>
-        cache.addAll(["/", "/manifest.webmanifest", "/icon.svg"]),
+        cache.addAll([
+          "/",
+          "/manifest.webmanifest",
+          "/icon.svg",
+          "/icon-192.png",
+          "/icon-512.png",
+          "/icon-maskable-512.png",
+        ]),
       ),
   );
   self.skipWaiting();
