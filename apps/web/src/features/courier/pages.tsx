@@ -49,6 +49,11 @@ const REASON_LABEL: Record<FailureReason, string> = {
 };
 const cacheKey = (userId: number) => `swiftdrop:courier:jobs:${userId}`;
 
+type PromptInstallEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 /** Status a job will have once its queued updates reach the server. */
 export function projectedStatus(job: CourierJob, queue: QueuedOperation[]) {
   const pending = queue.filter(
@@ -225,6 +230,8 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
   const [stale, setStale] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [installPrompt, setInstallPrompt] =
+    useState<PromptInstallEvent | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [action, setAction] = useState<ParcelStatus | null>(null);
   const syncing = useRef(false);
@@ -324,6 +331,23 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
     };
   }, [sync]);
 
+  useEffect(() => {
+    const onInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as PromptInstallEvent);
+    };
+    const onInstalled = () => {
+      setInstallPrompt(null);
+      setNotice("SwiftDrop installed.");
+    };
+    window.addEventListener("beforeinstallprompt", onInstallPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onInstallPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
   const job = jobs.find((item) => item.id === selected) ?? null;
   const review = queue.filter((item) => item.state === "review");
   const waiting = queue.filter((item) => item.state === "pending").length;
@@ -365,6 +389,14 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
     }
   }
 
+  async function installApp() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    if (outcome === "accepted") setNotice("Installation started.");
+  }
+
   return (
     <section className="admin-panel courier-home">
       <div className="admin-heading">
@@ -372,6 +404,14 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
           <span className="eyebrow">Courier</span>
           <h1>Today’s jobs</h1>
         </div>
+        {installPrompt && (
+          <button
+            className="secondary courier-tap"
+            onClick={() => void installApp()}
+          >
+            Install app
+          </button>
+        )}
         {profile && (
           <button
             className="secondary courier-tap"

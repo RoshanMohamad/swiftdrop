@@ -8,6 +8,7 @@ import {
   type ParcelStatus,
 } from "@swiftdrop/contracts";
 import { HttpError } from "../../shared/problem.js";
+import { logger } from "../../shared/logger.js";
 import type { LifecycleService } from "../lifecycle/index.js";
 import { lockCourierRows } from "../dispatch/index.js";
 import type { ProofStorage } from "./storage.js";
@@ -43,8 +44,8 @@ export function sniffImage(data: Buffer): "image/jpeg" | "image/png" | null {
 }
 
 /**
- * Courier delivery backend (FR-K1, FR-K2). Every parcel read and write is scoped to the
- * courier's own unreleased assignment, so another courier's parcel is a 404. Status changes
+ * Courier delivery backend (FR-K1, FR-K2). Reads are scoped to the courier's own unreleased
+ * assignment; status updates log and reject another courier's parcel with 403. Status changes
  * go through LifecycleService (the only writer of parcels.status/version/attempt_count) and
  * record a ledger row in the same transaction, which makes offline replays exactly-once.
  */
@@ -158,12 +159,16 @@ export class CourierService {
 
   private async ownedParcel(courierId: number, parcelId: string) {
     if (!UUID.test(parcelId)) throw notFound();
-    const assignment = await this.db.parcelAssignment.findFirst({
+    const assignment = await this.findAssignment(courierId, parcelId);
+    if (!assignment) throw notFound();
+    return assignment.parcel;
+  }
+
+  private async findAssignment(courierId: number, parcelId: string) {
+    return this.db.parcelAssignment.findFirst({
       where: { parcelId, courierId, releasedAt: null },
       select: { parcel: { select: { status: true } } },
     });
-    if (!assignment) throw notFound();
-    return assignment.parcel;
   }
 
   /** FR-K2: store a private proof photo; the key is later attached to the DELIVERED update. */
@@ -204,7 +209,21 @@ export class CourierService {
     const replay = await this.findReplay(courierId, operationKey, requestHash);
     if (replay) return replay;
 
-    const parcel = await this.ownedParcel(courierId, parcelId);
+    if (!UUID.test(parcelId)) throw notFound();
+    const assignment = await this.findAssignment(courierId, parcelId);
+    if (!assignment) {
+      logger.warn({
+        event: "courier_unassigned_update_attempt",
+        courierId,
+        parcelId,
+      });
+      throw new HttpError(
+        403,
+        "FORBIDDEN",
+        "This job is not assigned to you.",
+      );
+    }
+    const parcel = assignment.parcel;
     if (parcel.status === "FAILED" && body.to === "OUT_FOR_DELIVERY")
       throw new HttpError(
         409,

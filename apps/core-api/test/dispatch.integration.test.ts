@@ -5,6 +5,7 @@ import {
   describe,
   expect,
   it,
+  jest,
 } from "@jest/globals";
 import {
   GenericContainer,
@@ -20,6 +21,7 @@ import { LifecycleService } from "../src/modules/lifecycle/index.js";
 import { CourierService } from "../src/modules/courier/service.js";
 import type { ProofStorage } from "../src/modules/courier/storage.js";
 import { HttpError } from "../src/shared/problem.js";
+import { logger } from "../src/shared/logger.js";
 import { UsersService } from "../src/modules/users/service.js";
 import { tokenHash } from "../src/modules/auth/service.js";
 
@@ -449,31 +451,41 @@ describe("courier delivery (FR-K1, FR-K2, FR-K3)", () => {
     expect(jobs.profile).toMatchObject({ workload: 1, onDuty: true });
   });
 
-  it("hides another courier's parcel behind 404", async () => {
+  it("logs and rejects another courier's update with 403 while proof lookup stays 404", async () => {
     const mine = await newCourier();
     const theirs = await newCourier();
     const parcel = await newParcel();
     await dispatch.assign(dispatcherId, parcel.id, theirs, 1);
-    const denied = await problem(
-      courier.updateStatus(mine, parcel.id, "key-12345678", {
-        to: "PICKED_UP",
-        town: "Colombo",
-        version: 2,
-      }),
-    );
-    expect(denied.status).toBe(404);
-    expect(
-      (
-        await problem(
-          courier.uploadProof(
-            mine,
-            parcel.id,
-            Buffer.from([0xff, 0xd8, 0xff, 0]),
-            "image/jpeg",
-          ),
-        )
-      ).status,
-    ).toBe(404);
+    const warning = jest.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const denied = await problem(
+        courier.updateStatus(mine, parcel.id, "key-12345678", {
+          to: "PICKED_UP",
+          town: "Colombo",
+          version: 2,
+        }),
+      );
+      expect(denied.status).toBe(403);
+      expect(warning).toHaveBeenCalledWith({
+        event: "courier_unassigned_update_attempt",
+        courierId: mine,
+        parcelId: parcel.id,
+      });
+      expect(
+        (
+          await problem(
+            courier.uploadProof(
+              mine,
+              parcel.id,
+              Buffer.from([0xff, 0xd8, 0xff, 0]),
+              "image/jpeg",
+            ),
+          )
+        ).status,
+      ).toBe(404);
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   it("applies an update once and returns the original result on replay", async () => {

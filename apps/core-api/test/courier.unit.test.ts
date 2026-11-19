@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import {
   assignParcelSchema,
   courierProfileUpdateSchema,
@@ -10,9 +10,69 @@ import {
   releaseReasonFor,
 } from "../src/modules/dispatch/capacity.js";
 import { decodeKeyset, encodeKeyset } from "../src/modules/dispatch/service.js";
-import { sniffImage } from "../src/modules/courier/service.js";
+import { CourierService, sniffImage } from "../src/modules/courier/service.js";
 
 const base = { town: "Kandy", version: 3 };
+
+describe("courier job ownership (FR-K1)", () => {
+  it("queries only the courier's unreleased active assignments", async () => {
+    const findMany = jest.fn(async (_query: unknown) => [
+      {
+        assignedAt: new Date("2026-11-19T10:00:00.000Z"),
+        parcel: {
+          id: "2c1b6f7e-9d0f-4a7e-8d52-0b2c8f3e1a11",
+          trackingNumber: "SD-7KQ2M9XA-P",
+          status: "CREATED",
+          version: 2,
+          attemptCount: 0,
+          recipientName: "Recipient",
+          recipientPhone: "0771234567",
+          recipientAddress: "Kandy",
+          originZone: { town: "Colombo" },
+          destinationZone: { town: "Kandy" },
+        },
+      },
+    ]);
+    const service = new CourierService(
+      {
+        user: {
+          findUnique: jest.fn(async () => ({
+            fullName: "Courier One",
+            courierProfile: { onDuty: true, capacity: 10, workload: 1 },
+          })),
+        },
+        parcelAssignment: { findMany },
+      } as never,
+      {} as never,
+      {} as never,
+    );
+
+    const jobs = await service.jobs(7);
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          courierId: 7,
+          releasedAt: null,
+          parcel: {
+            status: {
+              in: [
+                "CREATED",
+                "PICKED_UP",
+                "IN_TRANSIT",
+                "OUT_FOR_DELIVERY",
+                "FAILED",
+              ],
+            },
+          },
+        },
+      }),
+    );
+    expect(jobs.items.map((job) => job.id)).toEqual([
+      "2c1b6f7e-9d0f-4a7e-8d52-0b2c8f3e1a11",
+    ]);
+  });
+});
 
 describe("courier status update contract (FR-K2)", () => {
   it("requires the receiver's name for DELIVERED and keeps the photo optional", () => {
