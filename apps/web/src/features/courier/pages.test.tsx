@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CourierJob } from "@swiftdrop/contracts";
 import { CourierJobs, projectedStatus } from "./pages.js";
@@ -81,6 +81,32 @@ describe("projectedStatus", () => {
 });
 
 describe("CourierJobs (FR-F6)", () => {
+  it("offers installation after the browser signals installability", async () => {
+    const user = userEvent.setup();
+    const prompt = vi.fn(async () => {});
+    const event = Object.assign(
+      new Event("beforeinstallprompt", { cancelable: true }),
+      {
+        prompt,
+        userChoice: Promise.resolve({ outcome: "accepted" as const, platform: "web" }),
+      },
+    );
+    render(<CourierJobs store={createMemoryStore()} />);
+
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    const installButton = await screen.findByRole("button", {
+      name: "Install app",
+    });
+    expect(event.defaultPrevented).toBe(true);
+    await user.click(installButton);
+
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Installation started.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Install app" })).toBeNull();
+  });
+
   it("lists assigned jobs and shows recipient details on selection", async () => {
     const user = userEvent.setup();
     render(<CourierJobs store={createMemoryStore()} />);
