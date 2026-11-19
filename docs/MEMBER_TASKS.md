@@ -45,7 +45,7 @@ Rules for everyone:
 3. Dispatcher console: refresh the queue after a conflict (no silent retry).
 4. Test: reassign writes a history row and an outbox row in one transaction.
 
-## M07: Courier PWA (muzny, **create branch `feature/m07-courier-pwa` from main**) | reviewer: M10
+## M07: Courier PWA (muzny100, **create branch `feature/m07-courier-pwa` from main**) | reviewer: M10 | status: started
 1. Create the branch and push it with a one-line change to `docs/MEMBER_TASKS.md` marking it started.
 2. Test: courier sees only assigned parcels.
 3. Test: courier updating an unassigned parcel gets 403 and the attempt is logged.
