@@ -23,7 +23,7 @@ Checks before going on stage:
 - `http://localhost:5173/api/ready` shows `outboxRelay: ready`. If it says degraded, the relay is down and no event will flow.
 - Mailpit is open at `http://localhost:8025`. RabbitMQ UI at `http://localhost:15672` (guest/guest) is optional.
 - Browser profiles: one signed-in dispatcher, one signed-in courier on a phone-sized window, one private window for the customer.
-- Register a merchant at `/auth/merchant-register` with a unique email, but leave it pending so the approval step can be shown live. The seed script does not create an approved merchant profile (the README says merchant profiles are not seeded); this has not been confirmed against a fresh database.
+- Register a merchant at `/auth/merchant-register` with a unique email, but leave it pending so the approval step can be shown live. Confirmed on a fresh database: the seed script creates no merchant rows, a new merchant is `PENDING`, and creating an API client before approval returns 403 `MERCHANT_NOT_APPROVED`.
 - Demo accounts (development-only password `Local demo passphrase 2026!`): `customer@`, `courier@`, `dispatcher@`, `admin@swiftdrop.test` (and `merchant@swiftdrop.test`, which has no approved merchant profile).
 - Confirm the seeded courier is on duty (`/dispatcher` lists them). The seed creates an on-duty profile.
 - **Google sign-in** needs private credentials in `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL=http://localhost:5173/api/v1/auth/google/callback`). If they are not set, the button is unavailable; say so and show the password login. Do not paste credentials on screen.
@@ -65,12 +65,12 @@ Checks before going on stage:
 
    ```sh
    curl -s -X POST http://localhost:3000/api/v1/merchant/orders \
-     -H "Authorization: Bearer <accessToken>" -H "Idempotency-Key: demo-001" -H "Content-Type: application/json" \
+     -H "Authorization: Bearer <accessToken>" -H "Idempotency-Key: demo-order-0001-abcdef" -H "Content-Type: application/json" \
      -d '{"originDistrict":"Colombo","destinationDistrict":"Kandy","weightGrams":2000,"lengthMm":300,"widthMm":200,"heightMm":100,"recipientName":"Demo Recipient","recipientPhone":"0771234567","recipientAddress":"12 Temple Road, Kandy"}'
    ```
 
-   Expect 201 with a tracking number. Repeat the same call: the same order comes back (idempotent).
-4. Show the failure that matters: request a token without `orders:write` (or omit the scope) and call the same endpoint; expect 403. Say the order of checks is scope, then approved merchant, then body.
+   The `Idempotency-Key` must be 16 to 128 characters (letters, digits, `.`, `_`, `~`, `-`); a short key such as `demo-001` is rejected with 400 `IDEMPOTENCY_KEY`. Expect 201 with a tracking number. Repeat the same call: the same order comes back (idempotent). In `pnpm dev` the token endpoint is on port 3000 (Vite only proxies `/api`); behind the compose nginx it is `http://localhost/oauth/token`.
+4. Show the failure that matters: request a token without `orders:write` (or omit the scope) and call the same endpoint; expect 403 `INSUFFICIENT_SCOPE`. Say the order of checks is scope, then approved merchant, then body.
 5. Roshan: show the receiver. Expect a POST with `X-SwiftDrop-Signature` and a timestamp; the body carries `eventId`, `type`, `version`, `sequence` and no phone or address. Say: the request handler wrote the outbox row in the same transaction, the relay published it, and the webhook service signed it with HMAC-SHA256.
 6. Roshan, optional 30 seconds: `/admin/webhooks` (as admin) shows the delivery log and attempts; a failing endpoint retries with TTL backoff and ends in the DLQ with a **Replay** button.
 
@@ -78,12 +78,12 @@ Checks before going on stage:
 
 1. As `dispatcher@swiftdrop.test` open `/dispatcher`. Find the customer parcel in the unassigned queue.
 2. Assign it to the on-duty courier. Show the workload counter go up. The tracking window from section 3 should react.
-3. Say: assignment is `UPDATE ... WHERE courier_id IS NULL AND version = ?`. If two dispatchers race, exactly one wins and the other sees a conflict and a refreshed queue; it never retries silently. Open a second dispatcher window and assign the same parcel to show the conflict if time allows.
+3. Say: assignment is `UPDATE ... WHERE courier_id IS NULL AND version = ?`. If two dispatchers race, exactly one wins and the other sees a conflict and a refreshed queue; it never retries silently. Live conflict demo needs a second on-duty courier, because assigning the parcel to its current courier again is a documented no-op (returns 200, verified), so with one seeded courier the conflict is only shown by the concurrency test (`dispatch.integration.test.ts`).
 
 ### 6. Courier updates status (about 1.5 min) - presenter: muzny100 (M07)
 
 1. In the phone-sized window sign in as `courier@swiftdrop.test` and open `/courier`. Only assigned parcels are listed.
-2. Move the parcel through Picked up, In transit, Out for delivery, then **Delivered** with the recipient's name (a photo is optional). Show that a skipped step is refused with 409 `invalid-transition`.
+2. Move the parcel through Picked up, In transit, Out for delivery, then **Delivered** with the recipient's name (a photo is optional). To show a refused step, try Delivered straight from Created on a second parcel: the API answers 409 `ILLEGAL_TRANSITION` (problem type `illegal_transition`). Do not try it after Delivered: delivery releases the assignment, so a later courier update returns 403 and is logged.
 3. Optional: switch the browser to offline, make an update, go back online and show the queued update replay in order. Mention the app is installable (PWA).
 4. Say: the courier call returns immediately; parcel, history and outbox rows are written in one transaction and everything else is asynchronous.
 
@@ -102,6 +102,26 @@ Checks before going on stage:
 
 - AI assistant (read-only MCP tools, calls the REST API with the user's JWT): umar (M03) presents.
 - Kubernetes: `deploy/` Helm chart. No owner is recorded for this slice in the contribution sheet; the team should name a presenter.
+
+## What was checked live (2026-11-21, fresh clone, `pnpm dev`)
+
+Run through the HTTP API, not a browser, against the seeded database. Not checked: Google sign-in, the browser UI, the Socket.IO real-time update, the phone PWA, and webhook delivery to a public HTTPS receiver.
+
+| Step | Observed |
+|---|---|
+| Customer login | 200 with an access token |
+| Quote Colombo to Kandy, 2 kg | `feeCents` 57000 (LKR 570.00) |
+| Booking, then the same `Idempotency-Key` again | 201 `SD-NG53CZPG-H`; second call returned the same parcel |
+| Public tracking `/api/v1/track/<no>` | status, towns and history only; no names, phones or addresses |
+| Dispatcher assigns, courier moves it to Delivered | all 200; the parcel appeared in the unassigned queue first |
+| Courier jumps Created to Delivered | 409 `ILLEGAL_TRANSITION` |
+| Mailpit | one email per event: booking confirmed, picked up, in transit, out for delivery, delivered; no duplicates |
+| Merchant register, login, create client before approval | 403 `MERCHANT_NOT_APPROVED`; after admin approval the client is created |
+| Client-credentials token | 200, `expires_in` 900 |
+| Order with a read-only token | 403 `INSUFFICIENT_SCOPE` |
+| Order with `orders:write`, repeated with the same key | 201; same tracking number on the repeat |
+| Webhook to a local receiver (dev config file) | one POST, attempt 0, valid `X-SwiftDrop-Signature` over `<timestamp>.<body>`, fresh timestamp, no phone or address in the payload |
+| `/api/ready`, then stop the relay | `ready`; then 503 `degraded` / `unreachable`; back to `ready` after restart |
 
 ## If something goes wrong
 

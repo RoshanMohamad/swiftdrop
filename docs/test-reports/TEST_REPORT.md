@@ -9,7 +9,7 @@ Every row below was run in this session. Numbers are copied from the test output
 |---|---|---|
 | core-api unit | `pnpm --filter core-api test` | **21 suites, 289 tests: all passed** |
 | web unit | `pnpm --filter web test` | **20 files, 137 tests: all passed** (see note 1) |
-| messaging unit | `pnpm --filter @swiftdrop/messaging test` | **2 suites, 13 tests: all passed** |
+| messaging unit | `pnpm --filter @swiftdrop/messaging test` | **3 suites, 16 tests: all passed** (3 new: workspace path resolution) |
 | outbox-relay unit | `pnpm --filter outbox-relay test` | **1 suite, 6 tests: all passed** |
 | webhook-svc unit | `pnpm --filter webhook-svc test` | **3 suites, 29 tests: all passed** |
 | notification-svc unit | `pnpm --filter notification-svc test` | **1 suite, 12 tests: all passed** |
@@ -21,7 +21,7 @@ Every row below was run in this session. Numbers are copied from the test output
 | notification-svc integration | `pnpm --filter notification-svc test:integration` | **1 suite, 5 tests: all passed** |
 | outbox-relay integration | `pnpm --filter outbox-relay test:integration` | **1 suite, 3 tests: all passed** |
 
-Unit total: 493 tests, all passing. Integration total (four services), from one `pnpm test:integration` run with exit code 0: 494 tests, all passing (core-api 480, webhook-svc 6, notification-svc 5, outbox-relay 3).
+Unit total: 496 tests, all passing. Integration total (four services), from one `pnpm test:integration` run with exit code 0: 494 tests, all passing (core-api 480, webhook-svc 6, notification-svc 5, outbox-relay 3).
 
 ### Notes on failures and instability
 
@@ -65,7 +65,7 @@ Integration retry waits are shortened to 400 ms through a test seam; the product
 
 ## Known open issues (status as of this run)
 
-- **Relay health in `/api/ready`:** implemented in code (`core-api/src/app.ts`, `shared/relay-health.ts`; reports `outboxRelay` and returns 503 `degraded` when the relay is down). `relay-health.unit.test.ts` is part of the passing core-api unit run. CLAUDE.md still describes this as open, so the two disagree; neither was edited.
+- **Relay health in `/api/ready`:** implemented (`core-api/src/app.ts`, `shared/relay-health.ts`; reports `outboxRelay` and returns 503 `degraded` when the relay is down). Verified live twice (compose stack and `pnpm dev`): relay stopped gives 503 `unreachable`, restarted gives 200 `ready`. `relay-health.unit.test.ts` is part of the passing core-api unit run. CLAUDE.md was updated to match.
 - **Receipts against live MinIO:** exercised by `receipts.integration.test.ts` against a Testcontainers MinIO and it passed. This is a containerised MinIO, not the Compose `minio` service.
 - **Merchant approval concurrency:** a new regression test covers a reviewer waiting behind a slow lock holder (see note 2).
 - **Return to sender:** no enum value added; awaiting the team.
@@ -77,25 +77,70 @@ Followed the README setup in a fresh clone on Windows with Docker, under a separ
 
 | Step | Result |
 |---|---|
-| `pnpm install --frozen-lockfile`, `pnpm auth:keys:generate`, `pnpm db:generate` | Passed |
-| `docker compose up -d --wait` (starts the whole stack, not only infrastructure) | In-container `migrate` and both `provision-*` jobs passed; every service reached healthy. **nginx failed** (fixed, below) |
-| `/api/ready` through the gateway with the relay running | `200 {"status":"ready","outboxRelay":"ready"}` |
+| `pnpm install --frozen-lockfile`, `pnpm auth:keys:generate`, `pnpm db:generate` | Passed (key generation correctly refuses to run twice) |
+| `docker compose up -d --wait` (starts the whole stack, not only infrastructure) | In-container `migrate` and both `provision-*` jobs passed; every service reached healthy. **nginx failed at first** (fixed, below) |
+| `/api/ready` through the gateway, relay running | `200 {"status":"ready","outboxRelay":"ready"}` |
 | Relay stopped, then restarted | `503 {"status":"degraded","outboxRelay":"unreachable"}`, then `200 ready` |
-| Host-side `pnpm db:migrate`, `db:seed`, `services:provision`, then `pnpm dev` | **Not completed**: see the port issue below; `pnpm dev` was not run (low memory on the test machine) |
+| Host-side `pnpm db:migrate`, `pnpm db:seed`, `pnpm services:provision` (x2) | Passed once `.env.example` pointed at port 5433 (below) |
+| `pnpm dev` | All six processes started (core-api, web, outbox-relay, webhook-svc, notification-svc, ai-assistant). outbox-relay connected to the broker; `/api/ready` reported `outboxRelay: ready` |
 
-Found and fixed (committed):
+Found and fixed (all committed on this branch):
 
-- **nginx exited 127.** On Windows with `core.autocrlf=true`, `deploy/nginx/40-tls.sh` was checked out with CRLF. Fixed with a `.gitattributes` (`*.sh text eol=lf`).
-- **`http://localhost` showed the nginx welcome page and 404ed `/api/`.** The image kept the stock `conf.d/default.conf`, which also listens on IPv6. The Dockerfile now removes it and the gateway also listens on `[::]:80`. Verified on `localhost` and `127.0.0.1`.
+1. **nginx exited 127.** On Windows with `core.autocrlf=true`, `deploy/nginx/40-tls.sh` was checked out with CRLF. Fixed with a `.gitattributes` (`*.sh text eol=lf`).
+2. **`http://localhost` showed the nginx welcome page and 404ed `/api/`.** The image kept the stock `conf.d/default.conf`, which also listens on IPv6. The Dockerfile now removes it and the gateway also listens on `[::]:80`. Verified on `localhost` and `127.0.0.1`.
+3. **Postgres host port.** `compose.yaml` publishes Postgres on 5433 (commit `bcf7150`), but `.env.example` and the README said 5432, so host-side migrate, seed and `pnpm dev` failed with `P1000` on machines where another PostgreSQL owns 5432 (the test machine had one). `.env.example` and the README now say 5433. The compose file was not changed. The in-container address `postgres:5432` (and the `seed` service, which shares the Postgres network namespace) is correct and unchanged.
+4. **No email reached Mailpit under `pnpm dev`.** notification-svc logged `Contact lookup is unavailable` for every event. Cause: `.env` holds the repo-root-relative path `.local/services/notification-svc/signer.json`, but `pnpm dev` starts each service in `apps/<name>`, so the file was not found (confirmed: `ENOENT` from that directory). core-api already resolved its paths against the workspace root; the two workers did not. Added `resolveWorkspacePath()` to `@swiftdrop/messaging` (3 unit tests) and used it for the notification signer file and the webhook signer and dev-config files. After the fix the stuck events were redelivered and the emails arrived.
+5. **CLAUDE.md** still listed relay health in `/api/ready` as open; updated to say it is implemented and verified.
 
-Found and **not** fixed (needs a team decision):
+Still true, not fixed:
 
-- **Postgres host port.** `compose.yaml` publishes Postgres on host port **5433** (commit `bcf7150`), but `.env.example`, the README and the compose `seed` service use **5432**. Host-side `pnpm db:migrate`/`db:seed`/`pnpm dev` therefore connect to 5432. On the test machine another process already owns 5432, so they failed with `P1000` authentication errors. CLAUDE.md lists postgres at :5432. Either `compose.yaml` goes back to 5432 or `.env.example` and the README move to 5433.
 - **Stale local volumes.** A developer who ran the stack before 14 Nov has a `postgres-data` volume with a failed `202611130001_dispatch_capacity` migration, and `docker compose up` stops with `P3009`. The fix is `docker compose down -v` on a disposable database; this was not run against the existing volume.
-- **Image builds need registry access.** A rebuild during the check failed with `ETIMEDOUT` reaching `registry.npmjs.org` from inside Docker; this was a network problem on the test machine, not a repository problem.
+- **Image builds need registry access.** One rebuild failed with `ETIMEDOUT` reaching `registry.npmjs.org` from inside Docker; this was a network problem on the test machine.
+
+## Live end-to-end check (HTTP API against `pnpm dev`, fresh database)
+
+Run with small scripts against the running stack, not through a browser. Details are in [../DEMO_SCRIPT.md](../DEMO_SCRIPT.md).
+
+| Step | Observed |
+|---|---|
+| Customer login | 200 with an access token |
+| Quote Colombo to Kandy, 2 kg | `feeCents` 57000 |
+| Booking, then the same `Idempotency-Key` again | 201 with a tracking number; the repeat returned the same parcel |
+| Public tracking `/api/v1/track/<no>` | status, towns and history only; no PII |
+| Dispatcher assigns, courier moves the parcel to Delivered | all 200 |
+| Courier jumps Created to Delivered | 409 `ILLEGAL_TRANSITION` |
+| Mailpit | exactly one email per event for one parcel (booking confirmed, picked up, in transit, out for delivery, delivered) |
+| Merchant: create API client before approval | 403 `MERCHANT_NOT_APPROVED`; after admin approval 201 |
+| Client-credentials token | 200, `expires_in` 900 |
+| Order with a read-only token | 403 `INSUFFICIENT_SCOPE` |
+| Order with `orders:write`; same key again | 201; same tracking number on the repeat |
+| Webhook to a local receiver (dev config file) | one POST, attempt 0, valid HMAC-SHA256 `X-SwiftDrop-Signature` over `<timestamp>.<body>`, fresh timestamp, no phone or address in the payload |
+
+Differences between the code and CLAUDE.md found along the way (neither was changed; for the team to decide):
+
+- The illegal-transition error is problem type `illegal_transition` / code `ILLEGAL_TRANSITION`; CLAUDE.md calls it `invalid-transition`.
+- The webhook payload's `merchantId` is the merchant UUID; CLAUDE.md says the event contract uses the public string form (`m_1042`). This relates to open issue C-14 and was not touched.
+- Assigning a parcel to its current courier returns 200 (a documented no-op), so a live conflict demo needs a second courier.
+
+Not checked live: Google sign-in, the browser UI, the Socket.IO real-time update, the phone PWA, and webhook delivery to a public HTTPS receiver.
+
+## `notifications-realtime` evaluation (nothing was merged)
+
+Checked in an isolated clone of `origin/notifications-realtime` (tip `dcc1b60`). The branch has since merged `origin/main` itself.
+
+| Check | Result |
+|---|---|
+| Textual merge into `origin/main` (dry run) | **0 conflicts**. The earlier figure of 26 conflicting files no longer applies |
+| Textual merge into this branch (dry run) | **2 conflicts**: `.env.example` and `apps/notification-svc/src/server.ts` (the port and path fixes above; the branch rewrote the service into modules) |
+| `pnpm install --frozen-lockfile`, `pnpm db:generate`, `pnpm typecheck` | Passed |
+| Unit tests | messaging 13, notification-svc **51** (main has 12), core-api 299: all passed |
+| Signer path bug (item 4 above) | Not present: its `config.ts` resolves the signer file against the workspace root |
+
+Not run on that branch: integration tests, web tests, and a live `pnpm dev` run. It is an 83-file, about 8,900-line change that includes a Prisma upgrade, so it needs a decision and a full run before merging.
 
 ## Not verified
 
-- The host-side path (`pnpm db:migrate`, `db:seed`, `pnpm dev`) from a fresh clone, because of the Postgres port mismatch above.
-- Browser behaviour, phone PWA install and the manual test plans in the README.
+- Anything in a browser: Google sign-in, the web UI, the Socket.IO real-time update, the phone PWA install.
+- Webhook delivery to a public HTTPS receiver (only a local receiver through the dev config file was used).
 - Line coverage of web, relay, webhook-svc, notification-svc and ai-assistant.
+- Integration, web and live behaviour of the `notifications-realtime` branch.
