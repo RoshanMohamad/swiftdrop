@@ -3,3 +3,5 @@
 deploy/nginx/*.conf text eol=lf
 *.template text eol=lf
 Dockerfile text eol=lf
+packages/contracts/openapi.json text eol=lf
+packages/contracts/src/api.generated.ts text eol=lf
