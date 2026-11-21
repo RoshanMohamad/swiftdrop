@@ -23,7 +23,7 @@ This file condenses the design report (*SwiftDrop Design Documentation*, Oct 202
 
 - `pnpm dev` starts the stack, **including `outbox-relay`**. Events only flow while the relay is running. If you start services any other way, start the relay too.
 - The whole system must also come up with a single `docker compose up`. Don't add a step that breaks this.
-- `/api/ready` currently reports only the consumer's broker connection. It stays green when the relay is down, so check the relay yourself when events seem to vanish.
+- `/api/ready` reports the outbox relay's health as `outboxRelay` (`ready`, `unreachable` or `not-configured`) and returns 503 `degraded` when the relay is down. If events seem to vanish, check it first.
 - Configuration comes only from environment variables. The repo holds `.env.example` with placeholders. Never commit a real secret; CI secret scanning fails the build.
 
 ## Architecture
@@ -259,6 +259,6 @@ Don't build these unless asked:
 
 ## Known open issues (from the handover note, 14 Nov 2026)
 
-- **Relay readiness:** `/api/ready` doesn't reflect whether `outbox-relay` is running. A stopped relay silently stops all events.
+- **Relay readiness (resolved):** `/api/ready` now reports `outbox-relay` health and goes 503 `degraded` when it is down (`core-api/src/shared/relay-health.ts`; verified live on 2026-11-21).
 - **Receipts:** receipt generation on `DELIVERED` hasn't been exercised against a live MinIO yet.
 - **C-14 (partially resolved):** M08 and M09 type `merchantId` differently, one as a string and one as an integer. Don't change either side until the team picks one type. The event contract uses the public string form (`m_1042`).

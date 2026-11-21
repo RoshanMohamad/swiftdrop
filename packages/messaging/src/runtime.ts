@@ -1,17 +1,35 @@
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { createServer, type Server } from "node:http";
 import { config as dotenv } from "dotenv";
 import pino, { type Logger } from "pino";
 
-/** Load the workspace `.env` regardless of which app directory the process starts in. */
-export function loadWorkspaceEnv() {
+/** The directory that holds pnpm-workspace.yaml, found by walking up from the current directory. */
+export function workspaceRoot(): string | undefined {
   let root = process.cwd();
   while (!existsSync(resolve(root, "pnpm-workspace.yaml"))) {
     const parent = dirname(root);
-    if (parent === root) return process.env;
+    if (parent === root) return undefined;
     root = parent;
   }
+  return root;
+}
+
+/**
+ * Resolve a configured file path. `.env` paths such as `.local/services/x/signer.json` are written
+ * relative to the repository root, but `pnpm dev` starts each service in its own `apps/<name>`
+ * directory, so a relative path must be resolved against the workspace root, not the cwd.
+ */
+export function resolveWorkspacePath(path: string): string {
+  return isAbsolute(path)
+    ? path
+    : resolve(workspaceRoot() ?? process.cwd(), path);
+}
+
+/** Load the workspace `.env` regardless of which app directory the process starts in. */
+export function loadWorkspaceEnv() {
+  const root = workspaceRoot();
+  if (!root) return process.env;
   dotenv({ path: resolve(root, ".env"), quiet: true });
   return process.env;
 }
