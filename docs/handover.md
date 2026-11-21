@@ -993,6 +993,18 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery.
 
 ## M09 — TBD
 
+### M09 checkpoint: Isolate notification delivery integration test (21 November 2026)
+
+- Member: M09; branch: `notifications-realtime`; reference: uncommitted follow-up to `1f82401`.
+- Problem: the delivery integration test assumed PostgreSQL, RabbitMQ management/AMQP and Mailpit were already available at fixed localhost URLs. The GitHub Actions workflow runs the integration command without starting those services; the sibling storage suite already provisions its own database with Testcontainers.
+- Change: the delivery suite now starts disposable PostgreSQL 17, RabbitMQ 4 and Mailpit v1.27 containers on assigned ports, waits for readiness, deploys repository migrations to its isolated database, and stops the containers after the suite. It does not use the application's `.env` database or require Compose. Existing assertions for delivery, masked persistence, duplicate suppression and invalid-event DLQ handling remain intact. No production code or CI checks were bypassed.
+- Verification: notification typecheck passed; actual `pnpm --filter notification-svc test:integration` with Docker passed both suites and all six tests in 20.384 seconds, including a fresh application of the merged migrations. An empty, untracked `202611130001_notifications` directory left locally by the prior merge was removed after it caused Prisma P3015; fresh Git checkouts do not contain that directory. Existing application database contents were not changed.
+- Manual verification: use Node 24.22.1 and pnpm 11.25.0 with Docker running. From the repository root run `pnpm install --frozen-lockfile`, `pnpm db:generate`, then `pnpm --filter notification-svc test:integration`.
+  1. Run the command without starting Compose; expect two passing suites and six passing tests.
+  2. Repeat the command; expect isolated ports/databases and the same result, with test containers removed afterward. Notification delivery is observed through the automated Mailpit API assertions; UI/responsive testing is not applicable to this test-only change.
+- Boundary: validated locally on Windows with Docker; the GitHub Actions run itself has not been rerun from this workspace. M08 review remains the normal peer-review step; no push or remote merge is claimed.
+
+
 <a id="m09"></a>
 
 .

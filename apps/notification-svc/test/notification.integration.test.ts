@@ -1,5 +1,12 @@
-import { expect, it } from "@jest/globals";
+import { afterAll, beforeAll, expect, it } from "@jest/globals";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+import {
+  GenericContainer,
+  Wait,
+  type StartedTestContainer,
+} from "testcontainers";
 import { connect, type ChannelModel, type ConfirmChannel } from "amqplib";
 import { createDatabase } from "@swiftdrop/db";
 import type { ParcelCreatedEvent } from "@swiftdrop/contracts";
@@ -8,15 +15,75 @@ import { SmtpEmailSender } from "../src/senders.js";
 import { NotificationService } from "../src/service.js";
 import { PrismaNotificationProgress } from "../src/store.js";
 
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://swiftdrop:local-development-only@127.0.0.1:5433/swiftdrop";
-const rabbitManagementUrl =
-  process.env.RABBITMQ_MANAGEMENT_URL ?? "http://127.0.0.1:15672";
-const rabbitUrl =
-  process.env.RABBITMQ_URL ?? "amqp://guest:guest@127.0.0.1:5672";
-const smtpUrl = process.env.SMTP_URL ?? "smtp://127.0.0.1:1025";
-const mailpitUrl = process.env.MAILPIT_URL ?? "http://127.0.0.1:8025";
+const containers: StartedTestContainer[] = [];
+let databaseUrl: string;
+let rabbitManagementUrl: string;
+let rabbitUrl: string;
+let smtpUrl: string;
+let mailpitUrl: string;
+
+// CI supplies Docker, not a running application stack. Each dependency is isolated
+// on an assigned port so this test cannot depend on or modify a developer's DB.
+beforeAll(async () => {
+  const start = async (container: GenericContainer) => {
+    const started = await container.start();
+    containers.push(started);
+    return started;
+  };
+  const [postgres, rabbit, mailpit] = await Promise.all([
+    start(
+      new GenericContainer("postgres:17-alpine")
+        .withEnvironment({
+          POSTGRES_USER: "test",
+          POSTGRES_PASSWORD: "test",
+          POSTGRES_DB: "notification_delivery_test",
+        })
+        .withExposedPorts(5432)
+        .withWaitStrategy(
+          Wait.forLogMessage(
+            "database system is ready to accept connections",
+            2,
+          ),
+        ),
+    ),
+    start(
+      new GenericContainer("rabbitmq:4-management")
+        .withExposedPorts(5672, 15672)
+        .withWaitStrategy(Wait.forLogMessage("Server startup complete")),
+    ),
+    start(
+      new GenericContainer("axllent/mailpit:v1.27")
+        .withExposedPorts(1025, 8025)
+        .withWaitStrategy(
+          Wait.forHttp("/api/v1/messages", 8025).forStatusCode(200),
+        ),
+    ),
+  ]);
+  databaseUrl = `postgresql://test:test@${postgres.getHost()}:${postgres.getMappedPort(5432)}/notification_delivery_test`;
+  rabbitManagementUrl = `http://${rabbit.getHost()}:${rabbit.getMappedPort(15672)}`;
+  rabbitUrl = `amqp://guest:guest@${rabbit.getHost()}:${rabbit.getMappedPort(5672)}`;
+  smtpUrl = `smtp://${mailpit.getHost()}:${mailpit.getMappedPort(1025)}`;
+  mailpitUrl = `http://${mailpit.getHost()}:${mailpit.getMappedPort(8025)}`;
+  const root = resolve(import.meta.dirname, "../../..");
+  execFileSync(
+    process.execPath,
+    [
+      resolve(root, "packages/db/node_modules/prisma/build/index.js"),
+      "migrate",
+      "deploy",
+    ],
+    {
+      cwd: resolve(root, "packages/db"),
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      stdio: "pipe",
+    },
+  );
+}, 300_000);
+
+afterAll(async () => {
+  await Promise.allSettled(containers.map((container) => container.stop()));
+}, 60_000);
+
 const basicAuth = `Basic ${Buffer.from("guest:guest").toString("base64")}`;
 
 async function rabbitManagement(path: string, method: "PUT" | "DELETE") {

@@ -204,6 +204,8 @@ docker compose exec notification-svc node -e "fetch('http://127.0.0.1:3002/ready
 
 The notification health port is intentionally not published. Mailpit remains available at `http://localhost:8025`.
 
+The notification integration suites require Docker and start disposable Testcontainers dependencies. The delivery test creates its own PostgreSQL, RabbitMQ and Mailpit instances, applies migrations, and cleans them up; no running Compose stack or application database is needed. The storage suite also creates its own database unless `NOTIFICATION_TEST_DATABASE_URL` explicitly selects a disposable test database.
+
 Verification commands:
 
 ```sh
