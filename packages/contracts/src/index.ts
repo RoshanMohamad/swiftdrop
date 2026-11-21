@@ -5,6 +5,7 @@ export * from "./tracking";
 export * from "./events/index";
 export * from "./events/routing-keys";
 import { parcelStatusSchema } from "./lifecycle";
+import { webhookDeliveryStatusSchema } from "./messaging.js";
 import { TRACKING_PATTERN, isValidTrackingNumber } from "./tracking";
 const blocked = new Set(commonPasswords);
 export const roleSchema = z.enum([
@@ -177,6 +178,37 @@ export const saveMerchantWebhookResponseSchema = z.object({
 export const merchantWebhookSecretSchema = z.object({
   signingSecret: z.string().min(32).max(128),
 });
+export const merchantWebhookDeliveryQuerySchema = z
+  .object({
+    status: webhookDeliveryStatusSchema.optional(),
+    cursor: z.string().max(256).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+export type MerchantWebhookDeliveryQuery = z.infer<
+  typeof merchantWebhookDeliveryQuerySchema
+>;
+export const merchantWebhookDeliverySchema = z
+  .object({
+    eventId: z.uuid(),
+    eventType: z.string().min(3).max(100),
+    status: webhookDeliveryStatusSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+export const merchantWebhookDeliveryPageSchema = z
+  .object({
+    items: z.array(merchantWebhookDeliverySchema).max(100),
+    nextCursor: z.string().nullable(),
+  })
+  .strict();
+export type MerchantWebhookDelivery = z.infer<
+  typeof merchantWebhookDeliverySchema
+>;
+export type MerchantWebhookDeliveryPage = z.infer<
+  typeof merchantWebhookDeliveryPageSchema
+>;
 export const createMerchantApiClientSchema = z
   .object({
     name: z

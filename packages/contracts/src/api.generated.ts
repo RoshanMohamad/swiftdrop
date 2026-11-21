@@ -368,6 +368,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/merchant/webhook-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List webhook delivery history for the authenticated merchant */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "PENDING" | "SUCCESS" | "FAILED" | "SKIPPED";
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Merchant-safe webhook delivery summaries */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                /** Format: uuid */
+                                eventId: string;
+                                eventType: string;
+                                /** @enum {string} */
+                                status: "PENDING" | "SUCCESS" | "FAILED" | "SKIPPED";
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+                /** @description Invalid filter or page cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Approved merchant account required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;

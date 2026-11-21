@@ -18,8 +18,13 @@ import {
   saveMerchantWebhookSettings,
   rotateMerchantWebhookSecret,
   listMerchantOrders,
+  listMerchantWebhookDeliveries,
 } from "../auth/client.js";
-import { merchantOrderStatusSchema } from "@swiftdrop/contracts";
+import {
+  merchantOrderStatusSchema,
+  webhookDeliveryStatusSchema,
+  type WebhookDeliveryStatus,
+} from "@swiftdrop/contracts";
 
 type Merchant = Awaited<ReturnType<typeof listMerchants>>["items"][number];
 type MerchantApiClient = Awaited<
@@ -28,6 +33,16 @@ type MerchantApiClient = Awaited<
 type MerchantOrder = Awaited<
   ReturnType<typeof listMerchantOrders>
 >["items"][number];
+type MerchantWebhookDelivery = Awaited<
+  ReturnType<typeof listMerchantWebhookDeliveries>
+>["items"][number];
+
+const webhookStatusText: Record<WebhookDeliveryStatus, string> = {
+  PENDING: "Pending / retrying",
+  SUCCESS: "Delivered",
+  FAILED: "Failed",
+  SKIPPED: "Skipped",
+};
 
 export function MerchantOrders() {
   const [status, setStatus] = useState("");
@@ -134,6 +149,145 @@ export function MerchantOrders() {
             </tbody>
           </table>
         </div>
+      )}
+    </section>
+  );
+}
+
+export function MerchantWebhookHistory() {
+  const [status, setStatus] = useState<"" | WebhookDeliveryStatus>("");
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [history, setHistory] = useState<Array<string | undefined>>([]);
+  const [deliveries, setDeliveries] = useState<MerchantWebhookDelivery[]>([]);
+  const [next, setNext] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setError("");
+    void listMerchantWebhookDeliveries({
+      status: status || undefined,
+      cursor,
+      limit: 25,
+    })
+      .then((page) => {
+        if (!live) return;
+        setDeliveries(page.items);
+        setNext(page.nextCursor);
+      })
+      .catch((cause) => live && setError(errorMessage(cause)))
+      .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [status, cursor, refresh]);
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-heading">
+        <div>
+          <span className="eyebrow">Merchant platform</span>
+          <h1>Webhook delivery history</h1>
+          <p className="muted">
+            View delivery status for events sent to your configured webhook.
+          </p>
+        </div>
+      </div>
+      <label htmlFor="merchant-webhook-status">Filter by status</label>
+      <select
+        id="merchant-webhook-status"
+        value={status}
+        onChange={(event) => {
+          setStatus(event.target.value as typeof status);
+          setCursor(undefined);
+          setHistory([]);
+        }}
+      >
+        <option value="">All statuses</option>
+        {webhookDeliveryStatusSchema.options.map((value) => (
+          <option key={value} value={value}>
+            {webhookStatusText[value]}
+          </option>
+        ))}
+      </select>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {loading ? (
+        <p role="status">Loading webhook deliveries…</p>
+      ) : error ? (
+        <button
+          className="secondary"
+          onClick={() => setRefresh((value) => value + 1)}
+        >
+          Retry
+        </button>
+      ) : deliveries.length === 0 ? (
+        <p className="notice">
+          No webhook deliveries found
+          {status ? ` with status ${webhookStatusText[status]}` : ""}.
+        </p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <caption className="visually-hidden">
+              Webhook delivery history
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Event</th>
+                <th scope="col">Event ID</th>
+                <th scope="col">Status</th>
+                <th scope="col">Created</th>
+                <th scope="col">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.map((delivery) => (
+                <tr key={delivery.eventId}>
+                  <td>{delivery.eventType}</td>
+                  <td>
+                    <code>{delivery.eventId}</code>
+                  </td>
+                  <td>{webhookStatusText[delivery.status]}</td>
+                  <td>{new Date(delivery.createdAt).toLocaleString()}</td>
+                  <td>{new Date(delivery.updatedAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!loading && !error && (history.length > 0 || next) && (
+        <nav className="row-actions" aria-label="Webhook delivery pages">
+          <button
+            className="secondary"
+            disabled={history.length === 0}
+            onClick={() => {
+              const previous = history.at(-1);
+              setCursor(previous);
+              setHistory((pages) => pages.slice(0, -1));
+            }}
+          >
+            Previous page
+          </button>
+          <button
+            className="secondary"
+            disabled={!next}
+            onClick={() => {
+              if (!next) return;
+              setHistory((pages) => [...pages, cursor]);
+              setCursor(next);
+            }}
+          >
+            Next page
+          </button>
+        </nav>
       )}
     </section>
   );

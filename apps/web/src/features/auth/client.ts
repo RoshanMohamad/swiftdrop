@@ -62,6 +62,8 @@ import {
   saveMerchantWebhookSchema,
   saveMerchantWebhookResponseSchema,
   merchantWebhookSecretSchema,
+  merchantWebhookDeliveryPageSchema,
+  type MerchantWebhookDeliveryQuery,
 } from "@swiftdrop/contracts";
 export const api = createClient<paths>({
   baseUrl: window.location.origin,
@@ -539,6 +541,22 @@ export async function listMerchantOrders(status?: MerchantOrderStatus) {
         await checked(
           await api.GET("/api/v1/merchant/orders", {
             params: { query: status ? { status } : {} },
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }),
+        ),
+      ),
+    true,
+  );
+}
+export async function listMerchantWebhookDeliveries(
+  filters: MerchantWebhookDeliveryQuery = {},
+) {
+  return authenticated(
+    async (session) =>
+      merchantWebhookDeliveryPageSchema.parse(
+        await checked(
+          await api.GET("/api/v1/merchant/webhook-deliveries", {
+            params: { query: filters },
             headers: { Authorization: `Bearer ${session.accessToken}` },
           }),
         ),

@@ -1533,6 +1533,272 @@ describe("webhook delivery log and replay (M08)", () => {
   });
 });
 
+describe("merchant webhook delivery history (M02)", () => {
+  const bearerHeader = (token: string) => ({
+    Authorization: `Bearer ${token}`,
+  });
+
+  async function merchantSession(email: string) {
+    const owner = await user("MERCHANT", email);
+    const merchant = await db.merchant.create({
+      data: {
+        userId: owner.id,
+        businessName: `${email} shop`,
+        status: "APPROVED",
+        reviewedAt: new Date(),
+      },
+    });
+    const agent = request.agent(api.app);
+    const logged = await post(agent, "login", { email, password });
+    return { merchant, agent, access: logged.body.accessToken as string };
+  }
+
+  async function merchantDelivery(merchantId: string) {
+    const eventId = randomUUID();
+    return db.webhookDelivery.create({
+      data: {
+        eventId,
+        merchantId,
+        eventType: "parcel.created",
+        envelope: {
+          eventId,
+          type: "parcel.created",
+          signingSecret: "must-not-be-returned",
+        },
+        status: "FAILED",
+        attempts: {
+          create: [
+            {
+              runNumber: 0,
+              attempt: 0,
+              state: "DONE",
+              leaseUntil: new Date(),
+              outcome: "FAILURE",
+              statusCode: 500,
+              errorCode: "INTERNAL_TEST_DETAIL",
+              handoff: "DLQ",
+            },
+          ],
+        },
+        replays: {
+          create: [
+            {
+              runNumber: 1,
+              requestedByUserId: 999,
+              reason: "admin-only detail",
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  it("requires an authenticated, approved merchant session", async () => {
+    await request(api.app)
+      .get("/api/v1/merchant/webhook-deliveries")
+      .expect(401);
+    const owner = await user("MERCHANT", "pending-log@example.test");
+    await db.merchant.create({
+      data: {
+        userId: owner.id,
+        businessName: "Pending Shop",
+        status: "PENDING",
+      },
+    });
+    const pending = await merchantSessionForExisting(owner.email);
+    await pending.agent
+      .get("/api/v1/merchant/webhook-deliveries")
+      .set(bearerHeader(pending.access))
+      .expect(403);
+  });
+
+  async function merchantSessionForExisting(email: string) {
+    const agent = request.agent(api.app);
+    const logged = await post(agent, "login", { email, password });
+    return { agent, access: logged.body.accessToken as string };
+  }
+
+  it("isolates deliveries to the signed-in merchant and returns only safe summary fields", async () => {
+    const first = await merchantSession("first-log@example.test");
+    const second = await merchantSession("second-log@example.test");
+    const own = await merchantDelivery(first.merchant.id);
+    await merchantDelivery(second.merchant.id);
+
+    const response = await first.agent
+      .get("/api/v1/merchant/webhook-deliveries")
+      .set(bearerHeader(first.access))
+      .expect(200);
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0]).toEqual({
+      eventId: own.eventId,
+      eventType: "parcel.created",
+      status: "FAILED",
+      createdAt: own.createdAt.toISOString(),
+      updatedAt: own.updatedAt.toISOString(),
+    });
+    expect(JSON.stringify(response.body)).not.toContain(second.merchant.id);
+    expect(JSON.stringify(response.body)).not.toContain("INTERNAL_TEST_DETAIL");
+    expect(JSON.stringify(response.body)).not.toContain("admin-only detail");
+    expect(JSON.stringify(response.body)).not.toContain("must-not-be-returned");
+
+    await first.agent
+      .get(
+        `/api/v1/merchant/webhook-deliveries?merchantId=${second.merchant.id}`,
+      )
+      .set(bearerHeader(first.access))
+      .expect(400);
+  });
+
+  it("filters and cursor-paginates only the authenticated merchant's deliveries", async () => {
+    const owner = await merchantSession("paged-log@example.test");
+    const other = await merchantSession("other-paged-log@example.test");
+    const first = await merchantDelivery(owner.merchant.id);
+    const second = await merchantDelivery(owner.merchant.id);
+    await merchantDelivery(other.merchant.id);
+
+    const page = await owner.agent
+      .get("/api/v1/merchant/webhook-deliveries?status=FAILED&limit=1")
+      .set(bearerHeader(owner.access))
+      .expect(200);
+    expect(page.body.items).toHaveLength(1);
+    expect(page.body.nextCursor).toEqual(expect.any(String));
+    const next = await owner.agent
+      .get(
+        `/api/v1/merchant/webhook-deliveries?limit=1&cursor=${page.body.nextCursor}`,
+      )
+      .set(bearerHeader(owner.access))
+      .expect(200);
+    expect(next.body.items).toHaveLength(1);
+    expect(
+      new Set([page.body.items[0].eventId, next.body.items[0].eventId]),
+    ).toEqual(new Set([first.eventId, second.eventId]));
+    expect(next.body.nextCursor).toBeNull();
+  });
+});
+
+describe("merchant order API authorization and idempotency (M02)", () => {
+  async function merchantClient(scopes: string[]) {
+    const owner = await user("MERCHANT", `orders-${randomUUID()}@example.test`);
+    const merchant = await db.merchant.create({
+      data: {
+        userId: owner.id,
+        businessName: "Approved Test Merchant",
+        status: "APPROVED",
+        reviewedAt: new Date(),
+      },
+    });
+    const clientId = `sd_cli_${Buffer.from(randomUUID().replaceAll("-", "")).toString("base64url").slice(0, 24)}`;
+    const clientSecret = `sd_sec_${Buffer.from(randomUUID().replaceAll("-", "").padEnd(64, "a")).toString("base64url").slice(0, 43)}`;
+    await db.merchantApiClient.create({
+      data: {
+        merchantId: merchant.id,
+        clientId,
+        name: "Integration test client",
+        scopes,
+        secretHash: createHash("sha256").update(clientSecret).digest("hex"),
+      },
+    });
+    const tokenResponse = await request(api.app)
+      .post("/oauth/token")
+      .auth(clientId, clientSecret)
+      .type("form")
+      .send({ grant_type: "client_credentials" })
+      .expect(200);
+    return { merchant, token: tokenResponse.body.access_token as string };
+  }
+
+  const orderBody = {
+    weightGrams: 2000,
+    lengthMm: 250,
+    widthMm: 180,
+    heightMm: 120,
+    recipientName: "Kamal Perera",
+    recipientPhone: "0771234567",
+    recipientAddress: "12 Peradeniya Road, Kandy",
+  };
+
+  async function addPricedRoute() {
+    const suffix = randomUUID().slice(0, 8);
+    const originDistrict = `Colombo-${suffix}`;
+    const destinationDistrict = `Kandy-${suffix}`;
+    const origin = await db.zone.create({
+      data: { district: originDistrict, town: "Colombo Fort" },
+    });
+    const destination = await db.zone.create({
+      data: { district: destinationDistrict, town: "Kandy Town" },
+    });
+    await db.priceVersion.create({
+      data: {
+        originZoneId: origin.id,
+        destinationZoneId: destination.id,
+        baseCents: 50000,
+        perExtraKgCents: 10000,
+        effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
+      },
+    });
+    return { originDistrict, destinationDistrict };
+  }
+
+  it("rejects a valid merchant token without orders:write and accepts an authorized token", async () => {
+    const route = await addPricedRoute();
+    const readOnly = await merchantClient(["orders:read"]);
+    await request(api.app)
+      .post("/api/v1/merchant/orders")
+      .set("Authorization", `Bearer ${readOnly.token}`)
+      .set("Idempotency-Key", "merchant-order-readonly-001")
+      .send({ ...orderBody, ...route })
+      .expect(403);
+
+    const writer = await merchantClient(["orders:write"]);
+    const response = await request(api.app)
+      .post("/api/v1/merchant/orders")
+      .set("Authorization", `Bearer ${writer.token}`)
+      .set("Idempotency-Key", "merchant-order-authorized-001")
+      .send({ ...orderBody, ...route })
+      .expect(201);
+    expect(response.body).toMatchObject({
+      status: "CREATED",
+      feeCents: expect.any(Number),
+    });
+    expect(
+      await db.parcel.count({ where: { merchantId: writer.merchant.id } }),
+    ).toBe(1);
+  });
+
+  it("returns the original order for a repeated Idempotency-Key without creating a duplicate", async () => {
+    const route = await addPricedRoute();
+    const client = await merchantClient(["orders:write"]);
+    const headers = {
+      Authorization: `Bearer ${client.token}`,
+      "Idempotency-Key": "merchant-order-repeat-001",
+    };
+    const first = await request(api.app)
+      .post("/api/v1/merchant/orders")
+      .set(headers)
+      .send({ ...orderBody, ...route })
+      .expect(201);
+    const repeated = await request(api.app)
+      .post("/api/v1/merchant/orders")
+      .set(headers)
+      .send({ ...orderBody, ...route })
+      .expect(201);
+
+    expect(repeated.body).toEqual(first.body);
+    expect(
+      await db.parcel.count({ where: { merchantId: client.merchant.id } }),
+    ).toBe(1);
+    expect(
+      await db.idempotencyRecord.count({
+        where: {
+          principalKey: `merchant:${client.merchant.id}`,
+          operation: "merchant.order.create.v1",
+          key: headers["Idempotency-Key"],
+        },
+      }),
+    ).toBe(1);
+  });
+});
+
 describe("M01 account administration", () => {
   async function operator(email = "operator@example.test") {
     const account = await user("ADMIN", email);

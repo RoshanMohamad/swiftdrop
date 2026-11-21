@@ -190,6 +190,10 @@ export class MerchantsService {
     return merchant;
   }
 
+  async approvedMerchantId(userId: number) {
+    return (await this.approvedMerchant(userId)).id;
+  }
+
   async listApiClients(userId: number) {
     const merchant = await this.approvedMerchant(userId);
     const clients = await this.db.merchantApiClient.findMany({

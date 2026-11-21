@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { isValidTrackingNumber } from "@swiftdrop/contracts";
 import {
+  merchantApiClientPageSchema,
+  merchantOrderPageSchema,
+  merchantWebhookDeliveryPageSchema,
+} from "@swiftdrop/contracts";
+import {
   handlers,
   mockAdminUser,
   mockCustomerUser,
   mockDailyReport,
   mockMerchants,
+  mockMerchantClient,
+  mockMerchantDeliveries,
+  mockMerchantOrders,
   mockParcels,
   mockPrices,
   mockStaffUsers,
@@ -27,6 +35,11 @@ describe("MSW Mock Handlers", () => {
     expect(paths).toContain("/api/v1/admin/pricing");
     expect(paths).toContain("/api/v1/admin/users");
     expect(paths).toContain("/api/v1/admin/merchants");
+    expect(paths).toContain("/api/v1/merchant/register");
+    expect(paths).toContain("/api/v1/merchant/clients");
+    expect(paths).toContain("/api/v1/merchant/orders");
+    expect(paths).toContain("/api/v1/merchant/webhook");
+    expect(paths).toContain("/api/v1/merchant/webhook-deliveries");
     expect(paths).toContain("/api/v1/admin/reports/daily");
     expect(paths).toContain("/api/v1/assistant/chat");
   });
@@ -59,6 +72,33 @@ describe("MSW Mock Handlers", () => {
     expect(mockStaffUsers.some((u) => u.role === "COURIER")).toBe(true);
     expect(mockMerchants.length).toBeGreaterThan(0);
     expect(mockMerchants[0]!.status).toBe("PENDING");
+  });
+
+  it("provides a full webhook history fixture with enough records for cursor pagination", () => {
+    const deliveryHandler = handlers.find(
+      (handler) =>
+        "info" in handler &&
+        (handler.info as { path?: string }).path ===
+          "/api/v1/merchant/webhook-deliveries",
+    );
+    expect(deliveryHandler).toBeDefined();
+    expect(mockMerchantDeliveries).toHaveLength(30);
+    expect(
+      merchantWebhookDeliveryPageSchema.safeParse({
+        items: mockMerchantDeliveries.slice(0, 25),
+        nextCursor: "mock-deliveries-next-page",
+      }).success,
+    ).toBe(true);
+    expect(
+      merchantApiClientPageSchema.safeParse({ items: [mockMerchantClient] }).success,
+    ).toBe(true);
+    expect(
+      merchantOrderPageSchema.safeParse({ items: mockMerchantOrders }).success,
+    ).toBe(true);
+    expect(handlers.some((handler) => "info" in handler &&
+      (handler.info as { path?: string }).path === "/api/v1/merchant/clients/:id/rotate")).toBe(true);
+    expect(handlers.some((handler) => "info" in handler &&
+      (handler.info as { path?: string }).path === "/api/v1/merchant/webhook/rotate-secret")).toBe(true);
   });
 
   it("exports valid daily report fixture", () => {

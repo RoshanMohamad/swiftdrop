@@ -83,6 +83,9 @@ export function Account() {
           <Link to="/merchant/clients">Manage API clients</Link>
           <Link to="/merchant/orders">Orders</Link>
           <Link to="/merchant/webhook">Webhook settings</Link>
+          <Link to="/merchant/webhook-deliveries">
+            Webhook delivery history
+          </Link>
         </div>
       ) : (
         <div className="notice">
@@ -121,4 +124,3 @@ export function Account() {
     </section>
   );
 }
-
