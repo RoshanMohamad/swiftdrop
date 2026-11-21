@@ -993,6 +993,16 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery.
 
 ## M09 — TBD
 
+### M09 checkpoint: Recover notification worker during merge (22 November 2026)
+
+- Member: M09; branch: `notifications-realtime`; reference: pending user-started merge of `9431a13` into `eae1eb7`; not committed here.
+- Root cause: unresolved conflict markers in `apps/notification-svc/src/server.ts` prevented tsx from compiling the notification worker. Core API/outbox relay remained healthy, so booking and status events accumulated without notification progress.
+- Resolution: restored the modular runtime with the Text.lk factory and staged only the resolved server path. Inspected the incoming alternate legacy runtime and its workspace-path change: equivalent workspace-root signer resolution already exists in `loadNotificationConfig`, so retaining the modular startup preserves that behavior and the real-SMS selection. All other staged user merge changes remain intact; the merge is not committed or pushed. No unresolved Git paths remain after this resolution.
+- Live evidence: the worker restarted and returned ready for PostgreSQL/RabbitMQ. Queued booking event `f9ba61b9-eb79-49d8-9bef-874a7d837cd7` and status events processed automatically; no manual replay or duplicate parcel creation was needed. Mailpit's API shows the booking confirmation and four status emails for tracking `SD-5V8DQGFH-Q`. Text.lk accepted queued SMS requests according to masked worker logs; actual handset receipt still requires user confirmation.
+- Validation: notification typecheck and all seven unit suites (68 tests) passed in the merged workspace. No application data reset and no private token printed or committed. Existing credentials were reused.
+- Manual test: the current host `pnpm dev` processes and Docker infrastructure remain running. Refresh `http://localhost:8025` and find `SwiftDrop booking SD-5V8DQGFH-Q`; check your recipient phone and Text.lk logs for SMS delivery. For the next booking at `http://localhost:5173/parcels/new`, expect one Mailpit confirmation and masked provider-acceptance logging. No UI changes; responsive checks are not applicable. Complete/review the pending Git merge separately; do not leave conflict markers in runtime source during a demo.
+
+
 ### M09 checkpoint: Optional Text.lk real SMS adapter (21 November 2026)
 
 - Member: M09; branch: `notifications-realtime`; reference: uncommitted follow-up. User explicitly requested a Text.lk connection after confirming Quick Send delivery on their own phone; this is an opt-in extension of the original mock-only SMS scope.
