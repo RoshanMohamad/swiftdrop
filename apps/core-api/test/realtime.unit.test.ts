@@ -1,344 +1,427 @@
-import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { formatTrackingNumber } from "@swiftdrop/contracts";
+import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { createServer, type Server as HttpServer } from "node:http";
-import type { AddressInfo } from "node:net";
-import { io as connect, type Socket } from "socket.io-client";
+import { randomUUID } from "node:crypto";
+import { UnsecuredJWT } from "jose";
+import { io as createClient, type Socket } from "socket.io-client";
 import pino from "pino";
+import type { ConsumeMessage } from "amqplib";
+import type { Redis } from "ioredis";
+import type { Database } from "@swiftdrop/db";
+import type { PublicUser, SwiftDropEvent } from "@swiftdrop/contracts";
+import type { AuthService } from "../src/modules/auth/index.js";
 import {
-  publicStatusEventSchema,
-  type ParcelSnapshot,
-  type SwiftDropEvent,
-} from "@swiftdrop/contracts";
+  declareRealtimeQueue,
+  handleRealtimeMessage,
+} from "../src/modules/realtime/consumer.js";
+import { createRealtimeGateway } from "../src/modules/realtime/gateway.js";
 import {
-  createRealtimeGateway,
-  tokenExpiry,
-} from "../src/modules/realtime/gateway.js";
-import { project, publicRoom } from "../src/modules/realtime/projection.js";
-import type {
-  PrivateAccess,
-  RealtimeUser,
-} from "../src/modules/realtime/access.js";
-import { HttpError } from "../src/shared/problem.js";
+  PrismaRealtimeAccessPolicy,
+  type RealtimeAccessPolicy,
+} from "../src/modules/realtime/policy.js";
 
-const PARCEL = "11111111-1111-4111-8111-111111111111";
-const OTHER_PARCEL = "33333333-3333-4333-8333-333333333333";
+const parcelId = "22222222-2222-4222-8222-222222222222";
+const trackingNumber = formatTrackingNumber("7KQ2M9XA");
+const baseUser: PublicUser = {
+  id: 7,
+  email: "customer@example.test",
+  fullName: "Customer",
+  phone: "+94771234567",
+  role: "CUSTOMER",
+  status: "ACTIVE",
+  emailVerified: true,
+  profileComplete: true,
+};
 
-const validTracking = formatTrackingNumber("7KQ2M9XA");
+let httpServer: HttpServer | undefined;
+let clients: Socket[] = [];
+let closeGateway: (() => Promise<void>) | undefined;
 
-const statusEvent = (
-  to: "PICKED_UP" | "DELIVERED",
-  sequence = 2,
-): SwiftDropEvent => ({
-  eventId: "22222222-2222-4222-8222-222222222222",
-  type: "parcel.status.changed",
-  version: 1,
-  occurredAt: "2026-11-13T10:00:00.000Z",
-  sequence,
-  data: {
-    parcelId: PARCEL,
-    trackingNo: validTracking,
-    courierId: "9",
-    from: "CREATED",
-    to,
-    town: "Colombo",
-    occurredAt: "2026-11-13T10:00:00.000Z",
-  },
-});
-const assignment = (oldCourierId?: string): SwiftDropEvent => ({
-  eventId: "44444444-4444-4444-8444-444444444444",
-  type: "parcel.assignment.changed",
-  version: 1,
-  occurredAt: "2026-11-13T10:05:00.000Z",
-  sequence: 3,
-  data: {
-    parcelId: PARCEL,
-    trackingNo: validTracking,
-    newCourierId: "9",
-    ...(oldCourierId ? { oldCourierId } : {}),
-  },
+afterEach(async () => {
+  for (const socket of clients) socket.disconnect();
+  if (closeGateway) await closeGateway();
+  if (httpServer?.listening)
+    await new Promise<void>((resolve) => httpServer?.close(() => resolve()));
+  clients = [];
+  closeGateway = undefined;
+  httpServer = undefined;
 });
 
-describe("realtime projections (X-12)", () => {
-  it("builds a public projection with status, time, town and sequence only", () => {
-    const { emits } = project(statusEvent("PICKED_UP"));
-    const publicEmit = emits.find(
-      (emit) => emit.room === publicRoom(validTracking),
-    )!;
-    expect(Object.keys(publicEmit.payload as object).sort()).toEqual([
-      "occurredAt",
-      "sequence",
-      "status",
-      "town",
-      "trackingNumber",
-    ]);
-    expect(publicStatusEventSchema.safeParse(publicEmit.payload).success).toBe(
-      true,
+async function harness(
+  options: {
+    expirySeconds?: number;
+    user?: PublicUser;
+    exists?: boolean;
+    allowed?: boolean;
+    privateRecheckMs?: number;
+  } = {},
+) {
+  const values = new Map<string, number>();
+  const redis = {
+    eval: async (
+      _script: string,
+      _keyCount: number,
+      key: string,
+      candidate: string,
+    ) => {
+      const previous = values.get(key) ?? 0;
+      if (Number(candidate) <= previous) return [0, previous];
+      values.set(key, Number(candidate));
+      return [1, previous];
+    },
+  } as unknown as Redis;
+  const db = {
+    parcel: {
+      findUnique: async () =>
+        options.exists === false ? null : { id: parcelId },
+    },
+  } as unknown as Database;
+  let authenticated = true;
+  const user = options.user ?? baseUser;
+  const auth = {
+    authenticate: async () => {
+      if (!authenticated) throw new Error("UNAUTHENTICATED");
+      return { user, jti: "grant-id", familyId: "family-id" };
+    },
+  } as unknown as AuthService;
+  let allowed = options.allowed ?? true;
+  const policy: RealtimeAccessPolicy = {
+    canJoinPrivate: async () => allowed,
+  };
+  httpServer = createServer((_request, response) => response.end("ok"));
+  const gateway = await createRealtimeGateway({
+    server: httpServer,
+    db,
+    redis,
+    auth,
+    origin: "http://127.0.0.1",
+    logger: pino({ enabled: false }),
+    policy,
+    useRedisAdapter: false,
+    allowJoin: async () => true,
+    privateRecheckMs: options.privateRecheckMs ?? 50,
+  });
+  closeGateway = gateway.close;
+  await new Promise<void>((resolve) =>
+    httpServer?.listen(0, "127.0.0.1", resolve),
+  );
+  const address = httpServer.address();
+  if (!address || typeof address === "string") throw new Error("No test port.");
+  const token = new UnsecuredJWT({})
+    .setExpirationTime(
+      Math.floor(Date.now() / 1000) + (options.expirySeconds ?? 60),
+    )
+    .encode();
+  const connect = async () => {
+    const client = createClient(`http://127.0.0.1:${address.port}`, {
+      transports: ["websocket"],
+      auth: { token },
+    });
+    clients.push(client);
+    await new Promise<void>((resolve, reject) => {
+      client.once("connect", resolve);
+      client.once("connect_error", reject);
+    });
+    return client;
+  };
+  return {
+    gateway,
+    connect,
+    revoke: () => (authenticated = false),
+    deny: () => (allowed = false),
+  };
+}
+
+function join(socket: Socket, room: unknown) {
+  return new Promise<{ ok: boolean; code?: string }>((resolve) =>
+    socket.emit("room:join", room, resolve),
+  );
+}
+
+function statusEvent(sequence: number): SwiftDropEvent {
+  return {
+    eventId: randomUUID(),
+    type: "parcel.status.changed",
+    version: 1,
+    occurredAt: "2026-11-13T10:31:00.000Z",
+    sequence,
+    data: {
+      parcelId,
+      trackingNo: trackingNumber,
+      from: "CREATED",
+      to: "PICKED_UP",
+      town: "Colombo",
+      occurredAt: "2026-11-13T10:31:00.000Z",
+    },
+  };
+}
+
+describe("realtime gateway", () => {
+  it("emits a strict PII-free public DTO, discards stale events and signals gaps", async () => {
+    const test = await harness();
+    const client = await test.connect();
+    await expect(
+      join(client, { kind: "public", trackingNumber }),
+    ).resolves.toEqual({ ok: true });
+    const update = new Promise<Record<string, unknown>>((resolve) =>
+      client.once("parcel:status", resolve),
     );
-    expect(JSON.stringify(publicEmit.payload)).not.toContain(PARCEL);
-    expect(JSON.stringify(publicEmit.payload)).not.toContain("courier");
+    await test.gateway.publish(statusEvent(1));
+    expect(await update).toEqual({
+      status: "PICKED_UP",
+      occurredAt: "2026-11-13T10:31:00.000Z",
+      town: "Colombo",
+      sequence: 1,
+    });
+    const events: unknown[] = [];
+    client.on("parcel:status", (value) => events.push(value));
+    await test.gateway.publish(statusEvent(1));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(events).toHaveLength(0);
+
+    const reload = new Promise<Record<string, unknown>>((resolve) =>
+      client.once("parcel:reload", resolve),
+    );
+    await test.gateway.publish(statusEvent(3));
+    await expect(reload).resolves.toEqual({ reason: "gap", sequence: 3 });
   });
 
-  it("projects creation as CREATED without a town", () => {
-    const created: SwiftDropEvent = {
-      eventId: "55555555-5555-4555-8555-555555555555",
-      type: "parcel.created",
+  it("validates/rate-limits public joins and verifies parcel existence", async () => {
+    const test = await harness({ exists: false });
+    const client = await test.connect();
+    await expect(
+      join(client, { kind: "public", trackingNumber }),
+    ).resolves.toEqual({ ok: false, code: "NOT_FOUND" });
+    await expect(
+      join(client, { kind: "public", trackingNumber: "INVALID" }),
+    ).resolves.toEqual({ ok: false, code: "INVALID_ROOM" });
+  });
+
+  it("leaves a room explicitly without disconnecting the managed socket", async () => {
+    const test = await harness();
+    const client = await test.connect();
+    await join(client, { kind: "public", trackingNumber });
+    client.emit("room:leave", { kind: "public", trackingNumber });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const events: unknown[] = [];
+    client.on("parcel:status", (event) => events.push(event));
+    await test.gateway.publish(statusEvent(1));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(events).toHaveLength(0);
+    expect(client.connected).toBe(true);
+  });
+
+  it("returns the same safe result for unauthorized and unavailable private parcels", async () => {
+    const test = await harness({ allowed: false });
+    const client = await test.connect();
+    const denied = await join(client, { kind: "private", parcelId });
+    test.deny();
+    const unavailable = await join(client, { kind: "private", parcelId });
+    expect(denied).toEqual({ ok: false, code: "NOT_FOUND" });
+    expect(unavailable).toEqual(denied);
+  });
+
+  it("stores only non-PII session metadata and requests a snapshot on reconnect", async () => {
+    const test = await harness();
+    const client = await test.connect();
+    const reload = new Promise<Record<string, unknown>>((resolve) =>
+      client.once("parcel:reload", resolve),
+    );
+    await expect(
+      join(client, { kind: "private", parcelId, lastSequence: 9 }),
+    ).resolves.toEqual({ ok: true });
+    await expect(reload).resolves.toEqual({
+      reason: "reconnect",
+      sequence: 9,
+    });
+    const serverSocket = [...test.gateway.io.of("/").sockets.values()][0]!;
+    expect(serverSocket.data).toEqual({
+      principal: expect.objectContaining({
+        userId: 7,
+        role: "CUSTOMER",
+        tokenExpiresAt: expect.any(Number),
+        privateParcelIds: [parcelId],
+      }),
+    });
+    expect(JSON.stringify(serverSocket.data)).not.toMatch(
+      /customer@example|94771234567|Customer|eyJ/,
+    );
+  });
+
+  it("evicts private rooms at token expiry and after session revocation", async () => {
+    const expiring = await harness({ expirySeconds: 1 });
+    const first = await expiring.connect();
+    await join(first, { kind: "private", parcelId });
+    await expect(
+      new Promise((resolve) => first.once("room:evicted", resolve)),
+    ).resolves.toEqual({ reason: "expired" });
+    first.disconnect();
+    await expiring.gateway.close();
+    closeGateway = undefined;
+    if (httpServer?.listening)
+      await new Promise<void>((resolve) => httpServer?.close(() => resolve()));
+
+    const revoked = await harness({ privateRecheckMs: 20 });
+    const second = await revoked.connect();
+    await join(second, { kind: "private", parcelId });
+    const eviction = new Promise((resolve) =>
+      second.once("room:evicted", resolve),
+    );
+    revoked.revoke();
+    await expect(eviction).resolves.toEqual({ reason: "revoked" });
+  });
+
+  it("evicts only the old courier after reassignment", async () => {
+    const courier = { ...baseUser, id: 19, role: "COURIER" as const };
+    const test = await harness({ user: courier });
+    const client = await test.connect();
+    await join(client, { kind: "private", parcelId });
+    await test.gateway.publish({
+      eventId: randomUUID(),
+      type: "parcel.assignment.changed",
       version: 1,
-      occurredAt: "2026-11-13T09:00:00.000Z",
+      occurredAt: "2026-11-13T10:32:00.000Z",
       sequence: 1,
       data: {
-        parcelId: PARCEL,
-        trackingNo: validTracking,
-        originZone: "Colombo",
-        destZone: "Kandy",
-        feeCents: 100,
-        scheduledDate: "2026-11-13",
+        parcelId,
+        trackingNo: trackingNumber,
+        oldCourierId: "19",
+        newCourierId: "20",
       },
-    };
-    const first = project(created).emits[0]!;
-    expect(first.payload).toMatchObject({
-      status: "CREATED",
-      town: null,
-      sequence: 1,
     });
-  });
-
-  it("tells the new courier and the old courier, hides identity from the parcel room", () => {
-    const projection = project(assignment("4"));
-    const byRoom = Object.fromEntries(
-      projection.emits.map((e) => [e.room, e.payload]),
-    );
-    expect(byRoom["user:9"]).toMatchObject({ change: "assigned" });
-    expect(byRoom["user:4"]).toMatchObject({ change: "unassigned" });
-    expect(JSON.stringify(byRoom[`private:${PARCEL}`])).not.toMatch(
-      /courier|"9"|"4"/i,
-    );
-    expect(projection.revoke).toEqual({ userId: 4, room: `private:${PARCEL}` });
-    expect(project(assignment()).revoke).toBeUndefined();
-  });
-
-  it("reads the expiry from a verified token and tolerates garbage", () => {
-    const payload = Buffer.from(
-      JSON.stringify({ exp: 1_800_000_000 }),
-    ).toString("base64url");
-    expect(tokenExpiry(`x.${payload}.y`)).toBe(1_800_000_000_000);
-    expect(tokenExpiry("garbage")).toBeNull();
+    await expect(
+      new Promise((resolve) => client.once("room:evicted", resolve)),
+    ).resolves.toEqual({ reason: "reassigned" });
   });
 });
 
-describe("realtime gateway (FR-I6)", () => {
-  let http: HttpServer;
-  let gateway: ReturnType<typeof createRealtimeGateway>;
-  let url: string;
-  const sockets: Socket[] = [];
-  let reassignedAway = false;
-
-  const users: Record<string, RealtimeUser> = {
-    owner: { id: 1, role: "CUSTOMER" },
-    stranger: { id: 2, role: "CUSTOMER" },
-    courier: { id: 9, role: "COURIER" },
-  };
-  const access = {
-    snapshotFor: async (user: RealtimeUser, parcelId: string) => {
-      const allowed =
-        parcelId === PARCEL &&
-        (user.id === 1 || (user.id === 9 && !reassignedAway));
-      return allowed
-        ? ({
-            parcelId,
-            trackingNumber: validTracking,
-            status: "PICKED_UP",
-            version: 3,
-            history: [],
-          } satisfies ParcelSnapshot)
-        : null;
-    },
-  } as unknown as PrivateAccess;
-
-  beforeAll(async () => {
-    http = createServer();
-    gateway = createRealtimeGateway({
-      httpServer: http,
-      origin: "http://localhost:5173",
-      auth: {
-        authenticate: async (header) => {
-          const token = header?.replace("Bearer ", "") ?? "";
-          const user = users[token];
-          if (!user) throw new Error("bad token");
-          return { user };
+describe("database-scoped private access policy", () => {
+  it("uses role-specific ownership predicates and an injectable courier lookup", async () => {
+    const where: unknown[] = [];
+    const db = {
+      parcel: {
+        findFirst: async (query: { where: unknown }) => {
+          where.push(query.where);
+          return { id: parcelId };
         },
       },
-      access,
-      track: async (number) => {
-        if (number !== validTracking)
-          throw new HttpError(404, "TRACKING_NOT_FOUND", "none");
-        return {
-          trackingNumber: number,
-          status: "PICKED_UP",
-          originTown: "Colombo",
-          destinationTown: "Kandy",
-          history: [],
-        };
-      },
-      logger: pino({ level: "silent" }),
-    });
-    await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
-    url = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
-  });
-  afterAll(async () => {
-    for (const socket of sockets) socket.close();
-    await gateway.close();
-  });
-
-  const client = async (token?: string) => {
-    const socket = connect(url, {
-      transports: ["websocket"],
-      reconnection: false,
-      ...(token ? { auth: { token } } : {}),
-    });
-    sockets.push(socket);
-    await new Promise<void>((resolve, reject) => {
-      socket.once("connect", () => resolve());
-      socket.once("connect_error", (error) => reject(error));
-    });
-    return socket;
-  };
-  const ask = <T>(socket: Socket, event: string, payload: unknown) =>
-    new Promise<T>((resolve) => socket.emit(event, payload, resolve));
-  const next = <T>(socket: Socket, event: string) =>
-    new Promise<T>((resolve) => socket.once(event, resolve));
-
-  it("lets anyone join a public room and receive only the public projection", async () => {
-    const guest = await client();
-    const joined = await ask<{ ok: boolean; snapshot?: { status: string } }>(
-      guest,
-      "track:join",
-      { trackingNumber: validTracking },
+    } as unknown as Database;
+    const courierLookup = jest.fn(
+      async (_courierUserId: number, _parcelId: string) => true,
     );
-    expect(joined).toMatchObject({
-      ok: true,
-      snapshot: { status: "PICKED_UP" },
+    const policy = new PrismaRealtimeAccessPolicy(db, {
+      canAccess: courierLookup,
     });
-    const received = next<Record<string, unknown>>(guest, "parcel:status");
-    await gateway.handle(
-      Buffer.from(JSON.stringify(statusEvent("DELIVERED", 4))),
-    );
-    const payload = await received;
-    expect(payload).toMatchObject({
-      status: "DELIVERED",
-      sequence: 4,
-      town: "Colombo",
-    });
-    expect(payload).not.toHaveProperty("parcelId");
-  });
-
-  it("rejects bad or unknown tracking numbers", async () => {
-    const guest = await client();
-    expect(
-      await ask(guest, "track:join", { trackingNumber: "nope" }),
-    ).toMatchObject({
-      ok: false,
-      error: "INVALID",
-    });
-    expect(
-      await ask(guest, "track:join", { trackingNumber: "SD1234567A" }),
-    ).toMatchObject({
-      ok: false,
-    });
-    const unknown = formatTrackingNumber("4HNP6RTD");
-    expect(
-      await ask(guest, "track:join", { trackingNumber: unknown }),
-    ).toMatchObject({
-      ok: false,
-      error: "NOT_FOUND",
-    });
-  });
-
-  it("refuses unauthenticated private joins and bad tokens", async () => {
-    const guest = await client();
-    expect(await ask(guest, "parcel:join", { parcelId: PARCEL })).toMatchObject(
+    await policy.canJoinPrivate(baseUser, parcelId);
+    await policy.canJoinPrivate({ ...baseUser, role: "MERCHANT" }, parcelId);
+    await policy.canJoinPrivate({ ...baseUser, role: "DISPATCHER" }, parcelId);
+    await policy.canJoinPrivate({ ...baseUser, role: "COURIER" }, parcelId);
+    expect(where).toEqual([
+      { id: parcelId, userId: 7 },
       {
-        ok: false,
-        error: "UNAUTHENTICATED",
+        id: parcelId,
+        merchant: { is: { userId: 7, status: "APPROVED" } },
       },
-    );
-    await expect(client("not-a-user")).rejects.toThrow("UNAUTHENTICATED");
+      { id: parcelId },
+    ]);
+    expect(courierLookup).toHaveBeenCalledWith(7, parcelId);
   });
 
-  it("authorises private rooms per user and treats foreign parcels like missing ones", async () => {
-    const owner = await client("owner");
-    const stranger = await client("stranger");
-    expect(await ask(owner, "parcel:join", { parcelId: PARCEL })).toMatchObject(
-      {
-        ok: true,
-        snapshot: { parcelId: PARCEL, version: 3 },
+  it("checks the current unreleased M06 assignment by default", async () => {
+    const db = {
+      parcel: { findFirst: jest.fn(async () => null) },
+    } as unknown as Database;
+    await expect(
+      new PrismaRealtimeAccessPolicy(db).canJoinPrivate(
+        { ...baseUser, role: "COURIER" },
+        parcelId,
+      ),
+    ).resolves.toBe(false);
+    expect(db.parcel.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: parcelId,
+        assignment: { is: { courierId: 7, releasedAt: null } },
       },
-    );
-    expect(await ask(stranger, "parcel:join", { parcelId: PARCEL })).toEqual({
-      ok: false,
-      error: "NOT_FOUND",
-    });
-    expect(await ask(owner, "parcel:join", { parcelId: OTHER_PARCEL })).toEqual(
-      {
-        ok: false,
-        error: "NOT_FOUND",
-      },
-    );
-    const received = next<Record<string, unknown>>(owner, "parcel:status");
-    await gateway.handle(
-      Buffer.from(JSON.stringify(statusEvent("DELIVERED", 5))),
-    );
-    expect(await received).toMatchObject({
-      parcelId: PARCEL,
-      status: "DELIVERED",
+      select: { id: true },
     });
   });
+});
 
-  it("revokes a courier's private room on reassignment and notifies their user room", async () => {
-    const courier = await client("courier");
-    expect(
-      await ask(courier, "parcel:join", { parcelId: PARCEL }),
-    ).toMatchObject({ ok: true });
-    const assigned: Array<{ change: string }> = [];
-    const statuses: unknown[] = [];
-    courier.on("parcel:assigned", (value) => assigned.push(value));
-    courier.on("parcel:status", (value) => statuses.push(value));
+function delivery(body: unknown, messageId: string = randomUUID()) {
+  return {
+    content: Buffer.from(
+      typeof body === "string" ? body : JSON.stringify(body),
+    ),
+    properties: { messageId },
+  } as ConsumeMessage;
+}
 
-    // Parcel moves from courier 9 to courier 3; the fixture's access check now denies courier 9.
-    reassignedAway = true;
-    const away = {
-      ...assignment("9"),
-      data: { ...assignment("9").data, newCourierId: "3" },
+describe("realtime RabbitMQ consumer", () => {
+  it("declares the shared durable parcel.# queue with a 60 second TTL", async () => {
+    const calls: unknown[] = [];
+    const channel = {
+      assertExchange: async (...args: unknown[]) =>
+        calls.push(["exchange", ...args]),
+      assertQueue: async (...args: unknown[]) => calls.push(["queue", ...args]),
+      bindQueue: async (...args: unknown[]) => calls.push(["bind", ...args]),
     };
-    await gateway.handle(Buffer.from(JSON.stringify(away)));
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(assigned.map((item) => item.change)).toContain("unassigned");
-
-    await gateway.handle(
-      Buffer.from(JSON.stringify(statusEvent("DELIVERED", 6))),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(statuses).toEqual([]); // left private:<parcel>, nothing more arrives
-    expect(
-      await ask(courier, "parcel:join", { parcelId: PARCEL }),
-    ).toMatchObject({ ok: false });
-    reassignedAway = false;
+    await declareRealtimeQueue(channel as never);
+    expect(calls).toContainEqual([
+      "queue",
+      "realtime.q",
+      { durable: true, arguments: { "x-message-ttl": 60_000 } },
+    ]);
+    expect(calls).toContainEqual([
+      "bind",
+      "realtime.q",
+      "swiftdrop.events",
+      "parcel.#",
+    ]);
   });
 
-  it("throttles join attempts per socket", async () => {
-    const guest = await client();
-    const answers: Array<{ ok: boolean; error?: string }> = [];
-    for (let attempt = 0; attempt < 32; attempt++)
-      answers.push(await ask(guest, "track:join", { trackingNumber: validTracking }));
-    expect(answers.slice(0, 30).every((answer) => answer.ok)).toBe(true);
-    expect(answers[30]).toEqual({ ok: false, error: "RATE_LIMITED" });
+  it("acks only after handling and rejects mismatched message IDs", async () => {
+    const order: string[] = [];
+    const channel = {
+      ack: () => order.push("ack"),
+      nack: (_message: ConsumeMessage, _all: boolean, requeue: boolean) =>
+        order.push(`nack:${requeue}`),
+    };
+    const event = statusEvent(1);
+    await expect(
+      handleRealtimeMessage({
+        channel,
+        message: delivery(event, event.eventId),
+        publish: async () => {
+          order.push("handled");
+        },
+        logger: pino({ enabled: false }),
+      }),
+    ).resolves.toBe("acknowledged");
+    expect(order).toEqual(["handled", "ack"]);
+    await expect(
+      handleRealtimeMessage({
+        channel,
+        message: delivery(event, randomUUID()),
+        publish: async () => undefined,
+        logger: pino({ enabled: false }),
+      }),
+    ).resolves.toBe("discarded");
+    expect(order.at(-1)).toBe("nack:false");
   });
 
-  it("ignores malformed broker messages", async () => {
+  it("requeues when local handling fails", async () => {
+    const nack = jest.fn();
+    const event = statusEvent(1);
     await expect(
-      gateway.handle(Buffer.from("not json")),
-    ).resolves.toBeUndefined();
-    await expect(
-      gateway.handle(Buffer.from(JSON.stringify({ type: "parcel.created" }))),
-    ).resolves.toBeUndefined();
+      handleRealtimeMessage({
+        channel: { ack: jest.fn(), nack },
+        message: delivery(event, event.eventId),
+        publish: async () => {
+          throw new Error("redis unavailable");
+        },
+        logger: pino({ enabled: false }),
+      }),
+    ).resolves.toBe("requeued");
+    expect(nack).toHaveBeenCalledWith(expect.anything(), false, true);
   });
 });

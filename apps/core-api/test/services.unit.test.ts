@@ -165,6 +165,39 @@ describe("internal notification lookup", () => {
       .expect(403);
   });
 
+  it("returns the same event-bound contact projection for status templates", async () => {
+    eventRecord = {
+      eventId: ids.event,
+      eventType: "parcel.status.changed",
+      aggregateId: ids.parcel,
+      payload: {
+        eventId: ids.event,
+        type: "parcel.status.changed",
+        version: 1,
+        occurredAt: "2026-11-13T10:31:00.000Z",
+        sequence: 2,
+        data: {
+          parcelId: ids.parcel,
+          trackingNo: "SD1234567A",
+          from: "CREATED",
+          to: "PICKED_UP",
+          town: "Colombo",
+          occurredAt: "2026-11-13T10:31:00.000Z",
+        },
+      },
+    } as unknown as typeof event;
+    const response = await request(app)
+      .get(`/internal/v1/notifications/events/${ids.event}`)
+      .set("Authorization", `Bearer ${await tokenFor()}`)
+      .expect(200);
+    expect(response.body).toMatchObject({
+      eventId: ids.event,
+      parcelId: ids.parcel,
+      customerEmail: "customer@example.test",
+    });
+    eventRecord = event;
+  });
+
   it("binds signed event and parcel claims to the persisted event", async () => {
     const wrongEvent = await tokenFor({
       eventId: "33333333-3333-4333-8333-333333333333",

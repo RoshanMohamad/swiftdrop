@@ -284,6 +284,7 @@ services:
       SMTP_URL: smtp://mailpit:1025
       CORE_INTERNAL_URL: http://core-api:3001
       APP_ORIGIN: ${SD_APP_ORIGIN:-http://localhost}
+      NOTIFICATION_HOST: 0.0.0.0
       NOTIFICATION_SVC_PORT: 3103
       NOTIFICATION_SIGNER_FILE: /app/.local/services/notification-svc/signer.json
     volumes:

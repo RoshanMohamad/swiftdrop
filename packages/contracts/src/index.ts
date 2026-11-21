@@ -4,6 +4,7 @@ export * from "./lifecycle";
 export * from "./tracking";
 export * from "./events/index";
 export * from "./events/routing-keys";
+export * from "./realtime";
 import { parcelStatusSchema } from "./lifecycle";
 import { webhookDeliveryStatusSchema } from "./messaging.js";
 import { TRACKING_PATTERN, isValidTrackingNumber } from "./tracking";

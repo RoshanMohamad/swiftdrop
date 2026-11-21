@@ -12,10 +12,6 @@ type ServiceRequest = RequestHandler & {};
 
 // Booking confirmation (parcel.created) and status notifications (parcel.status.changed) are the
 // only events bound to notifications.q that need customer/recipient contact data.
-const LOOKUP_TYPES: readonly string[] = [
-  ROUTING_KEYS.PARCEL_CREATED,
-  ROUTING_KEYS.PARCEL_STATUS_CHANGED,
-];
 
 export function createNotificationLookupRouter(
   db: Database,
@@ -36,10 +32,13 @@ export function createNotificationLookupRouter(
       const event = await db.outboxEvent.findUnique({ where: { eventId } });
       if (
         !event ||
-        !LOOKUP_TYPES.includes(event.eventType) ||
+        (event.eventType !== ROUTING_KEYS.PARCEL_CREATED &&
+          event.eventType !== ROUTING_KEYS.PARCEL_STATUS_CHANGED) ||
         event.aggregateId !== claims.parcelId ||
         !isSwiftDropEvent(event.payload) ||
-        event.payload.type !== event.eventType
+        event.payload.type !== event.eventType ||
+        (event.payload.type !== ROUTING_KEYS.PARCEL_CREATED &&
+          event.payload.type !== ROUTING_KEYS.PARCEL_STATUS_CHANGED)
       )
         throw new HttpError(
           404,

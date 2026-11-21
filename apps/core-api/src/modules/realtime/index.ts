@@ -1,4 +1,12 @@
-export { PrivateAccess, type RealtimeUser } from "./access.js";
-export { createRealtimeGateway, tokenExpiry } from "./gateway.js";
-export { startRealtimeConsumer } from "./consumer.js";
-export { project, publicRoom, privateRoom, userRoom } from "./projection.js";
+export { createRealtimeGateway } from "./gateway.js";
+export {
+  declareRealtimeQueue,
+  decodeRealtimeMessage,
+  handleRealtimeMessage,
+  startRealtimeConsumer,
+} from "./consumer.js";
+export {
+  PrismaRealtimeAccessPolicy,
+  type CourierParcelAccess,
+  type RealtimeAccessPolicy,
+} from "./policy.js";

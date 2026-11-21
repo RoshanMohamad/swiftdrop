@@ -66,7 +66,7 @@ export function createApp(deps: {
   logger?: Logger;
   mailer?: AuthMailer;
   google?: GoogleOidc;
-  workerState?: { connected: boolean };
+  workerState?: { connected: boolean; realtimeConnected?: boolean };
   receipts?: ReceiptService;
   proofStorage?: ProofStorage;
 }) {

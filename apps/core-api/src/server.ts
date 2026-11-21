@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { Redis } from "ioredis";
 import { createDatabase } from "@swiftdrop/db";
 import { createApp } from "./app.js";
@@ -10,7 +11,6 @@ import { startParcelEventWorkers } from "./modules/parcels/events.js";
 import { ReceiptService } from "./modules/receipts/service.js";
 import { MerchantsService } from "./modules/merchants/index.js";
 import {
-  PrivateAccess,
   createRealtimeGateway,
   startRealtimeConsumer,
 } from "./modules/realtime/index.js";
@@ -45,14 +45,23 @@ const logger = pino({
   },
 });
 const workerState = { connected: false };
-const { app, service, parcels } = createApp({
+const realtimeWorkerState = { connected: false };
+const readinessState = {
+  get connected() {
+    return workerState.connected;
+  },
+  get realtimeConnected() {
+    return realtimeWorkerState.connected;
+  },
+};
+const { app, service } = createApp({
   db,
   redis,
   config,
   tokens,
   mailer: createAuthMailer(config.SMTP_URL),
   logger,
-  workerState,
+  workerState: readinessState,
   receipts: new ReceiptService(db, config),
 });
 const webhookMerchants = new MerchantsService(db, tokens, config.oauthSecret);
@@ -70,8 +79,25 @@ const workers = startParcelEventWorkers(
   workerState,
   new ReceiptService(db, config),
 );
-const server = app.listen(config.PORT, config.HOST, () =>
-  console.log(`SwiftDrop API listening at http://${config.HOST}:${config.PORT}`),
+const server = createServer(app);
+const realtime = await createRealtimeGateway({
+  server,
+  db,
+  redis,
+  auth: service,
+  origin: config.APP_ORIGIN,
+  logger,
+});
+const realtimeConsumer = startRealtimeConsumer({
+  url: config.RABBITMQ_URL,
+  logger,
+  publish: realtime.publish,
+  state: realtimeWorkerState,
+});
+server.listen(config.PORT, config.HOST, () =>
+  console.log(
+    `SwiftDrop API listening at http://${config.HOST}:${config.PORT}`,
+  ),
 );
 const internalServer = internalApp.listen(
   config.INTERNAL_PORT,
@@ -81,20 +107,6 @@ const internalServer = internalApp.listen(
       `SwiftDrop internal API listening at http://${config.INTERNAL_HOST}:${config.INTERNAL_PORT}`,
     ),
 );
-const realtime = createRealtimeGateway({
-  httpServer: server,
-  origin: config.APP_ORIGIN,
-  redis,
-  auth: service,
-  access: new PrivateAccess(db),
-  track: (trackingNumber) => parcels.track(trackingNumber),
-  logger,
-});
-const realtimeConsumer = startRealtimeConsumer({
-  url: config.RABBITMQ_URL,
-  logger,
-  handle: realtime.handle,
-});
 let stopping = false;
 async function shutdown() {
   if (stopping) return;

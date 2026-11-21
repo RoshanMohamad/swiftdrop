@@ -150,6 +150,9 @@ export async function resendVerification(email: string) {
   });
 }
 export const bearer = async () => current ?? refreshSession();
+export async function realtimeAccessToken() {
+  return (await bearer()).accessToken;
+}
 /**
  * The UI registers one handler that asks the user for their password (and code) and resolves
  * true once the server accepted it, or false if they cancel. Without a handler, a

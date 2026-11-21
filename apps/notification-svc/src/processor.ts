@@ -30,10 +30,7 @@ export class NotificationProcessor {
     },
   ) {}
 
-  async handle(
-    content: Buffer,
-    correlationId?: string,
-  ): Promise<Disposition> {
+  async handle(content: Buffer, correlationId?: string): Promise<Disposition> {
     const { store, lookup, sender, appOrigin } = this.deps;
     // Every log line for this message carries the originating request's correlation id.
     const logger = correlationId

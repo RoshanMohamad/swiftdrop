@@ -1,7 +1,9 @@
 import nodemailer from "nodemailer";
 import type { Logger } from "pino";
+import type { NotificationMessage } from "./types.js";
 import type { Message } from "./templates.js";
 import { maskPhone } from "./mask.js";
+import { maskPhone as maskNotificationPhone } from "./masking.js";
 
 export interface MessageSender {
   send(message: Message): Promise<{ providerMessageId?: string }>;
@@ -10,7 +12,10 @@ export interface MessageSender {
 /** Email over SMTP (Mailpit in development). */
 export class SmtpEmailSender implements MessageSender {
   private readonly transport;
-  constructor(smtpUrl: string) {
+  constructor(
+    smtpUrl: string,
+    private readonly from = "SwiftDrop <no-reply@swiftdrop.test>",
+  ) {
     this.transport = nodemailer.createTransport({
       url: smtpUrl,
       connectionTimeout: 5000,
@@ -18,13 +23,27 @@ export class SmtpEmailSender implements MessageSender {
       socketTimeout: 10000,
     });
   }
-  async send(message: Message) {
+  async send(input: Message | NotificationMessage) {
+    const message =
+      "recipient" in input
+        ? {
+            to: input.recipient,
+            subject: input.subject,
+            text: input.body,
+            templateId: "notification",
+            channel: "SMS" as const,
+          }
+        : input;
     const info = (await this.transport.sendMail({
-      from: "SwiftDrop <no-reply@swiftdrop.test>",
+      from: this.from,
       to: message.to,
       subject: message.subject,
       text: message.text,
-      html: message.html,
+      html: "html" in message ? message.html : undefined,
+      headers:
+        "eventId" in input
+          ? { "X-SwiftDrop-Event-ID": input.eventId }
+          : undefined,
     })) as { messageId?: string };
     return { providerMessageId: info.messageId };
   }
@@ -36,8 +55,19 @@ export class SmtpEmailSender implements MessageSender {
  */
 export class MockSmsSender implements MessageSender {
   readonly sent: Message[] = [];
-  constructor(private logger: Logger) {}
-  async send(message: Message) {
+  constructor(private logger: Pick<Logger, "info">) {}
+  async send(input: Message | NotificationMessage) {
+    if ("recipient" in input) {
+      this.logger.info(
+        {
+          eventId: input.eventId,
+          recipientMasked: maskNotificationPhone(input.recipient),
+        },
+        "Mock SMS accepted",
+      );
+      return { providerMessageId: `mock:${input.eventId}` };
+    }
+    const message = input;
     this.sent.push(message);
     this.logger.info({
       event: "sms_mock_sent",
