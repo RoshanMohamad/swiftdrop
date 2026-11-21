@@ -6,6 +6,7 @@ import {
   declareTopology,
   loadWorkspaceEnv,
   onShutdown,
+  resolveWorkspacePath,
   runWithBroker,
   startHealthServer,
 } from "@swiftdrop/messaging";
@@ -71,11 +72,11 @@ if (env.WEBHOOK_SIGNER_FILE && !env.CORE_INTERNAL_URL)
     "WEBHOOK_SIGNER_FILE requires CORE_INTERNAL_URL (pnpm services:provision --service webhook-svc).",
   );
 const config: WebhookConfigSource = env.WEBHOOK_DEV_CONFIG_FILE
-  ? new DevFileConfigSource(env.WEBHOOK_DEV_CONFIG_FILE)
+  ? new DevFileConfigSource(resolveWorkspacePath(env.WEBHOOK_DEV_CONFIG_FILE))
   : env.CORE_INTERNAL_URL && env.WEBHOOK_SIGNER_FILE
     ? new HttpConfigSource({
         baseUrl: env.CORE_INTERNAL_URL,
-        signerFile: env.WEBHOOK_SIGNER_FILE,
+        signerFile: resolveWorkspacePath(env.WEBHOOK_SIGNER_FILE),
       })
     : new NoConfigSource();
 if (config instanceof NoConfigSource)
