@@ -4,7 +4,8 @@ import { loadNotificationConfig } from "./config.js";
 import { createNotificationLogger } from "./logger.js";
 import { ServiceJwtContactLookupClient } from "./lookup.js";
 import { RabbitNotificationConsumer } from "./rabbit.js";
-import { MockSmsSender, SmtpEmailSender } from "./senders.js";
+import { SmtpEmailSender } from "./senders.js";
+import { createSmsSender } from "./sms.js";
 import { NotificationService } from "./service.js";
 import { PrismaNotificationProgress } from "./store.js";
 
@@ -18,7 +19,7 @@ const notificationService = new NotificationService(
     config.signerMetadataFile,
   ),
   new SmtpEmailSender(config.SMTP_URL, config.NOTIFICATION_FROM),
-  new MockSmsSender(logger),
+  createSmsSender(config, logger),
 );
 const eventConsumer = new RabbitNotificationConsumer(
   config.RABBITMQ_URL,

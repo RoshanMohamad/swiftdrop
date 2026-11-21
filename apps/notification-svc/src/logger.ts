@@ -25,6 +25,8 @@ const REDACTED_PATHS = [
   "DATABASE_URL",
   "RABBITMQ_URL",
   "SMTP_URL",
+  "TEXTLK_API_TOKEN",
+  "*.TEXTLK_API_TOKEN",
 ];
 
 export function createNotificationLogger(

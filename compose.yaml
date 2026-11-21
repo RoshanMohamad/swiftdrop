@@ -287,6 +287,9 @@ services:
       NOTIFICATION_HOST: 0.0.0.0
       NOTIFICATION_SVC_PORT: 3103
       NOTIFICATION_SIGNER_FILE: /app/.local/services/notification-svc/signer.json
+      SMS_PROVIDER: ${SMS_PROVIDER:-mock}
+      TEXTLK_API_TOKEN: ${TEXTLK_API_TOKEN:-}
+      TEXTLK_SENDER_ID: ${TEXTLK_SENDER_ID:-}
     volumes:
       - service-keys:/app/.local/services:ro
     depends_on:

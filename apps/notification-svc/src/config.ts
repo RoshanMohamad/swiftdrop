@@ -31,11 +31,29 @@ const environmentSchema = z
     NOTIFICATION_PREFETCH: z.coerce.number().int().min(1).max(32).default(4),
     INTERNAL_API_URL: z.url().default("http://127.0.0.1:3001"),
     NOTIFICATION_FROM: z.string().email().default("no-reply@swiftdrop.test"),
+    SMS_PROVIDER: z.enum(["mock", "textlk"]).default("mock"),
+    TEXTLK_API_TOKEN: z.string().trim().default(""),
+    TEXTLK_SENDER_ID: z.string().trim().default(""),
     NOTIFICATION_SIGNER_METADATA_FILE: z
       .string()
       .default(".local/services/notification-svc/signer.json"),
   })
   .superRefine((value, context) => {
+    if (value.SMS_PROVIDER === "textlk") {
+      if (!value.TEXTLK_API_TOKEN || /\s/.test(value.TEXTLK_API_TOKEN))
+        context.addIssue({
+          code: "custom",
+          path: ["TEXTLK_API_TOKEN"],
+          message: "Text.lk requires an API token without whitespace.",
+        });
+      if (!/^[A-Za-z0-9 ]{1,11}$/.test(value.TEXTLK_SENDER_ID))
+        context.addIssue({
+          code: "custom",
+          path: ["TEXTLK_SENDER_ID"],
+          message:
+            "Set the Text.lk sender ID used by your account (up to 11 letters, digits or spaces).",
+        });
+    }
     if (
       value.NODE_ENV === "production" &&
       value.RABBITMQ_URL === "amqp://guest:guest@localhost:5672"

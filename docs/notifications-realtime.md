@@ -255,3 +255,27 @@ docker compose up -d --build --wait notification-svc
 The worker uses the modular runtime and bounded RabbitMQ retries. Main's processor, contact lookup and delivery interfaces remain available to existing event-flow consumers. Only one notification worker is started by Compose. Main's `NOTIFICATION_SVC_PORT`, `CORE_INTERNAL_URL` and `NOTIFICATION_SIGNER_FILE` are accepted as aliases; explicit `NOTIFICATION_PORT`, `INTERNAL_API_URL` and `NOTIFICATION_SIGNER_METADATA_FILE` take precedence. The existing `useLiveRefresh` API delegates to the shared room client; legacy socket join names remain accepted.
 
 The canonical notification-table creation migration is main's `202611130002_notifications`. The new `202611210001_notification_attempts` migration adds the modular worker's attempts column and indexes. The branch-only duplicate `202611130001_notifications` was removed before integration. A development database that already applied that branch-only migration needs a deliberate migration-history reconciliation before applying this merged history; do not reset a database with data you need. No database was changed during conflict resolution.
+
+## Optional Text.lk SMS adapter
+
+Real SMS is an explicit optional extension to M09's original mock-only scope. The default remains `SMS_PROVIDER=mock`. For local Text.lk testing, set the following in the ignored `.env` file:
+
+```dotenv
+SMS_PROVIDER=textlk
+TEXTLK_API_TOKEN=your_private_token_from_the_Developers_page
+TEXTLK_SENDER_ID=the_sender_id_that_worked_in_Quick_Send
+```
+
+Use the exact sender ID shown in the account (maximum 11 letters, digits or spaces), for example `TextLKDemo` only if enabled for that test account. Use an approved sender ID for production. Keep the token out of chat, commits, browser code and screenshots. The adapter uses the documented fixed OAuth/Bearer endpoint `https://app.text.lk/api/v3/sms/send`; the HTTP query-string endpoint is not needed. See https://text.lk/docs/send-sms/ and https://text.lk/docs/textlk-api-key/ . No additional SDK or dependency is required.
+
+Restart the notification worker after editing `.env` (`pnpm dev` for the full local stack, or `pnpm --filter notification-svc dev` when the other services are already running and the previous notification worker is stopped). Compose also passes these three settings into its notification service when recreated. Leave `SMS_PROVIDER=mock` to continue free offline development; do not enable Text.lk with missing credentials.
+
+The adapter accepts one Sri Lankan mobile in `+947XXXXXXXX`, `947XXXXXXXX`, or `07XXXXXXXX` format and sends the digits-only international form. It rejects international/non-mobile/bulk recipients, uses a 10-second timeout, refuses redirects and validates the provider's success response/message ID. Provider error bodies, tokens, message text and full phone numbers are not logged. Only event ID, provider name and masked recipient are logged on acceptance. Existing channel progress and bounded RabbitMQ retries apply; there are no additional adapter retries.
+
+A SENT row means the API accepted the message, not a verified handset delivery receipt. Check Text.lk delivery logs and the recipient phone for actual delivery. Text.lk's published send API does not document an idempotency key, so a timeout or crash after acceptance but before the database log commits can cause duplicate external SMS on retry and consume more units. No delivery callbacks or provider-side exactly-once guarantee are claimed.
+
+Manual verification:
+1. Keep Docker infrastructure/Core API/outbox relay running. Enter your token and successful Quick Send sender ID locally, set `SMS_PROVIDER=textlk`, and restart the worker.
+2. Create one new customer booking with your own phone number as the recipient. Expect the booking email in Mailpit, one SMS on your phone, an accepted message in Text.lk, and masked `SMS accepted by provider` logging. Use the provider's account balance/delivery log to check the actual outcome.
+3. Replay the same completed event only to the notification queue; expect the existing processed-event/channel state to suppress another send. Do not bulk-replay old events while testing with limited credits.
+4. Use mocked unit tests for invalid token, credit errors, failed status, malformed response, timeout/network errors and invalid/multiple recipients rather than spending live SMS credits to test failures. Run `pnpm --filter notification-svc test` and `pnpm --filter notification-svc typecheck`. There are no UI changes; responsive checks are not applicable.

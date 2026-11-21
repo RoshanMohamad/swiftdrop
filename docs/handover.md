@@ -993,6 +993,16 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery.
 
 ## M09 — TBD
 
+### M09 checkpoint: Optional Text.lk real SMS adapter (21 November 2026)
+
+- Member: M09; branch: `notifications-realtime`; reference: uncommitted follow-up. User explicitly requested a Text.lk connection after confirming Quick Send delivery on their own phone; this is an opt-in extension of the original mock-only SMS scope.
+- Implemented: selectable mock/Text.lk adapter in `apps/notification-svc/src/sms.ts`, runtime factory wiring, credential validation, token redaction, environment examples and Compose passthrough. Uses the documented Bearer-authenticated JSON API with a fixed HTTPS endpoint, redirect rejection and bounded timeout. Accepts a single Sri Lankan mobile, sanitizes provider failures, returns a validated provider message ID and logs only masked recipients. Existing email delivery, per-channel persistence and RabbitMQ retry/DLQ handling are retained. No new dependencies, tables, migration or frontend changes.
+- Configuration: appended missing `SMS_PROVIDER=mock`, `TEXTLK_API_TOKEN=` and `TEXTLK_SENDER_ID=` keys to the ignored local `.env`, preserving existing values. User must enter credentials locally and select the sender ID that worked in Quick Send before enabling `SMS_PROVIDER=textlk`. No token was supplied, printed or committed; no live provider send was performed.
+- Checks: notification typecheck, 68 unit tests, scoped ESLint, Compose config validation and production JS/declaration build passed. Added coverage for phone normalization/rejection, exact authentication/body/endpoint, response rejection and sanitized failures, provider selection and fail-fast credentials. No real credits were consumed. Added a token-redaction assertion to the existing runtime logger test; rerun recorded below if needed.
+- Limitations: SENT means API acceptance, not a handset delivery receipt. Provider API has no documented idempotency key; uncertain acceptance/crash windows may duplicate external sends on retry. Phone delivery, provider credit behavior and production sender approval remain user acceptance steps. M08/M10 review of queue/config deployment boundaries remains normal peer review; no push claimed.
+- Manual setup/results: follow the optional Text.lk section in `docs/notifications-realtime.md`; enter token/sender locally, enable provider and restart the worker, then create one booking to your own phone. Expect SMS on the handset plus Text.lk delivery-log evidence, masked application logs and the usual Mailpit email. Verify duplicate suppression with the same event ID; use mocked failure tests to avoid spending credits. UI/responsive checks are not applicable.
+
+
 ### M09 checkpoint: Restore booking email delivery (21 November 2026)
 
 - Member: M09; branch: `notifications-realtime`; reference: local follow-up, recorded before commit.

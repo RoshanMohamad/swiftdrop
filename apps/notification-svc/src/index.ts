@@ -14,6 +14,7 @@ export {
   type NotificationEventProcessor,
 } from "./rabbit.js";
 export { MockSmsSender, SmtpEmailSender } from "./senders.js";
+export { TextLkSmsSender, createSmsSender } from "./sms.js";
 export {
   PrismaNotificationLogStore,
   PrismaProcessedEventStore,

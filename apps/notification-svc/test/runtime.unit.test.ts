@@ -155,6 +155,7 @@ describe("configuration and redaction", () => {
         recipientName: "Private Recipient",
         address: "Private Address",
         recipientMasked: "***4567",
+        TEXTLK_API_TOKEN: "private-textlk-token",
       },
       "privacy test",
     );
@@ -164,6 +165,7 @@ describe("configuration and redaction", () => {
     expect(serialized).not.toContain("customer@example.test");
     expect(serialized).not.toContain("Private Recipient");
     expect(serialized).not.toContain("Private Address");
+    expect(serialized).not.toContain("private-textlk-token");
     expect(serialized).toContain("***4567");
     expect(JSON.parse(serialized)).toMatchObject({
       name: "notification-svc",
