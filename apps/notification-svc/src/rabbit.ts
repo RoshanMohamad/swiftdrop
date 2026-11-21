@@ -43,6 +43,8 @@ const EVENT_DATA_KEYS = {
     "parcelId",
     "scheduledDate",
     "trackingNo",
+    "to",
+    "town",
   ]),
   "parcel.status.changed": new Set([
     "courierId",

@@ -20,6 +20,9 @@ export interface ParcelCreatedData {
   destZone: string;
   feeCents: number;
   scheduledDate: string;
+  /** Initial status/location emitted by the booking producer. */
+  to?: "CREATED";
+  town?: string;
 }
 
 export interface ParcelCreatedEvent extends EventEnvelope<
@@ -125,7 +128,9 @@ function isParcelCreatedData(
     typeof data.feeCents === "number" &&
     Number.isInteger(data.feeCents) &&
     data.feeCents >= 0 &&
-    isNonEmptyString(data.scheduledDate)
+    isNonEmptyString(data.scheduledDate) &&
+    (data.to === undefined || data.to === "CREATED") &&
+    isOptionalString(data.town)
   );
 }
 

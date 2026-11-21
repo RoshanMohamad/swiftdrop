@@ -172,6 +172,8 @@ it("delivers once through real RabbitMQ, PostgreSQL and Mailpit, then parks inva
         destZone: "Kandy",
         feeCents: 57000,
         scheduledDate: "2026-11-15",
+        to: "CREATED",
+        town: "Colombo",
       },
     };
     const publish = (body: unknown, messageId = eventId) => {

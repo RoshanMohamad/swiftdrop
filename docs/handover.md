@@ -993,6 +993,17 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery.
 
 ## M09 — TBD
 
+### M09 checkpoint: Restore booking email delivery (21 November 2026)
+
+- Member: M09; branch: `notifications-realtime`; reference: local follow-up, recorded before commit.
+- Root cause: M04's booking producer (`apps/core-api/src/modules/parcels/service.ts`) emits `to: CREATED` and `town`, but M09's exact booking-field allowlist rejected both as `UNEXPECTED_EVENT_FIELDS` before contact lookup or processing. Previously the isolated delivery fixture omitted these real producer fields, so it did not cover this seam.
+- Fix: declare optional `to: CREATED` and `town` in the typed booking contract, validate their values, and include them in the consumer allowlist. All unknown-field and sensitive-data safeguards remain. The consumer and real RabbitMQ/PostgreSQL/Mailpit integration fixtures now include these fields; two unit cases reject malformed status/location data. This reconciles the actual M04/M09 event boundary; peer review remains pending.
+- Recovery: replayed the user's persisted booking event directly to `notifications.q` with its original event/message ID; no replay to the shared topic exchange and no second parcel was created. Verified exactly one matching booking email through Mailpit's API, both EMAIL/SMS delivery rows marked SENT, and processed-event state DONE. SMS remains a masked-log mock. Earlier startup-time failed events were not bulk replayed.
+- Checks: notification unit tests (51), both integration suites (6 tests), notification/contracts typechecks, scoped ESLint and diff checks passed. API readiness returned ready. Live verification used the existing application stack; isolated integration tests used disposable databases. No browser-driven/manual UI acceptance is claimed.
+- Manual check: keep Docker infrastructure and `pnpm dev` running. Open `http://localhost:8025`, refresh and find subject `SwiftDrop booking SD-77AYDKDW-J`. Then sign in at `http://localhost:5173/auth/login`, open `/parcels/new`, and create a new booking. Expect one matching confirmation in Mailpit and masked mock-SMS logging; no real external email/SMS is sent by this local setup. Re-run `pnpm --filter notification-svc test` and `pnpm --filter notification-svc test:integration` with Docker running to check duplicate handling, rejection, retry and DLQ behavior. No UI layout changes; responsive checks are not applicable to this fix.
+- Scope: source fix is local and not pushed. The dev watchers restarted affected services; API readiness was rechecked afterward. Docker image builds remain separately blocked by the previously observed esbuild-version mismatch; the running app uses host Node with Docker infrastructure.
+
+
 ### M09 checkpoint: Fix CI high-severity Effect advisory (21 November 2026)
 
 - Member: M09; branch: `notifications-realtime`; reference: local follow-up to `2257dbb`, recorded before commit.

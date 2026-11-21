@@ -26,6 +26,8 @@ const created: ParcelCreatedEvent = {
     destZone: "Kandy",
     feeCents: 57000,
     scheduledDate: "2026-11-15",
+    to: "CREATED",
+    town: "Colombo",
   },
 };
 
@@ -184,6 +186,21 @@ describe("RabbitNotificationConsumer", () => {
     expect(test.channel.ack).toHaveBeenCalledTimes(1);
     expect(test.sent).toHaveLength(0);
   });
+
+  it.each([{ to: "DELIVERED" }, { town: { email: "hidden@example.test" } }])(
+    "rejects invalid booking status/location fields: %j",
+    async (invalidFields) => {
+      const test = harness(async () => "completed");
+      await test.deliver(
+        message({ ...created, data: { ...created.data, ...invalidFields } }),
+      );
+      expect(test.processor.process).not.toHaveBeenCalled();
+      expect(test.sent).toHaveLength(1);
+      expect(test.sent[0]?.content.toString("utf8")).not.toContain(
+        "hidden@example.test",
+      );
+    },
+  );
 
   it.each(["done", "busy"] as const)(
     "acknowledges the %s duplicate/lease outcome without retrying",
