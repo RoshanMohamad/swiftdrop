@@ -122,7 +122,58 @@ Differences between the code and CLAUDE.md found along the way (neither was chan
 - The webhook payload's `merchantId` is the merchant UUID; CLAUDE.md says the event contract uses the public string form (`m_1042`). This relates to open issue C-14 and was not touched.
 - Assigning a parcel to its current courier returns 200 (a documented no-op), so a live conflict demo needs a second courier.
 
-Not checked live: Google sign-in, the browser UI, the Socket.IO real-time update, the phone PWA, and webhook delivery to a public HTTPS receiver.
+Real-time, PWA files and webhook URL rules were checked in a second pass (next section). Not checked live: Google sign-in (excluded on request), the browser UI, a real phone, and webhook delivery to a public HTTPS receiver.
+
+## Remaining README checks (2026-11-21, Windows)
+
+| Check | Result |
+|---|---|
+| `pnpm lint` | Passed |
+| `pnpm build` (web, core-api, outbox-relay, webhook-svc, notification-svc, ai-assistant) | Passed |
+| `pnpm check:budget` (web bundle budget) | Passed |
+| `pnpm contracts:check` | **Failed on Windows, now fixed.** It compares generated files byte for byte; with `core.autocrlf=true` the checked-out `openapi.json` and `api.generated.ts` were CRLF and reported false drift (the committed blobs were LF, and CI on Linux is unaffected). `.gitattributes` now forces LF for those two files; the check passes and found no real drift |
+| `pnpm test:built` | **Functional checks pass** ("Built API serves health and keeps the internal listener isolated"). The final assertion "Built server must shut down cleanly" fails on Windows only: `SIGTERM` terminates a Node process outright, so its exit code is `null`, not 0. Not changed. CI runs this on Linux |
+| `pnpm format:check` | **Failed: 79 files, in a pure-LF checkout too, so these are real, existing formatting issues** (`main` has 83). Not part of CI (`ci.yml` runs `contracts:check`, `lint`, `typecheck`, `test`, `test:built`). Not reformatted, to avoid a large unrelated diff |
+
+## Real-time, PWA and webhook URL checks (fresh clone, `pnpm dev`, fresh database)
+
+Run with Node scripts against the running stack (a Socket.IO client and the HTTP API). No browser was used: the Claude browser extension was not connected in this session.
+
+**Real-time (Socket.IO gateway)**
+
+| Check | Observed |
+|---|---|
+| Signed-out socket joins a tracking number's public room | Joined; snapshot keys `trackingNumber, status, originTown, destinationTown, history` only |
+| Status changes made by the dispatcher and courier | The public room received `PICKED_UP > IN_TRANSIT > OUT_FOR_DELIVERY > DELIVERED` in order, 0.3 to 1.1 s after each API response (the relay polls every second) |
+| Public event payload | `trackingNumber, status, town, occurredAt, sequence`; no name, phone or address |
+| Owner joins the private room of their own parcel | Joined and received the same four events (payload adds `parcelId`) |
+| Another customer joins that parcel's private room | `NOT_FOUND`; received 0 events |
+| Signed-out socket joins a private room | `UNAUTHENTICATED` |
+
+**PWA (courier app)**
+
+| Check | Observed |
+|---|---|
+| Manifest | name `SwiftDrop Courier`, `start_url` `/courier`, `scope` `/`, `display` `standalone`, theme and background colours set |
+| Icons | 192 and 512 PNG (valid files, correct sizes), a 512 maskable PNG and an SVG |
+| Service worker | `/sw.js` served as JavaScript with install, activate and fetch handlers; caches the app shell only, never API responses |
+| Production build | `dist` contains `manifest.webmanifest`, `sw.js` and all icons |
+| Offline queue replay | Covered by the passing web unit tests (`queue.ts`); not exercised on a device |
+
+These meet Chrome's installability criteria on paper. The service worker is registered only in production builds (`import.meta.env.PROD`), so the install prompt does not appear under `pnpm dev`; use the built app. `mockServiceWorker.js` (the MSW development mock) is also copied into `dist`; it is harmless but unnecessary in a production build. **Actual installation on a phone was not tested.**
+
+**Webhook URL validation (merchant `PUT /api/v1/merchant/webhook`)**
+
+| URL | Result |
+|---|---|
+| `https://example.com/hook` (public HTTPS) | Accepted |
+| `http://example.com/hook` | 422 `UNSAFE_WEBHOOK_URL` |
+| `https://127.0.0.1/...`, `https://localhost/...`, `https://[::1]/...` | 422 `UNSAFE_WEBHOOK_URL` |
+| `https://10.0.0.5/...`, `https://192.168.1.10/...`, `https://172.16.0.1/...` | 422 `UNSAFE_WEBHOOK_URL` |
+| `https://169.254.169.254/...` (cloud metadata), `https://100.64.0.1/...` (carrier-grade NAT) | 422 `UNSAFE_WEBHOOK_URL` |
+| `https://user:pass@example.com/...`, `ftp://example.com/...` | 422 `UNSAFE_WEBHOOK_URL` |
+
+The signing secret was not returned by `GET /merchant/webhook`. No webhook was delivered to the public URL (that would send a request to a third party); delivery was verified against a local receiver earlier.
 
 ## `notifications-realtime` evaluation (nothing was merged)
 
@@ -140,7 +191,9 @@ Not run on that branch: integration tests, web tests, and a live `pnpm dev` run.
 
 ## Not verified
 
-- Anything in a browser: Google sign-in, the web UI, the Socket.IO real-time update, the phone PWA install.
-- Webhook delivery to a public HTTPS receiver (only a local receiver through the dev config file was used).
+- **Google sign-in** (excluded on request).
+- **The browser UI**: no page was opened in a browser because the Claude browser extension was not connected. The web unit tests (137, jsdom) pass, but visual layout, keyboard use and the booking wizard in a real browser were not checked.
+- **A real phone**: PWA installation and the offline queue on a device.
+- Webhook delivery to a public HTTPS receiver (only a local receiver was used).
 - Line coverage of web, relay, webhook-svc, notification-svc and ai-assistant.
 - Integration, web and live behaviour of the `notifications-realtime` branch.

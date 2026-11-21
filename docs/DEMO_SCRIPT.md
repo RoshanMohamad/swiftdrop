@@ -105,7 +105,7 @@ Checks before going on stage:
 
 ## What was checked live (2026-11-21, fresh clone, `pnpm dev`)
 
-Run through the HTTP API, not a browser, against the seeded database. Not checked: Google sign-in, the browser UI, the Socket.IO real-time update, the phone PWA, and webhook delivery to a public HTTPS receiver.
+Run through the HTTP API, not a browser, against the seeded database. Real-time, PWA files and webhook URL rules were checked with scripts (see the test report). Not checked: Google sign-in, the browser UI, a real phone, and webhook delivery to a public HTTPS receiver.
 
 | Step | Observed |
 |---|---|
@@ -121,6 +121,10 @@ Run through the HTTP API, not a browser, against the seeded database. Not checke
 | Order with a read-only token | 403 `INSUFFICIENT_SCOPE` |
 | Order with `orders:write`, repeated with the same key | 201; same tracking number on the repeat |
 | Webhook to a local receiver (dev config file) | one POST, attempt 0, valid `X-SwiftDrop-Signature` over `<timestamp>.<body>`, fresh timestamp, no phone or address in the payload |
+| Socket.IO: signed-out public room, owner private room | status events `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED` arrived in order 0.3 to 1.1 s after each update; public payload has no PII |
+| Socket.IO: another customer joins the parcel's private room; signed-out private join | `NOT_FOUND`; `UNAUTHENTICATED`; the other customer received no events |
+| Merchant webhook URL: public HTTPS vs HTTP, loopback, private ranges, metadata address, embedded credentials | only public HTTPS accepted; the rest 422 `UNSAFE_WEBHOOK_URL` |
+| PWA manifest, icons and service worker | valid and served; the service worker registers only in the production build, so show the install prompt from the built app, not `pnpm dev` |
 | `/api/ready`, then stop the relay | `ready`; then 503 `degraded` / `unreachable`; back to `ready` after restart |
 
 ## If something goes wrong
