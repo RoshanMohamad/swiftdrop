@@ -23,8 +23,14 @@ const principals: Record<string, string[]> = {
 const merchants = {
   authenticateOAuthToken: async (token: string) => {
     const scopes = principals[token];
-    if (!scopes) throw new OAuthProtocolError("invalid_token", 401, "bad token");
-    return { kind: "merchant-client", clientId: "c1", merchantId: "m1", scopes };
+    if (!scopes)
+      throw new OAuthProtocolError("invalid_grant", 401, "bad token");
+    return {
+      kind: "merchant-client",
+      clientId: "c1",
+      merchantId: "m1",
+      scopes,
+    };
   },
 } as unknown as MerchantsService;
 
