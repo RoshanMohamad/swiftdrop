@@ -993,6 +993,15 @@ Planned slice (plan.md §4.1): Eventing and webhook delivery.
 
 ## M09 — TBD
 
+### M09 checkpoint: Fix CI high-severity Effect advisory (21 November 2026)
+
+- Member: M09; branch: `notifications-realtime`; reference: local follow-up to `2257dbb`, recorded before commit.
+- Change: scoped `@prisma/config>effect` to patched 3.22.1 in `pnpm-workspace.yaml` and regenerated `pnpm-lock.yaml`. This removes GHSA-7589-6fvf-x4pw from both Prisma dependency paths without changing Prisma 7.10.1/client versions or weakening CI. M10/platform and shared database consumers should review the temporary override; reassess it when Prisma adopts the fix upstream.
+- Verification: frozen install, `pnpm audit --audit-level high` (exit 0, no high/critical; 1 low and 6 moderate remain), `pnpm db:generate`, database package typecheck, and both notification integration suites (6 tests in 19.824s) passed with Node 24.22.1 / pnpm 11.25.0. Actual migration deployment succeeded against disposable test databases. No application database, secrets or `.env` were changed.
+- Manual verification: with Docker running, from the repository root run `pnpm install --frozen-lockfile`, `pnpm audit --audit-level high`, `pnpm db:generate`, then `pnpm --filter notification-svc test:integration`. Expect audit exit 0 without high/critical advisories and both integration suites/all six tests passing. UI, responsive and browser checks are not applicable to this transitive-dependency change.
+- Limits: remaining lower-severity advisories are outside this fix; no new acceptance of them is implied. Remote CI and peer review remain pending. No push is claimed.
+
+
 ### M09 checkpoint: Isolate notification delivery integration test (21 November 2026)
 
 - Member: M09; branch: `notifications-realtime`; reference: uncommitted follow-up to `1f82401`.

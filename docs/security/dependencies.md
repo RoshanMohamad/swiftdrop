@@ -1,4 +1,11 @@
-# Dependency review — 29 October 2026
+# Dependency review ? 21 November 2026
+
+Resolved the high-severity Effect ReDoS advisory [GHSA-7589-6fvf-x4pw](https://github.com/advisories/GHSA-7589-6fvf-x4pw). Prisma 7.10.1's `@prisma/config` dependency previously selected `effect@3.20.0`; the scoped pnpm override `@prisma/config>effect: 3.22.1` selects the patched release for both Prisma paths without changing Prisma/client versions. The lockfile is regenerated; the CI audit threshold remains unchanged. Remove/reassess the override when Prisma adopts a patched version upstream.
+
+Validation on Node 24.22.1 / pnpm 11.25.0: frozen-lockfile install, `pnpm audit --audit-level high`, `pnpm db:generate`, `pnpm --filter @swiftdrop/db typecheck`, and notification integration tests (2 suites, 6 tests, using disposable containers) passed. The audit still reports 1 low and 6 moderate findings; this fix does not resolve or newly approve those findings. GitHub CI has not been rerun for this local change.
+
+## Historical review ? 29 October 2026
+
 
 `pnpm audit --audit-level high` passes: no high/critical findings. React Router was upgraded to 7.18.5 to resolve the initial runtime redirect/SSR findings. The three remaining advisories are accepted **for local development/testing only**, pending upstream fixes. Recheck before every release and next sprint; these are not blanket production exceptions.
 
