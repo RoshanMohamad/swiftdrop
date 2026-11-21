@@ -6,6 +6,8 @@ import {
   merchantOrderRequestSchema,
   saveMerchantWebhookSchema,
   merchantOrderStatusSchema,
+  merchantWebhookDeliveryQuerySchema,
+  merchantWebhookDeliveryPageSchema,
 } from "@swiftdrop/contracts";
 import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
@@ -19,6 +21,7 @@ import {
   requireMerchantScope,
 } from "./machine-auth.js";
 import type { ParcelService } from "../parcels/index.js";
+import type { WebhooksService } from "../webhooks/service.js";
 
 export function createMerchantsRouter(
   merchants: MerchantsService,
@@ -26,6 +29,7 @@ export function createMerchantsRouter(
   auth: AuthService,
   limiter: RateLimiter,
   config: Config,
+  webhooks: WebhooksService,
 ) {
   const router = Router();
   router.use((_req, res, next) => {
@@ -77,6 +81,35 @@ export function createMerchantsRouter(
           ? undefined
           : merchantOrderStatusSchema.parse(req.query.status);
       res.json(await merchants.listOrders(res.locals.user.id, status));
+    },
+  );
+  router.get(
+    "/merchant/webhook-deliveries",
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) => {
+      const query = merchantWebhookDeliveryQuerySchema.parse(req.query);
+      const merchantId = await merchants.approvedMerchantId(res.locals.user.id);
+      const page = await webhooks.list({
+        merchantId,
+        status: query.status,
+        cursor: query.cursor,
+        limit: query.limit,
+      });
+      res.json(
+        merchantWebhookDeliveryPageSchema.parse({
+          items: page.items.map(
+            ({ eventId, eventType, status, createdAt, updatedAt }) => ({
+              eventId,
+              eventType,
+              status,
+              createdAt,
+              updatedAt,
+            }),
+          ),
+          nextCursor: page.nextCursor,
+        }),
+      );
     },
   );
   router.get(

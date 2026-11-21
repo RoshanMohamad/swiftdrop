@@ -163,13 +163,21 @@ export function createApp(deps: {
   app.use("/api/v1/auth", createAuthRouter(service, limiter, config, users));
   app.use("/api/v1/admin/audit-events", createAuditRouter(db, service));
   app.use("/api/v1/admin/users", createUsersRouter(users, service, config));
+  const webhooks = new WebhooksService(db);
   app.use(
     "/api/v1/admin/webhook-deliveries",
-    createWebhooksRouter(new WebhooksService(db), service, config),
+    createWebhooksRouter(webhooks, service, config),
   );
   app.use(
     "/api/v1",
-    createMerchantsRouter(merchants, parcels, service, limiter, config),
+    createMerchantsRouter(
+      merchants,
+      parcels,
+      service,
+      limiter,
+      config,
+      webhooks,
+    ),
   );
   app.use("/api/v1", createPricingRouter(pricing, service, limiter, config));
   const reports = new ReportsService(db);

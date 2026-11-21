@@ -98,6 +98,65 @@ export const mockMerchants = [
   },
 ];
 
+export const mockMerchantClient = {
+  id: "44444444-4444-4444-8444-444444444444",
+  clientId: `sd_cli_${"A".repeat(24)}`,
+  name: "Shop integration",
+  scopes: ["orders:read", "orders:write"],
+  createdAt: "2026-11-10T08:00:00.000Z",
+  rotatedAt: null,
+  revokedAt: null,
+};
+export const mockMerchantClients: Array<
+  Omit<typeof mockMerchantClient, "rotatedAt" | "revokedAt"> & {
+    rotatedAt: string | null;
+    revokedAt: string | null;
+  }
+> = [{ ...mockMerchantClient }];
+
+export const mockMerchantOrders = [
+  {
+    trackingNumber: "SD-7KQ2M9XA-Y",
+    status: "IN_TRANSIT" as const,
+    originDistrict: "Colombo",
+    destinationDistrict: "Kandy",
+    recipientName: "Kamal Perera",
+    recipientPhone: "+94771234567",
+    feeCents: 57000,
+    createdAt: "2026-11-18T09:30:00.000Z",
+  },
+  {
+    trackingNumber: "SD-4HNP6RTD-N",
+    status: "CREATED" as const,
+    originDistrict: "Colombo",
+    destinationDistrict: "Galle",
+    recipientName: "Nimali Fernando",
+    recipientPhone: "+94772345678",
+    feeCents: 50000,
+    createdAt: "2026-11-19T11:15:00.000Z",
+  },
+];
+
+export const mockMerchantDeliveries = Array.from({ length: 30 }, (_, index) => ({
+  eventId: `55555555-5555-4555-8555-${String(index + 1).padStart(12, "0")}`,
+  eventType: index % 2 === 0 ? "parcel.created" : "parcel.status.changed",
+  status: (["SUCCESS", "FAILED", "PENDING", "SKIPPED", "SUCCESS"] as const)[index % 5]!,
+  createdAt: new Date(Date.UTC(2026, 10, 20 - index, 10, 0)).toISOString(),
+  updatedAt: new Date(Date.UTC(2026, 10, 20 - index, 10, 5)).toISOString(),
+}));
+
+const mockProblem = (detail = "The Merchant service is temporarily unavailable.") =>
+  HttpResponse.json(
+    {
+      type: "about:blank",
+      title: "Service Unavailable",
+      status: 503,
+      detail,
+      correlationId: "mock-correlation-id",
+    },
+    { status: 503, headers: { "Content-Type": "application/problem+json" } },
+  );
+
 export const mockStaffUsers = [
   {
     id: 4,
@@ -479,9 +538,124 @@ export const handlers = [
   }),
 
   // ── Merchants ───────────────────────────────────────────────────────────────
-  http.post("/api/v1/merchant/register", () => {
+  http.post("/api/v1/merchant/register", ({ request }) => {
+    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    return HttpResponse.json(
+      { message: "Application submitted for review." },
+      { status: 201 },
+    );
+  }),
+
+  http.get("/api/v1/merchant/clients", ({ request }) => {
+    const query = new URL(request.url).searchParams;
+    if (query.get("mock") === "error") return mockProblem();
     return HttpResponse.json({
-      message: "Application submitted for review.",
+      items: query.get("mock") === "empty" ? [] : mockMerchantClients,
+    });
+  }),
+
+  http.post("/api/v1/merchant/clients", async ({ request }) => {
+    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    const body = (await request.json()) as { name?: string; scopes?: string[] };
+    const result = {
+      client: {
+        ...mockMerchantClient,
+        id: crypto.randomUUID(),
+        clientId: `sd_cli_${crypto.randomUUID().replaceAll("-", "").slice(0, 24)}`,
+        name: body.name ?? "New integration",
+        scopes: body.scopes ?? ["orders:read"],
+        createdAt: new Date().toISOString(),
+      },
+      clientSecret: `sd_sec_${"S".repeat(43)}`,
+    };
+    mockMerchantClients.unshift(result.client);
+    return HttpResponse.json(result, { status: 201 });
+  }),
+
+  http.post("/api/v1/merchant/clients/:id/rotate", ({ params, request }) => {
+    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    const client = mockMerchantClients.find((item) => item.id === params["id"]);
+    if (!client) return HttpResponse.json({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      detail: "API client was not found.",
+      correlationId: "mock-correlation-id",
+    }, { status: 404, headers: { "Content-Type": "application/problem+json" } });
+    client.rotatedAt = new Date().toISOString();
+    return HttpResponse.json({
+      client,
+      clientSecret: `sd_sec_${"R".repeat(43)}`,
+    });
+  }),
+
+  http.post("/api/v1/merchant/clients/:id/revoke", ({ params, request }) => {
+    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    const client = mockMerchantClients.find((item) => item.id === params["id"]);
+    if (!client) return HttpResponse.json({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      detail: "API client was not found.",
+      correlationId: "mock-correlation-id",
+    }, { status: 404, headers: { "Content-Type": "application/problem+json" } });
+    client.revokedAt = new Date().toISOString();
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get("/api/v1/merchant/orders", ({ request }) => {
+    const query = new URL(request.url).searchParams;
+    if (query.get("mock") === "error") return mockProblem();
+    const status = query.get("status");
+    const items = query.get("mock") === "empty"
+      ? []
+      : mockMerchantOrders.filter((order) => !status || order.status === status);
+    return HttpResponse.json({ items });
+  }),
+
+  http.get("/api/v1/merchant/webhook", ({ request }) =>
+    new URL(request.url).searchParams.get("mock") === "error"
+      ? mockProblem()
+      : HttpResponse.json({
+          configured: true,
+          url: "https://hooks.ceylontea.example/swiftdrop",
+          updatedAt: "2026-11-18T09:00:00.000Z",
+        }),
+  ),
+
+  http.put("/api/v1/merchant/webhook", async ({ request }) => {
+    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    const body = (await request.json()) as { url?: string };
+    return HttpResponse.json({
+      settings: {
+        configured: true,
+        url: body.url ?? "https://hooks.ceylontea.example/swiftdrop",
+        updatedAt: new Date().toISOString(),
+      },
+      signingSecret: `sd_whsec_${"W".repeat(43)}`,
+    });
+  }),
+
+  http.post("/api/v1/merchant/webhook/rotate-secret", ({ request }) =>
+    new URL(request.url).searchParams.get("mock") === "error"
+      ? mockProblem()
+      : HttpResponse.json({ signingSecret: `sd_whsec_${"N".repeat(43)}` }),
+  ),
+
+  http.get("/api/v1/merchant/webhook-deliveries", ({ request }) => {
+    const query = new URL(request.url).searchParams;
+    if (query.get("mock") === "error") return mockProblem();
+    let items = mockMerchantDeliveries.filter(
+      (delivery) => !query.has("status") || delivery.status === query.get("status"),
+    );
+    if (query.get("mock") === "empty") items = [];
+    const limit = Math.min(100, Math.max(1, Number(query.get("limit") ?? 25)));
+    const isNextPage = query.has("cursor");
+    const page = isNextPage ? items.slice(limit) : items.slice(0, limit);
+    const hasNextPage = !isNextPage && items.length > limit;
+    return HttpResponse.json({
+      items: page,
+      nextCursor: hasNextPage ? "mock-deliveries-next-page" : null,
     });
   }),
 

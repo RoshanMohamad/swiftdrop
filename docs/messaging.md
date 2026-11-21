@@ -54,7 +54,7 @@ FR-I1 relay, FR-I2 topology, FR-I4 dispatcher, X-11 merchant webhook configurati
 
 - Merchant-facing events are `parcel.created` and `parcel.status.changed`, and they carry `merchantId` only for merchant-owned parcels. Assignment events carry internal courier ids and never carry `merchantId`, so they are not delivered by webhook.
 - Status events still include the courier's internal numeric `courierId` in `data`, which webhook merchants receive. Decide whether to drop it from merchant payloads.
-- Merchant-scoped delivery log: `WebhooksService.list({ merchantId })` exists for M02 to mount; there is no merchant-facing route yet.
+- Merchant-scoped delivery log: M02 mounts `WebhooksService.list({ merchantId })` at `GET /api/v1/merchant/webhook-deliveries`. It derives the approved merchant ID from the authenticated account and projects the response to event ID, type, status and timestamps; replay audit data, attempt internals, payloads and secrets are omitted.
 - Dockerfiles and Compose entries for the two services now exist (see [operations.md](operations.md)); CI path filters (X-14) were not checked.
 - Graceful shutdown (finish in-flight messages on SIGTERM) is implemented but not verified: no automated test covers it, and the only local run was on Windows, where `kill` does not deliver a catchable signal. Check it on Linux/CI or in a container.
 

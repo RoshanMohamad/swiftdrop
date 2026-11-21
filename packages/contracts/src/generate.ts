@@ -81,6 +81,8 @@ import {
   saveMerchantWebhookSchema,
   saveMerchantWebhookResponseSchema,
   merchantWebhookSecretSchema,
+  merchantWebhookDeliveryQuerySchema,
+  merchantWebhookDeliveryPageSchema,
   dispatchParcelPageSchema,
   courierListSchema,
   courierSummarySchema,
@@ -177,6 +179,31 @@ registry.registerPath({
     },
     403: {
       description: "Approved merchant account required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/merchant/webhook-deliveries",
+  summary: "List webhook delivery history for the authenticated merchant",
+  security: [{ bearerAuth: [] }],
+  request: { query: merchantWebhookDeliveryQuerySchema },
+  responses: {
+    200: {
+      description: "Merchant-safe webhook delivery summaries",
+      content: json(merchantWebhookDeliveryPageSchema),
+    },
+    401: {
+      description: "Authentication required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    403: {
+      description: "Approved merchant account required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    400: {
+      description: "Invalid filter or page cursor",
       content: { "application/problem+json": { schema: problemSchema } },
     },
   },

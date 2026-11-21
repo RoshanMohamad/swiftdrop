@@ -15,10 +15,10 @@ Rules for everyone:
 4. README: document the Google OIDC (PKCE) flow and the env vars it needs.
 
 ## M02: Merchant platform (Abdhullah, `feature/Merchant`) | reviewer: M01
-1. Test: merchant token without `orders:write` gets 403 on `POST /merchant/orders`.
-2. Test: unapproved merchant cannot create API credentials.
-3. Test: repeated `Idempotency-Key` returns the original order.
-4. Add a webhook URL SSRF test (private and loopback addresses rejected).
+1. [x] Test: merchant token without `orders:write` gets 403 on `POST /merchant/orders`.
+2. [x] Test: unapproved merchant cannot create API credentials.
+3. [x] Test: repeated `Idempotency-Key` returns the original order.
+4. [x] Add a webhook URL SSRF test (private and loopback addresses rejected).
 
 ## M03: Pricing, zones, reports (umar, `umarali`) | reviewer: M04
 1. Unit test fixture: Colombo to Kandy, 2 kg = 57000 cents.
