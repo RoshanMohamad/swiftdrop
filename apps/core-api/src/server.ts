@@ -1,5 +1,5 @@
-import { Redis } from "ioredis";
 import { createServer } from "node:http";
+import { Redis } from "ioredis";
 import { createDatabase } from "@swiftdrop/db";
 import { createApp } from "./app.js";
 import { createInternalApp } from "./internal-app.js";
@@ -9,6 +9,7 @@ import { createAuthMailer } from "./modules/auth/mail.js";
 import pino from "pino";
 import { startParcelEventWorkers } from "./modules/parcels/events.js";
 import { ReceiptService } from "./modules/receipts/service.js";
+import { MerchantsService } from "./modules/merchants/index.js";
 import {
   createRealtimeGateway,
   startRealtimeConsumer,
@@ -63,7 +64,14 @@ const { app, service } = createApp({
   workerState: readinessState,
   receipts: new ReceiptService(db, config),
 });
-const internalApp = createInternalApp({ db, config, logger });
+const webhookMerchants = new MerchantsService(db, tokens, config.oauthSecret);
+const internalApp = createInternalApp({
+  db,
+  config,
+  logger,
+  webhookTargetFor: (merchantId) =>
+    webhookMerchants.webhookTargetForDelivery(merchantId),
+});
 const workers = startParcelEventWorkers(
   db,
   config.RABBITMQ_URL,
@@ -71,9 +79,9 @@ const workers = startParcelEventWorkers(
   workerState,
   new ReceiptService(db, config),
 );
-const httpServer = createServer(app);
+const server = createServer(app);
 const realtime = await createRealtimeGateway({
-  server: httpServer,
+  server,
   db,
   redis,
   auth: service,
@@ -82,19 +90,21 @@ const realtime = await createRealtimeGateway({
 });
 const realtimeConsumer = startRealtimeConsumer({
   url: config.RABBITMQ_URL,
-  publish: realtime.publish,
   logger,
+  publish: realtime.publish,
   state: realtimeWorkerState,
 });
-const server = httpServer.listen(config.PORT, "127.0.0.1", () =>
-  console.log(`SwiftDrop API listening at http://127.0.0.1:${config.PORT}`),
+server.listen(config.PORT, config.HOST, () =>
+  console.log(
+    `SwiftDrop API listening at http://${config.HOST}:${config.PORT}`,
+  ),
 );
 const internalServer = internalApp.listen(
   config.INTERNAL_PORT,
-  "127.0.0.1",
+  config.INTERNAL_HOST,
   () =>
     console.log(
-      `SwiftDrop internal API listening at http://127.0.0.1:${config.INTERNAL_PORT}`,
+      `SwiftDrop internal API listening at http://${config.INTERNAL_HOST}:${config.INTERNAL_PORT}`,
     ),
 );
 let stopping = false;
@@ -105,19 +115,13 @@ async function shutdown() {
   timeout.unref();
   try {
     await realtimeConsumer.stop();
-    await realtime.close();
-    await Promise.all(
-      [server, internalServer].map(
-        (listener) =>
-          new Promise<void>((done, fail) =>
-            listener.close((error) =>
-              error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING"
-                ? fail(error)
-                : done(),
-            ),
-          ),
+    // Closing Socket.IO also closes the public HTTP server it is attached to.
+    await Promise.all([
+      realtime.close(),
+      new Promise<void>((done, fail) =>
+        internalServer.close((error) => (error ? fail(error) : done())),
       ),
-    );
+    ]);
     await workers.stop();
     await db.$disconnect();
     redis.disconnect();

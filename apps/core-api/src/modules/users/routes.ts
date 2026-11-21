@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
 import { protectMutations } from "../../shared/mutations.js";
-import { authenticate, requireRole } from "../auth/index.js";
+import { authenticate, requireRecentAuth, requireRole } from "../auth/index.js";
 import type { AuthService } from "../auth/service.js";
 import { UsersService } from "./service.js";
 
@@ -29,6 +29,8 @@ export function createUsersRouter(
 ) {
   const router = Router();
   const admin = [authenticate(auth), requireRole("ADMIN")];
+  // Creating staff, resending invitations and suspending accounts change who can act.
+  const privileged = [...admin, requireRecentAuth(auth)];
   router.use((_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     next();
@@ -37,7 +39,7 @@ export function createUsersRouter(
     const filters = filtersSchema.parse(req.query);
     res.json(await users.list(res.locals.user.id, filters));
   });
-  router.post("/", protectMutations(config), ...admin, async (req, res) => {
+  router.post("/", protectMutations(config), ...privileged, async (req, res) => {
     res.status(201).json(
       await users.create(
         {
@@ -52,7 +54,7 @@ export function createUsersRouter(
   router.post(
     "/:id/invitation",
     protectMutations(config),
-    ...admin,
+    ...privileged,
     async (req, res) => {
       const id = Number(req.params.id);
       if (!Number.isSafeInteger(id) || id < 1)
@@ -74,7 +76,7 @@ export function createUsersRouter(
   router.patch(
     "/:id/status",
     protectMutations(config),
-    ...admin,
+    ...privileged,
     async (req, res) => {
       if (!/^[1-9]\d*$/.test(String(req.params.id)))
         throw new HttpError(400, "INVALID_USER", "User id is invalid.");

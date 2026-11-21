@@ -1,6 +1,10 @@
 import type { Logger } from "pino";
 import { Prisma, type Database } from "@swiftdrop/db";
-import { eventEnvelopeSchema } from "@swiftdrop/contracts";
+import {
+  CORRELATION_HEADER,
+  correlationIdSchema,
+  eventEnvelopeSchema,
+} from "@swiftdrop/contracts";
 import { EXCHANGES, type ConfirmedMessage } from "@swiftdrop/messaging";
 
 export const DEFAULT_BATCH_SIZE = 50;
@@ -21,6 +25,7 @@ type Row = {
   event_id: string;
   event_type: string;
   payload: unknown;
+  correlation_id: string | null;
 };
 
 /**
@@ -37,7 +42,7 @@ export async function publishBatch(
   return db.$transaction(
     async (tx) => {
       const rows = await tx.$queryRaw<Row[]>(Prisma.sql`
-        SELECT id, event_id, event_type, payload FROM outbox_events
+        SELECT id, event_id, event_type, payload, correlation_id FROM outbox_events
         WHERE published_at IS NULL AND attempts < ${QUARANTINED}
         ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT ${batchSize}`);
       const result: BatchResult = {
@@ -62,10 +67,13 @@ export async function publishBatch(
             event: "outbox_event_quarantined",
             eventId: row.event_id,
             eventType: row.event_type,
+            correlationId: row.correlation_id ?? undefined,
           });
           malformed.push(row.id);
           continue;
         }
+        // Stored value came from a request header: re-validate before it goes on the wire.
+        const correlation = correlationIdSchema.safeParse(row.correlation_id);
         sendable.push({
           row,
           message: {
@@ -74,6 +82,9 @@ export async function publishBatch(
             content: Buffer.from(JSON.stringify(parsed.data)),
             messageId: parsed.data.eventId,
             type: parsed.data.type,
+            ...(correlation.success
+              ? { headers: { [CORRELATION_HEADER]: correlation.data } }
+              : {}),
           },
         });
       }

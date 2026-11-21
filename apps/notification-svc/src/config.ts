@@ -63,7 +63,17 @@ export function parseNotificationConfig(
   environment: NodeJS.ProcessEnv,
   root = findWorkspaceRoot(),
 ) {
-  const parsed = environmentSchema.parse(environment);
+  const parsed = environmentSchema.parse({
+    ...environment,
+    NOTIFICATION_PORT:
+      environment.NOTIFICATION_PORT ?? environment.NOTIFICATION_SVC_PORT,
+    NOTIFICATION_HOST: environment.NOTIFICATION_HOST ?? environment.HEALTH_HOST,
+    INTERNAL_API_URL:
+      environment.INTERNAL_API_URL ?? environment.CORE_INTERNAL_URL,
+    NOTIFICATION_SIGNER_METADATA_FILE:
+      environment.NOTIFICATION_SIGNER_METADATA_FILE ??
+      environment.NOTIFICATION_SIGNER_FILE,
+  });
   return {
     ...parsed,
     root,

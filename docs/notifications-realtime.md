@@ -247,3 +247,9 @@ docker compose up -d --build --wait notification-svc
 - M08/M09 still need to agree the final `merchantId` type across the generic M08 envelope and M09 event interfaces, and remove the redundant legacy in-process outbox publisher tracked in `handover.md` C-14.
 - Missing `town` on a status event causes snapshot reload instead of emitting an incomplete public DTO.
 - No static M09 API key exists or should be shared. Service identity is short-lived, event-bound RS256 JWT only.
+
+## Main reconciliation (21 November 2026)
+
+The worker uses the modular runtime and bounded RabbitMQ retries. Main's processor, contact lookup and delivery interfaces remain available to existing event-flow consumers. Only one notification worker is started by Compose. Main's `NOTIFICATION_SVC_PORT`, `CORE_INTERNAL_URL` and `NOTIFICATION_SIGNER_FILE` are accepted as aliases; explicit `NOTIFICATION_PORT`, `INTERNAL_API_URL` and `NOTIFICATION_SIGNER_METADATA_FILE` take precedence. The existing `useLiveRefresh` API delegates to the shared room client; legacy socket join names remain accepted.
+
+The canonical notification-table creation migration is main's `202611130002_notifications`. The new `202611210001_notification_attempts` migration adds the modular worker's attempts column and indexes. The branch-only duplicate `202611130001_notifications` was removed before integration. A development database that already applied that branch-only migration needs a deliberate migration-history reconciliation before applying this merged history; do not reset a database with data you need. No database was changed during conflict resolution.

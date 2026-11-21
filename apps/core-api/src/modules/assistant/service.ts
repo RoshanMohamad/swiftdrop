@@ -226,8 +226,8 @@ export class AssistantService {
     const lower = message.toLowerCase();
     const toolsUsed: string[] = [];
 
-    // Intent 1: Tracking query (e.g. "where is parcel SD12345678" or "track SD...")
-    const trackingMatch = message.match(/\b(SD[A-Z0-9]{8})\b/i);
+    // Intent 1: Tracking query (e.g. "where is parcel SD-7KQ2M9XA-P" or "track SD-...")
+    const trackingMatch = message.match(/\b(SD-[A-Z0-9]{8}-[A-Z0-9])(?![A-Z0-9-])/i);
     if (trackingMatch) {
       toolsUsed.push("get_parcel_status");
       const trackingNumber = trackingMatch[1]!.toUpperCase();

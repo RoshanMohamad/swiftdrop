@@ -15,6 +15,21 @@ import {
   problemSchema,
   resendVerificationSchema,
   verifyEmailSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  sessionListSchema,
+  sessionListQuerySchema,
+  loginResultSchema,
+  mfaChallengeVerifySchema,
+  mfaChallengeRecoverSchema,
+  mfaEnrolResultSchema,
+  mfaConfirmSchema,
+  mfaRecoveryCodesSchema,
+  mfaStatusSchema,
+  reauthenticateSchema,
+  reauthenticateResultSchema,
+  auditPageSchema,
   completeProfileSchema,
   googleLinkSchema,
   quoteRequestSchema,
@@ -66,6 +81,19 @@ import {
   saveMerchantWebhookSchema,
   saveMerchantWebhookResponseSchema,
   merchantWebhookSecretSchema,
+  merchantWebhookDeliveryQuerySchema,
+  merchantWebhookDeliveryPageSchema,
+  dispatchParcelPageSchema,
+  courierListSchema,
+  courierSummarySchema,
+  assignParcelSchema,
+  assignResultSchema,
+  courierProfileUpdateSchema,
+  courierJobsSchema,
+  courierStatusUpdateSchema,
+  courierStatusResultSchema,
+  courierDutySchema,
+  proofUploadResultSchema,
 } from "./index.js";
 extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
@@ -156,6 +184,31 @@ registry.registerPath({
   },
 });
 registry.registerPath({
+  method: "get",
+  path: "/api/v1/merchant/webhook-deliveries",
+  summary: "List webhook delivery history for the authenticated merchant",
+  security: [{ bearerAuth: [] }],
+  request: { query: merchantWebhookDeliveryQuerySchema },
+  responses: {
+    200: {
+      description: "Merchant-safe webhook delivery summaries",
+      content: json(merchantWebhookDeliveryPageSchema),
+    },
+    401: {
+      description: "Authentication required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    403: {
+      description: "Approved merchant account required",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+    400: {
+      description: "Invalid filter or page cursor",
+      content: { "application/problem+json": { schema: problemSchema } },
+    },
+  },
+});
+registry.registerPath({
   method: "post",
   path: "/api/v1/merchant/orders",
   summary: "Create an order for the authenticated merchant",
@@ -223,6 +276,24 @@ for (const [method, suffix, input, output, status, bearer] of [
     200,
     false,
   ],
+  [
+    "post",
+    "forgot-password",
+    forgotPasswordSchema,
+    z.object({ message: z.string() }),
+    202,
+    false,
+  ],
+  [
+    "post",
+    "reset-password",
+    resetPasswordSchema,
+    z.object({ message: z.string() }),
+    200,
+    false,
+  ],
+  ["post", "change-password", changePasswordSchema, sessionSchema, 200, true],
+  ["get", "sessions", null, sessionListSchema, 200, true],
   ["get", "providers", null, z.object({ google: z.boolean() }), 200, false],
   [
     "post",
@@ -240,7 +311,36 @@ for (const [method, suffix, input, output, status, bearer] of [
     200,
     true,
   ],
-  ["post", "login", loginSchema, sessionSchema, 200, false],
+  ["post", "login", loginSchema, loginResultSchema, 200, false],
+  [
+    "post",
+    "mfa/challenge/verify",
+    mfaChallengeVerifySchema,
+    sessionSchema,
+    200,
+    false,
+  ],
+  [
+    "post",
+    "mfa/challenge/recover",
+    mfaChallengeRecoverSchema,
+    sessionSchema,
+    200,
+    false,
+  ],
+  ["get", "mfa", null, mfaStatusSchema, 200, true],
+  ["post", "mfa/enrol", emptySchema, mfaEnrolResultSchema, 200, true],
+  ["post", "mfa/confirm", mfaConfirmSchema, mfaRecoveryCodesSchema, 200, true],
+  ["post", "mfa/recovery-codes", emptySchema, mfaRecoveryCodesSchema, 200, true],
+  ["delete", "mfa", null, null, 204, true],
+  [
+    "post",
+    "reauthenticate",
+    reauthenticateSchema,
+    reauthenticateResultSchema,
+    200,
+    true,
+  ],
   ["post", "refresh", emptySchema, sessionSchema, 200, false],
   ["post", "logout", emptySchema, null, 204, false],
   ["post", "logout-all", emptySchema, null, 204, true],
@@ -258,7 +358,9 @@ for (const [method, suffix, input, output, status, bearer] of [
           : [],
     ...(input
       ? { request: { body: { required: true, content: json(input) } } }
-      : {}),
+      : suffix === "sessions"
+        ? { request: { query: sessionListQuerySchema } }
+        : {}),
     responses: {
       [status]: {
         description: "Success",
@@ -362,6 +464,8 @@ for (const [method, path, input, output, status, bearer] of [
   ["post", "/api/v1/admin/zones", zoneInputSchema, zoneSchema, 201, true],
   ["patch", "/api/v1/admin/zones/{id}", zoneInputSchema, zoneSchema, 200, true],
   ["delete", "/api/v1/admin/zones/{id}", null, null, 204, true],
+  ["delete", "/api/v1/auth/sessions/{id}", null, null, 204, true],
+  ["get", "/api/v1/admin/audit-events", null, auditPageSchema, 200, true],
   ["get", "/api/v1/admin/pricing", null, z.array(priceSchema), 200, true],
   ["post", "/api/v1/admin/pricing", priceInputSchema, priceSchema, 201, true],
   [
@@ -409,6 +513,18 @@ for (const [method, path, input, output, status, bearer] of [
                 ]
               : []),
           ],
+        }
+      : {}),
+    ...(method === "get" && path === "/api/v1/admin/audit-events"
+      ? {
+          parameters: ["cursor", "limit", "eventType", "userId"].map(
+            (name) => ({
+              name,
+              in: "query" as const,
+              required: false,
+              schema: { type: "string" as const },
+            }),
+          ),
         }
       : {}),
     ...(method === "get" && path === "/api/v1/parcels"
@@ -702,6 +818,140 @@ for (const [method, path, input, output, status] of [
         : [{ csrfHeader: [], bearerAuth: [] }],
     ...(input
       ? { request: { body: { required: true, content: json(input) } } }
+      : {}),
+    responses: {
+      [status]: { description: "Success", content: json(output) },
+      ...Object.fromEntries(
+        [400, 401, 403, 404, 409, 413, 415, 429, 503].map((code) => [
+          code,
+          {
+            description: "Request rejected",
+            content: { "application/problem+json": { schema: problemSchema } },
+          },
+        ]),
+      ),
+    },
+  });
+}
+const operationKeyJson = {
+  type: "string" as const,
+  pattern: "^[A-Za-z0-9_-]{8,64}$",
+};
+const uuidPath = (name: string) => ({
+  name,
+  in: "path" as const,
+  required: true,
+  schema: { type: "string" as const, format: "uuid" },
+});
+const intPath = (name: string) => ({
+  name,
+  in: "path" as const,
+  required: true,
+  schema: { type: "integer" as const, minimum: 1 },
+});
+// M06 dispatch and M07 courier endpoints.
+for (const [method, path, input, output, status, parameters, headers] of [
+  [
+    "get",
+    "/api/v1/dispatch/parcels",
+    null,
+    dispatchParcelPageSchema,
+    200,
+    [
+      webhookQuery("state", {
+        type: "string" as const,
+        enum: ["unassigned", "assigned"],
+      }),
+      webhookQuery("zoneId", { type: "integer" as const, minimum: 1 }),
+      webhookQuery("cursor", { type: "string" as const }),
+      webhookQuery("limit", {
+        type: "integer" as const,
+        minimum: 1,
+        maximum: 100,
+      }),
+    ],
+    [],
+  ],
+  ["get", "/api/v1/dispatch/couriers", null, courierListSchema, 200, [], []],
+  [
+    "patch",
+    "/api/v1/dispatch/couriers/{courierId}",
+    courierProfileUpdateSchema,
+    courierSummarySchema,
+    200,
+    [intPath("courierId")],
+    [],
+  ],
+  [
+    "post",
+    "/api/v1/dispatch/parcels/{id}/assign",
+    assignParcelSchema,
+    assignResultSchema,
+    200,
+    [uuidPath("id")],
+    [],
+  ],
+  ["get", "/api/v1/courier/jobs", null, courierJobsSchema, 200, [], []],
+  [
+    "patch",
+    "/api/v1/courier/jobs/{id}/status",
+    courierStatusUpdateSchema,
+    courierStatusResultSchema,
+    200,
+    [uuidPath("id")],
+    ["Idempotency-Key"],
+  ],
+  [
+    "post",
+    "/api/v1/courier/jobs/{id}/proof",
+    null,
+    proofUploadResultSchema,
+    201,
+    [uuidPath("id")],
+    [],
+  ],
+  [
+    "patch",
+    "/api/v1/courier/duty",
+    courierDutySchema,
+    courierSummarySchema,
+    200,
+    [],
+    [],
+  ],
+] as const) {
+  registry.registerPath({
+    method,
+    path,
+    summary: path,
+    parameters: [
+      ...parameters,
+      ...headers.map((name) => ({
+        name,
+        in: "header" as const,
+        required: true,
+        schema: operationKeyJson,
+      })),
+    ],
+    security:
+      method === "get"
+        ? [{ bearerAuth: [] }]
+        : [{ csrfHeader: [], bearerAuth: [] }],
+    ...(input
+      ? { request: { body: { required: true, content: json(input) } } }
+      : {}),
+    ...(path.endsWith("/proof")
+      ? {
+          request: {
+            body: {
+              required: true,
+              content: {
+                "image/jpeg": { schema: { type: "string" as const, format: "binary" } },
+                "image/png": { schema: { type: "string" as const, format: "binary" } },
+              },
+            },
+          },
+        }
       : {}),
     responses: {
       [status]: { description: "Success", content: json(output) },

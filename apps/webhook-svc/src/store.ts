@@ -10,7 +10,7 @@ import type {
 type Row = {
   id: string;
   eventId: string;
-  merchantId: number;
+  merchantId: string;
   eventType: string;
   envelope: Prisma.JsonValue;
   status: DeliveryStatus;

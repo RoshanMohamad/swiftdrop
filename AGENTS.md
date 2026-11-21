@@ -60,7 +60,7 @@ This registry is the source of contributor identity across chats and branches. I
 | M04 | 4 / Customer booking and parcel records | TBD | TBD |
 | M05 | 5 / Parcel lifecycle, cancellation and public tracking | TBD | TBD |
 | M06 | 6 / Dispatch and courier capacity | TBD | TBD |
-| M07 | 7 / Courier delivery and offline PWA | TBD | TBD |
+| M07 | 7 / Courier delivery and offline PWA | muzny100 | `feature/m07-courier-pwa` |
 | M08 | 8 / Eventing and webhook delivery | TBD | TBD |
 | M09 | 9 / Notifications and realtime | TBD | `notifications-realtime` |
 | M10 | 10 / Platform kernel and web foundation | Lavin | `lavin-dev` |

@@ -11,6 +11,7 @@ import {
 } from "@swiftdrop/messaging";
 import {
   DevFileConfigSource,
+  HttpConfigSource,
   NoConfigSource,
   type WebhookConfigSource,
 } from "./config-source.js";
@@ -27,6 +28,15 @@ const env = z
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    // X-11: where merchant webhook configuration is read from (core-api internal listener).
+    CORE_INTERNAL_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.url().optional(),
+    ),
+    WEBHOOK_SIGNER_FILE: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
     // Development stand-ins. Refused in production (below).
     WEBHOOK_DEV_CONFIG_FILE: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -54,14 +64,25 @@ if (
 
 const logger = createLogger("webhook-svc");
 const db = createDatabase(env.DATABASE_URL);
+// The HTTP source is opt-in through WEBHOOK_SIGNER_FILE; CORE_INTERNAL_URL is shared with
+// notification-svc in .env, so it alone does not enable it.
+if (env.WEBHOOK_SIGNER_FILE && !env.CORE_INTERNAL_URL)
+  throw new Error(
+    "WEBHOOK_SIGNER_FILE requires CORE_INTERNAL_URL (pnpm services:provision --service webhook-svc).",
+  );
 const config: WebhookConfigSource = env.WEBHOOK_DEV_CONFIG_FILE
   ? new DevFileConfigSource(env.WEBHOOK_DEV_CONFIG_FILE)
-  : new NoConfigSource();
-if (!env.WEBHOOK_DEV_CONFIG_FILE)
+  : env.CORE_INTERNAL_URL && env.WEBHOOK_SIGNER_FILE
+    ? new HttpConfigSource({
+        baseUrl: env.CORE_INTERNAL_URL,
+        signerFile: env.WEBHOOK_SIGNER_FILE,
+      })
+    : new NoConfigSource();
+if (config instanceof NoConfigSource)
   logger.warn({
     event: "webhook_config_source_missing",
     detail:
-      "No merchant webhook configuration source is wired (plan X-11); deliveries are recorded as SKIPPED.",
+      "WEBHOOK_SIGNER_FILE is not set; deliveries are recorded as SKIPPED.",
   });
 const sender = new HttpWebhookSender({ devAllowedHosts: devHosts });
 const state = { connected: false };

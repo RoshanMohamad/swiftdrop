@@ -1,3 +1,4 @@
+import { formatTrackingNumber } from "@swiftdrop/contracts";
 import {
   afterAll,
   beforeAll,
@@ -27,7 +28,7 @@ import { createRealtimeGateway } from "../src/modules/realtime/gateway.js";
 import type { RealtimeAccessPolicy } from "../src/modules/realtime/policy.js";
 
 const parcelId = "22222222-2222-4222-8222-222222222222";
-const trackingNumber = "SD00000000";
+const trackingNumber = formatTrackingNumber("7KQ2M9XA");
 const logger = pino({ enabled: false });
 const customer: PublicUser = {
   id: 7,
@@ -189,10 +190,7 @@ afterAll(async () => {
   if (server?.listening)
     await new Promise<void>((resolve) => server.close(() => resolve()));
   redis?.disconnect();
-  await Promise.all([
-    rabbitContainer?.stop(),
-    redisContainer?.stop(),
-  ]);
+  await Promise.all([rabbitContainer?.stop(), redisContainer?.stop()]);
 });
 
 describe("realtime over real Redis and RabbitMQ", () => {

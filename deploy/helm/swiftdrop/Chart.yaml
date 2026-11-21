@@ -1,0 +1,6 @@
+apiVersion: v2
+name: swiftdrop
+description: SwiftDrop parcel delivery platform (modular monolith core-api plus event-driven workers)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,60 @@
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15252) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":50,"time":1794715203487,"pid":15252,"hostname":"DESKTOP-2FHDKVC","correlationId":"8ff8e467-360f-4907-99a5-98541a0a3c4e","event":"request_failed"}
+
+=============================== Coverage summary ===============================
+Statements   : 27.96% ( 451/1613 )
+Branches     : 27.91% ( 352/1261 )
+Functions    : 29.74% ( 83/279 )
+Lines        : 28.68% ( 438/1527 )
+================================================================================
+----------------------|---------|----------|---------|---------|-----------------------------------------------------
+File                  | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                   
+----------------------|---------|----------|---------|---------|-----------------------------------------------------
+All files             |   27.96 |    27.91 |   29.74 |   28.68 |                                                     
+ assistant            |   80.95 |    76.27 |     100 |   80.72 |                                                     
+  service.ts          |   80.95 |    76.27 |     100 |   80.72 | 73,90,143,242,267,311-322,328                       
+ auth                 |   11.59 |     12.5 |   12.79 |   12.22 |                                                     
+  cleanup.ts          |       0 |        0 |       0 |       0 | 8-73                                                
+  jwt.ts              |   98.07 |    89.09 |     100 |     100 | 27,108,121-147,160                                  
+  password.ts         |      40 |        0 |       0 |      50 | 9-10                                                
+  service.ts          |    0.75 |        0 |       0 |    0.81 | 33,35,54-1257                                       
+  transactions.ts     |       0 |        0 |       0 |       0 | 10-14                                               
+ courier              |    12.3 |    15.38 |    7.14 |   13.33 |                                                     
+  service.ts          |    12.3 |    15.38 |    7.14 |   13.33 | 24,53-286                                           
+ dispatch             |   20.43 |    18.88 |      35 |   21.17 |                                                     
+  capacity.ts         |    42.1 |    68.75 |    62.5 |   41.17 | 20,22-35,83-96                                      
+  service.ts          |   14.86 |      8.1 |   16.66 |   16.17 | 24,45-312                                           
+ lifecycle            |    66.1 |    43.13 |     100 |   68.42 |                                                     
+  service.ts          |    66.1 |    43.13 |     100 |   68.42 | 56,61,72,91,129,145-155,179,182,186,198,241,248-258 
+ merchants            |   23.11 |    26.11 |   18.18 |    22.9 |                                                     
+  service.ts          |       0 |        0 |       0 |       0 | 34-539                                              
+  webhook-security.ts |   82.69 |    81.39 |   66.66 |   89.13 | 80-89                                               
+ parcels              |   13.84 |       10 |      35 |    13.6 |                                                     
+  service.ts          |   13.84 |       10 |      35 |    13.6 | 20,80-469,481,510-520,529,548-563                   
+ pricing              |   76.92 |    71.42 |   81.81 |   76.66 |                                                     
+  service.ts          |   67.74 |    58.13 |   73.33 |   67.21 | 158-169,208,228,240,249-287,297,310-317             
+  strategy.ts         |   96.55 |    92.59 |     100 |   96.55 | 63                                                  
+ receipts             |       0 |        0 |       0 |       0 |                                                     
+  service.ts          |       0 |        0 |       0 |       0 | 7-209                                               
+ reports              |     100 |    69.56 |     100 |     100 |                                                     
+  service.ts          |     100 |    69.56 |     100 |     100 | 29-31,76-77,97,122                                  
+ services             |   94.89 |    95.28 |   85.71 |   94.62 |                                                     
+  auth.ts             |     100 |     98.3 |     100 |     100 | 53                                                  
+  notifications.ts    |   86.36 |    89.47 |   66.66 |   86.36 | 56,73,93                                            
+  signing.ts          |      80 |       75 |     100 |      80 | 21                                                  
+  webhooks.ts         |   96.15 |      100 |      75 |      96 | 76                                                  
+ users                |       0 |        0 |       0 |       0 |                                                     
+  admin.ts            |       0 |        0 |       0 |       0 | 8-55                                                
+  service.ts          |       0 |        0 |       0 |       0 | 20-407                                              
+ webhooks             |       0 |        0 |       0 |       0 |                                                     
+  service.ts          |       0 |        0 |       0 |       0 | 11-164                                              
+----------------------|---------|----------|---------|---------|-----------------------------------------------------
+Jest: Coverage for lines (28.68%) does not meet "global" threshold (80%)
+
+Test Suites: 20 passed, 20 total
+Tests:       285 passed, 285 total
+Snapshots:   0 total
+Time:        59.066 s
+Ran all test suites.

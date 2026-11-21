@@ -5,28 +5,31 @@ export interface RealtimeAccessPolicy {
   canJoinPrivate(user: PublicUser, parcelId: string): Promise<boolean>;
 }
 
-/**
- * M06 owns the courier-assignment read model (X-08). Keeping that lookup behind
- * this narrow interface lets FR-I6 deny courier access safely until M06 supplies
- * a database-backed implementation, without guessing a table or trusting event state.
- */
+/** Courier ownership is checked against the current, unreleased M06 assignment. */
 export interface CourierParcelAccess {
   canAccess(courierUserId: number, parcelId: string): Promise<boolean>;
 }
 
-const denyCourierAccess: CourierParcelAccess = {
-  canAccess: async () => false,
-};
-
 export class PrismaRealtimeAccessPolicy implements RealtimeAccessPolicy {
   constructor(
     private readonly db: Database,
-    private readonly courierAccess: CourierParcelAccess = denyCourierAccess,
+    private readonly courierAccess?: CourierParcelAccess,
   ) {}
 
   async canJoinPrivate(user: PublicUser, parcelId: string) {
-    if (user.role === "COURIER")
-      return this.courierAccess.canAccess(user.id, parcelId);
+    if (user.role === "COURIER") {
+      if (this.courierAccess)
+        return this.courierAccess.canAccess(user.id, parcelId);
+      return Boolean(
+        await this.db.parcel.findFirst({
+          where: {
+            id: parcelId,
+            assignment: { is: { courierId: user.id, releasedAt: null } },
+          },
+          select: { id: true },
+        }),
+      );
+    }
 
     const ownership =
       user.role === "CUSTOMER"

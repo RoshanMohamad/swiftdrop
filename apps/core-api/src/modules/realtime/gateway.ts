@@ -6,6 +6,11 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import type { Redis } from "ioredis";
 import type { Logger } from "pino";
 import {
+  isSwiftDropEvent,
+  parcelJoinSchema,
+  trackJoinSchema,
+  privateAssignedEventSchema,
+  courierAssignmentEventSchema,
   privateRealtimeUpdateSchema,
   publicRealtimeUpdateSchema,
   realtimeEvictionSchema,
@@ -24,6 +29,15 @@ import {
   PrismaRealtimeAccessPolicy,
   type RealtimeAccessPolicy,
 } from "./policy.js";
+
+export function tokenExpiry(token: string): number | null {
+  try {
+    const expiry = decodeJwt(token).exp;
+    return typeof expiry === "number" ? expiry * 1000 : null;
+  } catch {
+    return null;
+  }
+}
 
 type RealtimePrincipal = {
   userId: number;
@@ -163,6 +177,9 @@ export async function createRealtimeGateway(input: {
     reason: "expired" | "revoked",
   ) {
     for (const room of privateRooms(socket)) await leaveRoom(socket, room);
+    for (const room of socket.rooms) {
+      if (room.startsWith("user:")) await socket.leave(room);
+    }
     socket.data.principal = undefined;
     clearLocalSession(socket.id);
     socket.emit("room:evicted", realtimeEvictionSchema.parse({ reason }));
@@ -236,12 +253,32 @@ export async function createRealtimeGateway(input: {
   }
 
   io.on("connection", (socket) => {
-    socket.on("room:join", async (raw, acknowledge) => {
+    let joinTimes: number[] = [];
+    const joinRoom: RealtimeClientToServerEvents["room:join"] = async (
+      raw,
+      acknowledge,
+    ) => {
       try {
         const request = realtimeJoinSchema.parse(raw);
+        const now = Date.now();
+        joinTimes = joinTimes.filter((at) => now - at < 60_000);
+        if (
+          joinTimes.length >= 30 ||
+          !(await allowJoin(socket.handshake.address))
+        )
+          throw new Error("RATE_LIMITED");
+        joinTimes.push(now);
+        const room =
+          request.kind === "public"
+            ? publicRoom(request.trackingNumber)
+            : privateRoom(request.parcelId);
+        const roomCount = [...socket.rooms].filter(
+          (value) =>
+            value.startsWith("public:") || value.startsWith("private:"),
+        ).length;
+        if (!socket.rooms.has(room) && roomCount >= 20)
+          throw new Error("RATE_LIMITED");
         if (request.kind === "public") {
-          if (!(await allowJoin(socket.handshake.address)))
-            throw new Error("RATE_LIMITED");
           const trackingNumber = trackingNumberSchema.parse(
             request.trackingNumber,
           );
@@ -277,6 +314,7 @@ export async function createRealtimeGateway(input: {
           if (!expiresAt || expiresAt * 1000 <= Date.now())
             throw new Error("UNAUTHENTICATED");
           await socket.join(privateRoom(request.parcelId));
+          await socket.join(`user:${authenticated.user.id}`);
           startPrivateSession(
             socket,
             token,
@@ -305,6 +343,31 @@ export async function createRealtimeGateway(input: {
             : "INVALID_ROOM";
         acknowledge?.({ ok: false, code });
       }
+    };
+    socket.on("room:join", joinRoom);
+    socket.on("track:join", async (raw, acknowledge) => {
+      const parsed = trackJoinSchema.safeParse(raw);
+      if (!parsed.success)
+        return acknowledge?.({ ok: false, error: "INVALID" });
+      await joinRoom({ kind: "public", ...parsed.data }, (result) =>
+        acknowledge?.(result.ok ? result : { ok: false, error: result.code }),
+      );
+    });
+    socket.on("parcel:join", async (raw, acknowledge) => {
+      const parsed = parcelJoinSchema.safeParse(raw);
+      if (!parsed.success)
+        return acknowledge?.({ ok: false, error: "INVALID" });
+      await joinRoom({ kind: "private", ...parsed.data }, (result) =>
+        acknowledge?.(result.ok ? result : { ok: false, error: result.code }),
+      );
+    });
+    socket.on("parcel:leave", async (raw, acknowledge) => {
+      const parsed = parcelJoinSchema.safeParse(raw);
+      if (parsed.success) {
+        await leaveRoom(socket, privateRoom(parsed.data.parcelId));
+        if (privateRooms(socket).length === 0) clearLocalSession(socket.id);
+      }
+      acknowledge?.({ ok: parsed.success });
     });
     socket.on("room:leave", async (raw) => {
       const request = realtimeLeaveSchema.safeParse(raw);
@@ -363,6 +426,23 @@ export async function createRealtimeGateway(input: {
           );
         }
       }
+      const assigned = privateAssignedEventSchema.parse({
+        parcelId: event.data.parcelId,
+        trackingNumber: event.data.trackingNo,
+        occurredAt: event.occurredAt,
+        sequence: event.sequence,
+      });
+      io.to(room).emit("parcel:assigned", assigned);
+      for (const [id, change] of [
+        [event.data.oldCourierId, "unassigned"],
+        [event.data.newCourierId, "assigned"],
+      ] as const) {
+        if (id)
+          io.to(`user:${id}`).emit(
+            "parcel:assigned",
+            courierAssignmentEventSchema.parse({ ...assigned, change }),
+          );
+      }
       return { handled: true, stale: false } as const;
     }
     if (event.type !== "parcel.status.changed")
@@ -407,6 +487,15 @@ export async function createRealtimeGateway(input: {
   return {
     io,
     publish,
+    async handle(content: Buffer) {
+      let event: unknown;
+      try {
+        event = JSON.parse(content.toString("utf8"));
+      } catch {
+        return;
+      }
+      if (isSwiftDropEvent(event)) await publish(event);
+    },
     async close() {
       for (const socketId of localSessions.keys()) clearLocalSession(socketId);
       await new Promise<void>((resolve) => io.close(() => resolve()));

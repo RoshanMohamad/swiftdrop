@@ -105,6 +105,7 @@ describe("lifecycle outbox event envelopes", () => {
   function createService(parcel: Record<string, unknown>) {
     const outbox: Array<Record<string, unknown>> = [];
     const transaction = {
+      parcelAssignment: { findFirst: async () => null },
       parcel: {
         findUnique: async () => parcel,
         updateMany: async () => ({ count: 1 }),

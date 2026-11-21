@@ -16,9 +16,13 @@ const envelope = (type = "parcel.created") => {
     data: { parcelId: randomUUID(), trackingNo: "SD-AAAAAAAA-1" },
   };
 };
-const row = (payload: unknown, id = randomUUID()) => {
+const row = (
+  payload: unknown,
+  id = randomUUID(),
+  correlation_id: string | null = null,
+) => {
   const p = payload as { eventId: string; type: string };
-  return { id, event_id: p.eventId, event_type: p.type, payload };
+  return { id, event_id: p.eventId, event_type: p.type, payload, correlation_id };
 };
 
 function fakeDb(rows: ReturnType<typeof row>[]) {
@@ -60,6 +64,20 @@ describe("publishBatch (FR-I1)", () => {
     expect(JSON.parse(sent[0]!.content.toString())).toEqual(events[0]);
     expect(updates).toHaveLength(1);
     expect(updates[0]!.data).toMatchObject({ attempts: { increment: 1 } });
+  });
+
+  it("publishes the stored correlation id as a header and omits unsafe ones (NFR-13)", async () => {
+    const [a, b, c] = [envelope(), envelope(), envelope()];
+    const { db } = fakeDb([
+      row(a, undefined, "req-1234-abcd"),
+      row(b, undefined, "bad id with spaces"),
+      row(c),
+    ]);
+    const sent: ConfirmedMessage[] = [];
+    await publishBatch(db, { publish: async (m) => void sent.push(m) }, logger);
+    expect(sent[0]!.headers).toEqual({ "x-correlation-id": "req-1234-abcd" });
+    expect(sent[1]!.headers).toBeUndefined();
+    expect(sent[2]!.headers).toBeUndefined();
   });
 
   it("marks only the confirmed prefix so a failure never lets later events overtake", async () => {

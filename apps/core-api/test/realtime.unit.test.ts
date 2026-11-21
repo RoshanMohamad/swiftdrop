@@ -1,3 +1,4 @@
+import { formatTrackingNumber } from "@swiftdrop/contracts";
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { createServer, type Server as HttpServer } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -20,7 +21,7 @@ import {
 } from "../src/modules/realtime/policy.js";
 
 const parcelId = "22222222-2222-4222-8222-222222222222";
-const trackingNumber = "SD00000000";
+const trackingNumber = formatTrackingNumber("7KQ2M9XA");
 const baseUser: PublicUser = {
   id: 7,
   email: "customer@example.test",
@@ -326,9 +327,9 @@ describe("database-scoped private access policy", () => {
     expect(courierLookup).toHaveBeenCalledWith(7, parcelId);
   });
 
-  it("denies courier access by default until M06 supplies X-08", async () => {
+  it("checks the current unreleased M06 assignment by default", async () => {
     const db = {
-      parcel: { findFirst: jest.fn() },
+      parcel: { findFirst: jest.fn(async () => null) },
     } as unknown as Database;
     await expect(
       new PrismaRealtimeAccessPolicy(db).canJoinPrivate(
@@ -336,7 +337,13 @@ describe("database-scoped private access policy", () => {
         parcelId,
       ),
     ).resolves.toBe(false);
-    expect(db.parcel.findFirst).not.toHaveBeenCalled();
+    expect(db.parcel.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: parcelId,
+        assignment: { is: { courierId: 7, releasedAt: null } },
+      },
+      select: { id: true },
+    });
   });
 });
 

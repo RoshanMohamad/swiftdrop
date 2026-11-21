@@ -12,3 +12,5 @@ export {
   type RealtimeSocketTransport,
 } from "./realtime-client.js";
 export { createMockRealtimeEmitter } from "./mock-realtime.js";
+
+export { useLiveRefresh } from "./useLiveRefresh.js";

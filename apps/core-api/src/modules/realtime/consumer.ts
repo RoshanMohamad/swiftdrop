@@ -5,11 +5,7 @@ import {
   type ConsumeMessage,
 } from "amqplib";
 import { isSwiftDropEvent, type SwiftDropEvent } from "@swiftdrop/contracts";
-import {
-  EXCHANGES,
-  QUEUES,
-  buildTopology,
-} from "@swiftdrop/messaging";
+import { EXCHANGES, QUEUES, buildTopology } from "@swiftdrop/messaging";
 import type { Logger } from "pino";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

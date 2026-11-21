@@ -1,5 +1,10 @@
 import type { Database } from "@swiftdrop/db";
-export async function cleanupAuth(db: Database, now = new Date()) {
+import { cleanupAudit } from "./audit.js";
+export async function cleanupAuth(
+  db: Database,
+  now = new Date(),
+  options: { auditRetentionDays?: number } = {},
+) {
   const grants = await db.accessGrant.findMany({
     where: { expiresAt: { lte: now } },
     select: { jti: true },
@@ -25,6 +30,16 @@ export async function cleanupAuth(db: Database, now = new Date()) {
     select: { id: true },
     take: 500,
   });
+  const resetTokens = await db.passwordResetToken.findMany({
+    where: { expiresAt: { lte: now } },
+    select: { id: true },
+    take: 500,
+  });
+  const mfaChallenges = await db.mfaChallenge.findMany({
+    where: { expiresAt: { lte: now } },
+    select: { id: true },
+    take: 500,
+  });
   await db.$transaction(async (tx) => {
     await tx.accessGrant.deleteMany({
       where: { jti: { in: grants.map((grant) => grant.jti) } },
@@ -43,12 +58,26 @@ export async function cleanupAuth(db: Database, now = new Date()) {
     await tx.staffInvitation.deleteMany({
       where: { id: { in: staffInvitations.map(({ id }) => id) } },
     });
+    await tx.passwordResetToken.deleteMany({
+      where: { id: { in: resetTokens.map(({ id }) => id) } },
+    });
+    await tx.mfaChallenge.deleteMany({
+      where: { id: { in: mfaChallenges.map(({ id }) => id) } },
+    });
   });
+  const auditEvents = await cleanupAudit(
+    db,
+    options.auditRetentionDays ?? 365,
+    now,
+  );
   return {
     grants: grants.length,
     families: families.length,
     verificationTokens: verificationTokens.length,
     oauthTransactions: oauthTransactions.length,
     staffInvitations: staffInvitations.length,
+    resetTokens: resetTokens.length,
+    mfaChallenges: mfaChallenges.length,
+    auditEvents,
   };
 }

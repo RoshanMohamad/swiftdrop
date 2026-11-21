@@ -1,7 +1,17 @@
 import type { Request, Response, NextFunction } from "express";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
+import { CORRELATION_PATTERN } from "@swiftdrop/contracts";
 import { childLogger } from "./logger.js";
+
+const context = new AsyncLocalStorage<string>();
+
+/**
+ * The correlation id of the HTTP request currently being handled, if any. Lets code deep in a
+ * transaction (the outbox writer) record it without threading it through every service.
+ */
+export const currentCorrelationId = () => context.getStore();
 
 /**
  * Express middleware that extracts or generates a correlation ID,
@@ -15,8 +25,9 @@ export function correlationMiddleware(baseLogger?: Logger) {
     const incomingHeader = req.headers["x-correlation-id"];
     const incoming = Array.isArray(incomingHeader) ? incomingHeader[0] : incomingHeader;
 
+    // The header is untrusted and ends up in logs and broker headers: accept only a safe shape.
     const correlationId =
-      typeof incoming === "string" && incoming.trim().length > 0
+      typeof incoming === "string" && CORRELATION_PATTERN.test(incoming.trim())
         ? incoming.trim()
         : randomUUID();
 
@@ -31,6 +42,6 @@ export function correlationMiddleware(baseLogger?: Logger) {
 
     res.setHeader("X-Correlation-ID", correlationId);
     res.setHeader("Cache-Control", "no-store");
-    next();
+    context.run(correlationId, next);
   };
 }

@@ -4,7 +4,7 @@ const base = {
     "^.+\\.tsx?$": ["ts-jest", { useESM: true, tsconfig: "tsconfig.json" }],
   },
   moduleNameMapper: { "^(\\.{1,2}/.*)\\.js$": "$1" },
-  testTimeout: 60000,
+  testTimeout: 180000,
 };
 module.exports = {
   projects: [

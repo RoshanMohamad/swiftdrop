@@ -15,4 +15,8 @@ The additive merchant schema is in `packages/db/prisma/schema.prisma` and the
 merchant migrations. Reuse shared auth and contracts. Merchant order creation
 uses M04's `ParcelsService`; merchant order listing is scoped by `merchantId`.
 Webhook configuration is implemented; webhook delivery and attempt logs depend
-on M08. The delivery-log dashboard remains pending that integration.
+on M08. The merchant history endpoint uses M08's existing delivery list and
+returns only event ID, event type, status, and timestamps. It derives the
+approved merchant ID from the authenticated account; clients cannot supply a
+merchant ID. Replay details, attempt internals, event payloads, and secrets are
+not exposed to merchants.

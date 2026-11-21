@@ -3,6 +3,7 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { completeProfileSchema } from "@swiftdrop/contracts";
 import { beginGoogleLink, completeProfile, errorMessage } from "./client.js";
 import { roleHome, useSession } from "./session.js";
+import { ActiveSessions, ChangePasswordForm, MfaSettings } from "./security.js";
 
 export function CompleteProfile() {
   const { state, updateUser } = useSession();
@@ -142,11 +143,23 @@ export function GoogleResult() {
 
 export function SecuritySettings() {
   const { state } = useSession();
+  const [reloadKey, setReloadKey] = useState(0);
+  if (!state.user) return <Navigate to="/auth/login" replace />;
+  return (
+    <section className="auth-panel" aria-labelledby="security-title">
+      <span className="eyebrow">Security settings</span>
+      <h1 id="security-title">Your account security.</h1>
+      <ChangePasswordForm onChanged={() => setReloadKey((key) => key + 1)} />
+      <MfaSettings />
+      <ActiveSessions reloadKey={reloadKey} />
+      {state.user.role === "CUSTOMER" && <LinkGoogle />}
+    </section>
+  );
+}
+
+function LinkGoogle() {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
-  if (!state.user) return <Navigate to="/auth/login" replace />;
-  if (state.user.role !== "CUSTOMER")
-    return <Navigate to={roleHome(state.user.role)} replace />;
   const formSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
@@ -163,9 +176,8 @@ export function SecuritySettings() {
     }
   };
   return (
-    <section className="auth-panel">
-      <span className="eyebrow">Security settings</span>
-      <h1>Link Google.</h1>
+    <section aria-labelledby="link-google-title">
+      <h2 id="link-google-title">Link Google</h2>
       <p className="muted">
         Prove your current password. The Google account must use the same email
         address.

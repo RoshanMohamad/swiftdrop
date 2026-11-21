@@ -6,12 +6,14 @@ import {
   merchantOrderRequestSchema,
   saveMerchantWebhookSchema,
   merchantOrderStatusSchema,
+  merchantWebhookDeliveryQuerySchema,
+  merchantWebhookDeliveryPageSchema,
 } from "@swiftdrop/contracts";
 import type { Config } from "../../shared/config.js";
 import { HttpError } from "../../shared/problem.js";
 import { protectMutations } from "../../shared/mutations.js";
 import type { RateLimiter } from "../../shared/rate-limit.js";
-import { authenticate, requireRole } from "../auth/index.js";
+import { authenticate, requireRecentAuth, requireRole } from "../auth/index.js";
 import type { AuthService } from "../auth/service.js";
 import { MerchantsService } from "./service.js";
 import {
@@ -19,6 +21,7 @@ import {
   requireMerchantScope,
 } from "./machine-auth.js";
 import type { ParcelService } from "../parcels/index.js";
+import type { WebhooksService } from "../webhooks/service.js";
 
 export function createMerchantsRouter(
   merchants: MerchantsService,
@@ -26,6 +29,7 @@ export function createMerchantsRouter(
   auth: AuthService,
   limiter: RateLimiter,
   config: Config,
+  webhooks: WebhooksService,
 ) {
   const router = Router();
   router.use((_req, res, next) => {
@@ -80,6 +84,35 @@ export function createMerchantsRouter(
     },
   );
   router.get(
+    "/merchant/webhook-deliveries",
+    authenticate(auth),
+    requireRole("MERCHANT"),
+    async (req, res) => {
+      const query = merchantWebhookDeliveryQuerySchema.parse(req.query);
+      const merchantId = await merchants.approvedMerchantId(res.locals.user.id);
+      const page = await webhooks.list({
+        merchantId,
+        status: query.status,
+        cursor: query.cursor,
+        limit: query.limit,
+      });
+      res.json(
+        merchantWebhookDeliveryPageSchema.parse({
+          items: page.items.map(
+            ({ eventId, eventType, status, createdAt, updatedAt }) => ({
+              eventId,
+              eventType,
+              status,
+              createdAt,
+              updatedAt,
+            }),
+          ),
+          nextCursor: page.nextCursor,
+        }),
+      );
+    },
+  );
+  router.get(
     "/admin/merchants",
     authenticate(auth),
     requireRole("ADMIN"),
@@ -97,6 +130,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) =>
       res
         .status(201)
@@ -112,6 +146,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) => {
       const id = String(req.params.id);
       if (!isUuid(id))
@@ -124,6 +159,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) => {
       const id = String(req.params.id);
       if (!isUuid(id))
@@ -144,6 +180,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (req, res) =>
       res.json(
         await merchants.saveWebhookSettings(
@@ -157,6 +194,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("MERCHANT"),
+    requireRecentAuth(auth),
     async (_req, res) =>
       res.json(await merchants.rotateWebhookSecret(res.locals.user.id)),
   );
@@ -165,6 +203,7 @@ export function createMerchantsRouter(
     protectMutations(config),
     authenticate(auth),
     requireRole("ADMIN"),
+    requireRecentAuth(auth),
     async (req, res) => {
       const id = String(req.params.id);
       if (

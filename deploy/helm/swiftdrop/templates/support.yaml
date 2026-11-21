@@ -1,0 +1,185 @@
+{{- if .Values.createNamespace }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+{{- end }}
+{{- if .Values.credentials.create }}
+---
+# ConfigMaps hold settings; Secrets hold credentials. This chart-managed Secret is for local
+# clusters only. Hosted clusters create the Secret out of band (credentials.existingSecret).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.credentials.existingSecret }}
+  namespace: {{ .Values.namespace }}
+type: Opaque
+stringData:
+  {{- range $k, $v := .Values.credentials.data }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swiftdrop-config
+  namespace: {{ .Values.namespace }}
+data:
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  APP_ORIGIN: {{ .Values.config.appOrigin | quote }}
+  COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
+  TRUST_PROXY: {{ .Values.config.trustProxy | quote }}
+  MINIO_BUCKET: {{ .Values.config.minioBucket | quote }}
+  SERVICE_ISSUER: {{ .Values.config.serviceIssuer | quote }}
+  API_ISSUER: {{ .Values.config.appOrigin | quote }}
+  HUMAN_AUDIENCE: {{ .Values.config.humanAudience | quote }}
+  SMTP_URL: {{ .Values.config.smtpUrl | quote }}
+---
+# Redis backs rate limits and the Socket.IO adapter; both are rebuildable, so no PVC.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+  labels: { app.kubernetes.io/name: redis, app.kubernetes.io/part-of: swiftdrop }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: redis }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: redis, app.kubernetes.io/part-of: swiftdrop }
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          ports: [{ name: redis, containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with .Values.redis.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app.kubernetes.io/name: redis }
+  ports: [{ name: redis, port: 6379, targetPort: redis }]
+{{- if .Values.mailpit.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: {{ .Values.namespace }}
+  labels: { app.kubernetes.io/name: mailpit, app.kubernetes.io/part-of: swiftdrop }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: mailpit }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: mailpit, app.kubernetes.io/part-of: swiftdrop }
+    spec:
+      containers:
+        - name: mailpit
+          image: {{ .Values.mailpit.image }}
+          ports:
+            - { name: smtp, containerPort: 1025 }
+            - { name: ui, containerPort: 8025 }
+          readinessProbe:
+            httpGet: { path: /readyz, port: ui }
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app.kubernetes.io/name: mailpit }
+  ports:
+    - { name: smtp, port: 1025, targetPort: smtp }
+    - { name: ui, port: 8025, targetPort: ui }
+{{- end }}
+{{- if .Values.autoscaling.enabled }}
+---
+# HPA scales core-api on CPU.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: core-api
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: {{ .Values.coreApi.name }} }
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }} }
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+# The Ingress replaces the compose nginx gateway. core-api's internal port is never routed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swiftdrop
+  namespace: {{ .Values.namespace }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - { path: /api, pathType: Prefix, backend: { service: { name: {{ .Values.coreApi.name }}, port: { number: {{ .Values.coreApi.port }} } } } }
+          - { path: /oauth, pathType: Prefix, backend: { service: { name: {{ .Values.coreApi.name }}, port: { number: {{ .Values.coreApi.port }} } } } }
+          - { path: /socket.io, pathType: Prefix, backend: { service: { name: {{ .Values.coreApi.name }}, port: { number: {{ .Values.coreApi.port }} } } } }
+          - { path: /mcp, pathType: Prefix, backend: { service: { name: {{ .Values.aiAssistant.name }}, port: { number: {{ .Values.aiAssistant.port }} } } } }
+          - { path: /, pathType: Prefix, backend: { service: { name: {{ .Values.web.name }}, port: { number: {{ .Values.web.port }} } } } }
+{{- end }}
+{{- if .Values.migrate.enabled }}
+---
+# Applies Prisma migrations. Named per release revision because Jobs are immutable; finished
+# Jobs are garbage-collected. Service probes use /healthz only, so `helm --wait` does not
+# deadlock waiting for a schema that this Job is about to create.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: swiftdrop-migrate-{{ .Release.Revision }}
+  namespace: {{ .Values.namespace }}
+  labels: { app.kubernetes.io/name: migrate, app.kubernetes.io/part-of: swiftdrop }
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 900
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000 }
+      containers:
+        - name: migrate
+          image: {{ include "sd.image" (dict "root" . "image" .Values.migrate.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "sd.credEnv" . | nindent 12 }}
+{{- end }}

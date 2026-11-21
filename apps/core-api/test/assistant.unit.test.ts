@@ -40,7 +40,7 @@ describe("AI Delivery Assistant (FR-B2, Design Doc §12.2)", () => {
         Promise.resolve([
           {
             id: "p1",
-            trackingNumber: "SDABC12345",
+            trackingNumber: "SD-7KQ2M9XA-Y",
             status: "CREATED",
             recipientName: "Nimal Perera",
             feeCents: 57000,
@@ -57,10 +57,10 @@ describe("AI Delivery Assistant (FR-B2, Design Doc §12.2)", () => {
           },
         ]),
       findUnique: (args: { where: { trackingNumber: string } }) => {
-        if (args.where.trackingNumber === "SDABC12345") {
+        if (args.where.trackingNumber === "SD-7KQ2M9XA-Y") {
           return Promise.resolve({
             id: "p1",
-            trackingNumber: "SDABC12345",
+            trackingNumber: "SD-7KQ2M9XA-Y",
             status: "IN_TRANSIT",
             recipientName: "Nimal Perera",
             feeCents: 57000,
@@ -99,11 +99,11 @@ describe("AI Delivery Assistant (FR-B2, Design Doc §12.2)", () => {
 
   it("executes get_parcel_status tool when tracking number is present (T2)", async () => {
     const res = await assistant.chat(undefined, {
-      message: "Where is parcel SDABC12345?",
+      message: "Where is parcel SD-7KQ2M9XA-Y?",
       history: [],
     });
     expect(res.toolsUsed).toContain("get_parcel_status");
-    expect(res.reply).toContain("SDABC12345");
+    expect(res.reply).toContain("SD-7KQ2M9XA-Y");
     expect(res.reply).toContain("IN_TRANSIT");
   });
 
@@ -113,7 +113,7 @@ describe("AI Delivery Assistant (FR-B2, Design Doc §12.2)", () => {
       history: [],
     });
     expect(res.toolsUsed).toContain("list_my_parcels");
-    expect(res.reply).toContain("SDABC12345");
+    expect(res.reply).toContain("SD-7KQ2M9XA-Y");
   });
 
   it("prompts user to log in when asking for parcels unauthenticated (T3 auth guard)", async () => {

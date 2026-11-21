@@ -10,6 +10,7 @@ import {
   resendVerification,
 } from "./client.js";
 import { roleHome, useSession } from "./session.js";
+import { MfaChallengeStep } from "./mfa.js";
 export function AuthForm({ registering = false }: { registering?: boolean }) {
   const { state, accept } = useSession();
   const [pending, setPending] = useState(false);
@@ -20,6 +21,8 @@ export function AuthForm({ registering = false }: { registering?: boolean }) {
   const [resending, setResending] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [googleChecked, setGoogleChecked] = useState(false);
+  // Set when the password was right but the account also needs its second factor.
+  const [challenge, setChallenge] = useState<string | null>(null);
   const form = useRef<HTMLFormElement>(null);
   const inFlight = useRef(false);
   useEffect(
@@ -76,13 +79,16 @@ export function AuthForm({ registering = false }: { registering?: boolean }) {
         setSuccess(true);
         setMessage(response.message);
         element.reset();
-      } else
-        accept(
-          await login(
-            String(values.email).trim().toLowerCase(),
-            String(values.password),
-          ),
+      } else {
+        const result = await login(
+          String(values.email).trim().toLowerCase(),
+          String(values.password),
         );
+        if (result.state === "mfa_required") {
+          setChallenge(result.challengeToken);
+          element.reset();
+        } else accept(result);
+      }
     } catch (error) {
       setMessage(errorMessage(error));
       if (error instanceof ApiError && error.problem.errors)
@@ -151,6 +157,16 @@ export function AuthForm({ registering = false }: { registering?: boolean }) {
       )}
     </div>
   );
+  if (challenge)
+    return (
+      <section className="auth-panel">
+        <MfaChallengeStep
+          challengeToken={challenge}
+          onSession={accept}
+          onCancel={() => setChallenge(null)}
+        />
+      </section>
+    );
   return (
     <section className="auth-panel" aria-labelledby="form-title">
       <span className="eyebrow">
@@ -246,7 +262,7 @@ export function AuthForm({ registering = false }: { registering?: boolean }) {
               : "Google sign-in is unavailable. Use your email and password."}
           </p>
           <p className="fine">
-            Password recovery is planned for a later phase.
+            <Link to="/auth/forgot-password">Forgot your password?</Link>
           </p>
         </>
       )}

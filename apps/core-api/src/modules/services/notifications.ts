@@ -10,6 +10,9 @@ import { HttpError } from "../../shared/problem.js";
 
 type ServiceRequest = RequestHandler & {};
 
+// Booking confirmation (parcel.created) and status notifications (parcel.status.changed) are the
+// only events bound to notifications.q that need customer/recipient contact data.
+
 export function createNotificationLookupRouter(
   db: Database,
   authenticate: ServiceRequest,

@@ -9,3 +9,11 @@
 **/coverage
 *.log
 
+**/*.log
+packages/db/src/generated
+packages/db/.agents
+packages/db/.claude
+packages/db/.windsurf
+output
+*.pdf
+docs

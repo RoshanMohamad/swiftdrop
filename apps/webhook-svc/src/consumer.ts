@@ -1,6 +1,7 @@
 import type { Channel, ConsumeMessage } from "amqplib";
 import type { Logger } from "pino";
 import { z } from "zod";
+import { CORRELATION_HEADER, correlationIdSchema } from "@swiftdrop/contracts";
 import {
   EXCHANGES,
   QUEUES,
@@ -21,11 +22,16 @@ export const RUN_HEADER = "x-swiftdrop-run";
 const headerSchema = z.object({
   [ATTEMPT_HEADER]: z.number().int().min(0).max(6).default(0),
   [RUN_HEADER]: z.number().int().min(0).default(0),
+  // A malformed value is dropped, never a reason to reject the delivery.
+  [CORRELATION_HEADER]: correlationIdSchema.optional().catch(undefined),
 });
 
 const headers = (message: HandoffMessage) => ({
   [ATTEMPT_HEADER]: message.attempt,
   [RUN_HEADER]: message.run,
+  ...(message.correlationId
+    ? { [CORRELATION_HEADER]: message.correlationId }
+    : {}),
 });
 
 /** Confirmed publishes for retry and dead-letter hand-offs (never the topic exchange). */
@@ -83,6 +89,7 @@ export async function consumeWebhooks(
             attempt: parsed.data[ATTEMPT_HEADER],
             run: parsed.data[RUN_HEADER],
             redelivered: message.fields.redelivered,
+            correlationId: parsed.data[CORRELATION_HEADER],
           });
         try {
           if (disposition === "ack") channel.ack(message);
