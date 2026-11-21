@@ -2,7 +2,7 @@
 -- Prisma deploys 202611130001_notifications/migration.sql instead.
 
 CREATE TABLE "processed_events" (
-  "id"               UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
+  "id"               UUID           PRIMARY KEY,
   "consumer"         VARCHAR(80)    NOT NULL,
   "event_id"         UUID           NOT NULL,
   "status"           VARCHAR(16)    NOT NULL,
@@ -21,7 +21,7 @@ CREATE INDEX "processed_events_lease_expires_at_idx"
   ON "processed_events" ("lease_expires_at");
 
 CREATE TABLE "notification_logs" (
-  "id"               UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
+  "id"               UUID           PRIMARY KEY,
   "event_id"         UUID           NOT NULL,
   "channel"          VARCHAR(8)     NOT NULL,
   "template_id"      VARCHAR(80)    NOT NULL,

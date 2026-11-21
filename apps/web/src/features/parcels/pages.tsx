@@ -15,7 +15,10 @@ import {
   quoteRequestSchema,
   type QuoteRequest,
 } from "@swiftdrop/contracts";
-import { useParcelRealtime } from "../../shared/realtime/index.js";
+import {
+  usePrivateParcelRealtime,
+  usePublicParcelRealtime,
+} from "../../shared/realtime/index.js";
 const money = (cents: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(
     cents / 100,
@@ -338,7 +341,9 @@ export function NewParcel() {
           return (
             <li
               key={label}
-              className={number === step ? "current" : number < step ? "done" : ""}
+              className={
+                number === step ? "current" : number < step ? "done" : ""
+              }
               aria-current={number === step ? "step" : undefined}
             >
               <span>{number}</span>
@@ -502,7 +507,9 @@ export function NewParcel() {
               <strong>Address</strong> {recipient.recipientAddress}
             </p>
             <strong className="quote-total">{money(quote.feeCents)}</strong>
-            <p>Quote valid until {new Date(quote.expiresAt).toLocaleString()}.</p>
+            <p>
+              Quote valid until {new Date(quote.expiresAt).toLocaleString()}.
+            </p>
           </div>
           {error && (
             <p className="field-error" role="alert">
@@ -580,7 +587,9 @@ export function ParcelList() {
         </div>
       )}
       {!page && !error ? (
-        <p role="status" className="loading-state">Loading your bookings…</p>
+        <p role="status" className="loading-state">
+          Loading your bookings…
+        </p>
       ) : page?.items.length === 0 && !error ? (
         <div className="empty-state">
           <h2>No bookings yet</h2>
@@ -655,9 +664,7 @@ export function ParcelDetail() {
   useEffect(() => {
     void loadParcel();
   }, [loadParcel, retry]);
-  const realtimeState = useParcelRealtime({
-    kind: "private",
-    parcelId: id,
+  const realtimeState = usePrivateParcelRealtime(id, {
     onSnapshot: loadParcel,
     onUpdate: (update) =>
       setParcel((current) => {
@@ -700,7 +707,10 @@ export function ParcelDetail() {
       <section className="auth-panel">
         <h1>Booking unavailable</h1>
         <p role="alert">{error}</p>
-        <button className="secondary" onClick={() => setRetry((value) => value + 1)}>
+        <button
+          className="secondary"
+          onClick={() => setRetry((value) => value + 1)}
+        >
           Try again
         </button>
         <p>
@@ -717,7 +727,9 @@ export function ParcelDetail() {
   const shareUrl = `${window.location.origin}/track/${parcel.trackingNumber}`;
   return (
     <section className="auth-panel parcel-page">
-      <Link className="back-link" to="/parcels">← Back to booking history</Link>
+      <Link className="back-link" to="/parcels">
+        ← Back to booking history
+      </Link>
       <div className="detail-heading">
         <div>
           <span className="eyebrow">Delivery details</span>
@@ -731,32 +743,55 @@ export function ParcelDetail() {
         </span>
       </div>
       <p className="muted" role="status">
-        {realtimeState === "live"
+        {realtimeState === "connected"
           ? "Live updates connected."
-          : realtimeState === "evicted"
-            ? "Live access changed. Refreshing your authorised view."
-            : realtimeState === "fallback"
-              ? "Live updates unavailable. Showing the latest saved status."
-              : "Connecting live updates…"}
+          : realtimeState === "reconnecting"
+            ? "Reconnecting live updates…"
+            : realtimeState === "offline"
+              ? "Live updates offline. Showing the latest saved status."
+              : realtimeState === "error"
+                ? "Live access unavailable. Refreshing your authorised view."
+                : "Connecting live updates…"}
       </p>
       <div className="detail-route">
-        <span><small>Pickup</small><strong>{parcel.originTown}</strong></span>
-        <span className="route-arrow" aria-hidden="true">→</span>
-        <span><small>Delivery</small><strong>{parcel.destinationTown}</strong></span>
+        <span>
+          <small>Pickup</small>
+          <strong>{parcel.originTown}</strong>
+        </span>
+        <span className="route-arrow" aria-hidden="true">
+          →
+        </span>
+        <span>
+          <small>Delivery</small>
+          <strong>{parcel.destinationTown}</strong>
+        </span>
       </div>
       <div className="detail-grid">
         <section className="detail-card">
           <h2>Recipient</h2>
-          <p><strong>{parcel.recipientName}</strong></p>
+          <p>
+            <strong>{parcel.recipientName}</strong>
+          </p>
           <p>{parcel.recipientPhone}</p>
           <p>{parcel.recipientAddress}</p>
         </section>
         <section className="detail-card">
           <h2>Parcel information</h2>
           <dl className="detail-facts">
-            <div><dt>Weight</dt><dd>{(parcel.weightGrams / 1000).toFixed(2)} kg</dd></div>
-            <div><dt>Dimensions</dt><dd>{parcel.lengthMm} × {parcel.widthMm} × {parcel.heightMm} mm</dd></div>
-            <div><dt>Booking total</dt><dd>{money(parcel.feeCents)}</dd></div>
+            <div>
+              <dt>Weight</dt>
+              <dd>{(parcel.weightGrams / 1000).toFixed(2)} kg</dd>
+            </div>
+            <div>
+              <dt>Dimensions</dt>
+              <dd>
+                {parcel.lengthMm} × {parcel.widthMm} × {parcel.heightMm} mm
+              </dd>
+            </div>
+            <div>
+              <dt>Booking total</dt>
+              <dd>{money(parcel.feeCents)}</dd>
+            </div>
           </dl>
         </section>
       </div>
@@ -771,7 +806,9 @@ export function ParcelDetail() {
                 <span className="timeline-dot" aria-hidden="true" />
                 <div>
                   <strong>{statusLabel(item.status)}</strong>
-                  <span>{item.town} · {new Date(item.createdAt).toLocaleString()}</span>
+                  <span>
+                    {item.town} · {new Date(item.createdAt).toLocaleString()}
+                  </span>
                 </div>
               </li>
             ))}
@@ -780,9 +817,16 @@ export function ParcelDetail() {
       </section>
       <section className="detail-card tracking-share">
         <h2>Public tracking</h2>
-        <p className="muted">Share this link so someone can follow the delivery status.</p>
+        <p className="muted">
+          Share this link so someone can follow the delivery status.
+        </p>
         <label htmlFor="shareLink">Tracking link</label>
-        <input id="shareLink" readOnly value={shareUrl} onFocus={(event) => event.currentTarget.select()} />
+        <input
+          id="shareLink"
+          readOnly
+          value={shareUrl}
+          onFocus={(event) => event.currentTarget.select()}
+        />
       </section>
       <section className="detail-card receipt-card">
         <h2>Delivery receipt</h2>
@@ -819,9 +863,21 @@ export function ParcelDetail() {
               Your completed delivery receipt is stored securely and can be
               requested whenever you need it.
             </p>
-            {receiptError && <p role="alert" className="field-error">{receiptError}</p>}
-            <button className="secondary" disabled={receiptPending} onClick={() => void prepareReceipt()}>
-              {receiptPending ? "Preparing receipt…" : receiptError ? "Try again" : "Get PDF receipt"}
+            {receiptError && (
+              <p role="alert" className="field-error">
+                {receiptError}
+              </p>
+            )}
+            <button
+              className="secondary"
+              disabled={receiptPending}
+              onClick={() => void prepareReceipt()}
+            >
+              {receiptPending
+                ? "Preparing receipt…"
+                : receiptError
+                  ? "Try again"
+                  : "Get PDF receipt"}
             </button>
           </>
         )}
@@ -876,9 +932,7 @@ export function PublicTracking() {
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [loadTracking, retry]);
-  const realtimeState = useParcelRealtime({
-    kind: "public",
-    trackingNumber,
+  const realtimeState = usePublicParcelRealtime(trackingNumber, {
     onSnapshot: loadTracking,
     onUpdate: (update) =>
       setData((current) => {
@@ -910,11 +964,15 @@ export function PublicTracking() {
       <span className="eyebrow">SwiftDrop tracking</span>
       <h1>{trackingNumber}</h1>
       <p className="muted" role="status">
-        {realtimeState === "live"
+        {realtimeState === "connected"
           ? "Live tracking connected."
-          : realtimeState === "fallback"
-            ? "Live tracking unavailable. Automatic refresh is still active."
-            : "Connecting live tracking…"}
+          : realtimeState === "reconnecting"
+            ? "Reconnecting live tracking…"
+            : realtimeState === "offline"
+              ? "Live tracking offline. Automatic refresh is still active."
+              : realtimeState === "error"
+                ? "Live tracking unavailable. Automatic refresh is still active."
+                : "Connecting live tracking…"}
       </p>
       {error && (
         <div role="alert" className="notice error">

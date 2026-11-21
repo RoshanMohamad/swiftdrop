@@ -10,6 +10,7 @@ import {
   publicRealtimeUpdateSchema,
   realtimeEvictionSchema,
   realtimeJoinSchema,
+  realtimeLeaveSchema,
   realtimeReloadSchema,
   trackingNumberSchema,
   type RealtimeClientToServerEvents,
@@ -144,8 +145,7 @@ export async function createRealtimeGateway(input: {
       if (count === 1) await input.redis.expire(key, 60);
       return count <= 30;
     });
-  const privateRecheckMs =
-    input.privateRecheckMs ?? DEFAULT_PRIVATE_RECHECK_MS;
+  const privateRecheckMs = input.privateRecheckMs ?? DEFAULT_PRIVATE_RECHECK_MS;
   if (!Number.isSafeInteger(privateRecheckMs) || privateRecheckMs < 10)
     throw new Error("privateRecheckMs must be at least 10 ms.");
   const localSessions = new Map<string, LocalSession>();
@@ -225,9 +225,12 @@ export async function createRealtimeGateway(input: {
     };
     const session: LocalSession = { token };
     localSessions.set(socket.id, session);
-    session.expiryTimer = setTimeout(() => {
-      void evictLocalPrivateRooms(socket, "expired");
-    }, Math.max(0, expiresAt * 1000 - Date.now()));
+    session.expiryTimer = setTimeout(
+      () => {
+        void evictLocalPrivateRooms(socket, "expired");
+      },
+      Math.max(0, expiresAt * 1000 - Date.now()),
+    );
     session.expiryTimer.unref?.();
     scheduleRecheck(socket);
   }
@@ -298,12 +301,21 @@ export async function createRealtimeGateway(input: {
             error.message,
           )
             ? (error.message as
-                | "RATE_LIMITED"
-                | "NOT_FOUND"
-                | "UNAUTHENTICATED")
+                "RATE_LIMITED" | "NOT_FOUND" | "UNAUTHENTICATED")
             : "INVALID_ROOM";
         acknowledge?.({ ok: false, code });
       }
+    });
+    socket.on("room:leave", async (raw) => {
+      const request = realtimeLeaveSchema.safeParse(raw);
+      if (!request.success) return;
+      const room =
+        request.data.kind === "public"
+          ? publicRoom(request.data.trackingNumber)
+          : privateRoom(request.data.parcelId);
+      await leaveRoom(socket, room);
+      if (request.data.kind === "private" && privateRooms(socket).length === 0)
+        clearLocalSession(socket.id);
     });
     socket.on("disconnect", () => clearLocalSession(socket.id));
   });

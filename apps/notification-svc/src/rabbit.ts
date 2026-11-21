@@ -1,10 +1,6 @@
 import { once } from "node:events";
-import {
-  isSwiftDropEvent,
-  QUEUES,
-  ROUTING_KEYS,
-  type SwiftDropEvent,
-} from "@swiftdrop/contracts";
+import { isSwiftDropEvent, type SwiftDropEvent } from "@swiftdrop/contracts";
+import { buildTopology, EXCHANGES, QUEUES, ROUTE } from "@swiftdrop/messaging";
 import {
   connect,
   type ChannelModel,
@@ -16,13 +12,6 @@ import type { Logger } from "pino";
 import { NotificationProcessingError } from "./service.js";
 import type { EventConsumer } from "./types.js";
 
-const EXCHANGE = "swiftdrop.events";
-// M08/M09 integration seam: M08 must review these declarations before merge.
-const STATUS_BINDING = ROUTING_KEYS.PARCEL_STATUS_CHANGED.replace(
-  /[^.]+$/,
-  "*",
-);
-const DLQ = `${QUEUES.NOTIFICATIONS}.dlq`;
 const ATTEMPT_HEADER = "x-swiftdrop-notification-attempt";
 const FAILURE_HEADER = "x-swiftdrop-notification-failure";
 const MAX_REDELIVERIES = 3;
@@ -81,6 +70,31 @@ export interface NotificationEventProcessor {
   process(
     event: SwiftDropEvent,
   ): Promise<"ignored" | "acquired" | "done" | "busy" | "completed">;
+}
+
+/** Declare only the M09-owned consumers from M08's shared topology. */
+export async function declareNotificationTopology(channel: ConfirmChannel) {
+  const topology = buildTopology();
+  const queueNames = new Set<string>([
+    QUEUES.notifications,
+    QUEUES.notificationsDlq,
+  ]);
+  const exchangeNames = new Set<string>([EXCHANGES.events, EXCHANGES.dead]);
+  for (const exchange of topology.exchanges) {
+    if (exchangeNames.has(exchange.name))
+      await channel.assertExchange(exchange.name, exchange.type, {
+        durable: true,
+      });
+  }
+  for (const queue of topology.queues) {
+    if (!queueNames.has(queue.name)) continue;
+    await channel.assertQueue(queue.name, {
+      durable: true,
+      arguments: queue.arguments,
+    });
+    for (const binding of queue.bindings)
+      await channel.bindQueue(queue.name, binding.exchange, binding.key);
+  }
 }
 
 function hasSensitiveEventData(value: unknown) {
@@ -190,18 +204,10 @@ export class RabbitNotificationConsumer implements EventConsumer {
 
       const channel = await connection.createConfirmChannel();
       this.channel = channel;
-      await channel.assertExchange(EXCHANGE, "topic", { durable: true });
-      await channel.assertQueue(QUEUES.NOTIFICATIONS, { durable: true });
-      await channel.assertQueue(DLQ, { durable: true });
-      await channel.bindQueue(
-        QUEUES.NOTIFICATIONS,
-        EXCHANGE,
-        ROUTING_KEYS.PARCEL_CREATED,
-      );
-      await channel.bindQueue(QUEUES.NOTIFICATIONS, EXCHANGE, STATUS_BINDING);
+      await declareNotificationTopology(channel);
       await channel.prefetch(this.prefetch);
       const consumer = await channel.consume(
-        QUEUES.NOTIFICATIONS,
+        QUEUES.notifications,
         (message) => {
           if (message) this.schedule(channel, message);
         },
@@ -210,7 +216,7 @@ export class RabbitNotificationConsumer implements EventConsumer {
       this.consumerTag = consumer.consumerTag;
       this.ready = true;
       this.logger.info(
-        { queue: QUEUES.NOTIFICATIONS, prefetch: this.prefetch },
+        { queue: QUEUES.notifications, prefetch: this.prefetch },
         "Notification consumer ready",
       );
       return true;
@@ -286,9 +292,9 @@ export class RabbitNotificationConsumer implements EventConsumer {
     const attempt = deliveryAttempt(message);
     try {
       if (attempt < MAX_REDELIVERIES) {
-        await this.sendConfirmed(
+        await this.sendToQueueConfirmed(
           channel,
-          QUEUES.NOTIFICATIONS,
+          QUEUES.notifications,
           message.content,
           {
             contentType: "application/json",
@@ -299,16 +305,22 @@ export class RabbitNotificationConsumer implements EventConsumer {
           },
         );
       } else {
-        await this.sendConfirmed(channel, DLQ, message.content, {
-          contentType: "application/json",
-          messageId: event.eventId,
-          persistent: true,
-          type: event.type,
-          headers: {
-            [ATTEMPT_HEADER]: attempt,
-            [FAILURE_HEADER]: failure,
+        await this.publishConfirmed(
+          channel,
+          EXCHANGES.dead,
+          ROUTE.deadNotifications,
+          message.content,
+          {
+            contentType: "application/json",
+            messageId: event.eventId,
+            persistent: true,
+            type: event.type,
+            headers: {
+              [ATTEMPT_HEADER]: attempt,
+              [FAILURE_HEADER]: failure,
+            },
           },
-        });
+        );
       }
       this.ack(channel, message);
     } catch {
@@ -331,24 +343,43 @@ export class RabbitNotificationConsumer implements EventConsumer {
       const diagnostic = Buffer.from(
         JSON.stringify({ failure, occurredAt: new Date().toISOString() }),
       );
-      await this.sendConfirmed(channel, DLQ, diagnostic, {
-        contentType: "application/json",
-        persistent: true,
-        headers: { [FAILURE_HEADER]: failure },
-      });
+      await this.publishConfirmed(
+        channel,
+        EXCHANGES.dead,
+        ROUTE.deadNotifications,
+        diagnostic,
+        {
+          contentType: "application/json",
+          persistent: true,
+          headers: { [FAILURE_HEADER]: failure },
+        },
+      );
       this.ack(channel, message);
     } catch {
       this.nack(channel, message);
     }
   }
 
-  private async sendConfirmed(
+  private async sendToQueueConfirmed(
     channel: ConfirmChannel,
     queue: string,
     content: Buffer,
     options: Options.Publish,
   ) {
     if (!channel.sendToQueue(queue, content, options)) {
+      await once(channel, "drain");
+    }
+    await channel.waitForConfirms();
+  }
+
+  private async publishConfirmed(
+    channel: ConfirmChannel,
+    exchange: string,
+    routingKey: string,
+    content: Buffer,
+    options: Options.Publish,
+  ) {
+    if (!channel.publish(exchange, routingKey, content, options)) {
       await once(channel, "drain");
     }
     await channel.waitForConfirms();

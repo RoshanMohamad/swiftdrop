@@ -13,11 +13,13 @@
     "build": "tsup",
     "start": "node dist/server.js",
     "typecheck": "tsc",
-    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs"
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit",
+    "test:integration": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand"
   },
   "dependencies": {
     "@swiftdrop/contracts": "workspace:*",
     "@swiftdrop/db": "workspace:*",
+    "@swiftdrop/messaging": "workspace:*",
     "amqplib": "^2.2.0",
     "dotenv": "^17.2.3",
     "nodemailer": "^10.3.1",

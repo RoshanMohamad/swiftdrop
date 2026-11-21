@@ -225,6 +225,16 @@ describe("adapters", () => {
     );
     expect(channel.assertQueue).toHaveBeenCalledWith("notifications.q", {
       durable: true,
+      arguments: expect.objectContaining({
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+        "x-dead-letter-exchange": "swiftdrop.dead",
+        "x-dead-letter-routing-key": "notifications",
+      }),
+    });
+    expect(channel.assertQueue).toHaveBeenCalledWith("notifications.dlq", {
+      durable: true,
+      arguments: { "x-queue-type": "quorum" },
     });
     expect(channel.bindQueue).toHaveBeenCalledWith(
       "notifications.q",

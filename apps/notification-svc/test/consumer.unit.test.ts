@@ -68,7 +68,9 @@ function harness(process: NotificationEventProcessor["process"]) {
   let delivery: ((message: ConsumeMessage | null) => void) | undefined;
   const order: string[] = [];
   const sent: Array<{
-    queue: string;
+    queue?: string;
+    exchange?: string;
+    routingKey?: string;
     content: Buffer;
     options: Options.Publish;
   }> = [];
@@ -94,6 +96,18 @@ function harness(process: NotificationEventProcessor["process"]) {
       (queue: string, content: Buffer, options: Options.Publish) => {
         order.push("send");
         sent.push({ queue, content, options });
+        return true;
+      },
+    ),
+    publish: jest.fn(
+      (
+        exchange: string,
+        routingKey: string,
+        content: Buffer,
+        options: Options.Publish,
+      ) => {
+        order.push("send");
+        sent.push({ exchange, routingKey, content, options });
         return true;
       },
     ),
@@ -140,6 +154,27 @@ function harness(process: NotificationEventProcessor["process"]) {
 }
 
 describe("RabbitNotificationConsumer", () => {
+  it("declares the M08 notification quorum queue and DLQ topology", async () => {
+    const test = harness(async () => "completed");
+
+    await test.consumer.start();
+    await test.consumer.stop();
+
+    expect(test.channel.assertQueue).toHaveBeenCalledWith("notifications.q", {
+      durable: true,
+      arguments: expect.objectContaining({
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+        "x-dead-letter-exchange": "swiftdrop.dead",
+        "x-dead-letter-routing-key": "notifications",
+      }),
+    });
+    expect(test.channel.assertQueue).toHaveBeenCalledWith("notifications.dlq", {
+      durable: true,
+      arguments: { "x-queue-type": "quorum" },
+    });
+  });
+
   it("validates and processes a booking event", async () => {
     const test = harness(async () => "completed");
 
@@ -176,7 +211,10 @@ describe("RabbitNotificationConsumer", () => {
 
     expect(test.processor.process).not.toHaveBeenCalled();
     expect(test.sent).toHaveLength(1);
-    expect(test.sent[0]?.queue).toBe("notifications.q.dlq");
+    expect(test.sent[0]).toMatchObject({
+      exchange: "swiftdrop.dead",
+      routingKey: "notifications",
+    });
     expect(test.sent[0]?.options.persistent).toBe(true);
     expect(test.order).toEqual(["send", "confirm", "ack"]);
   });
@@ -209,7 +247,8 @@ describe("RabbitNotificationConsumer", () => {
 
     expect(test.sent).toHaveLength(1);
     expect(test.sent[0]).toMatchObject({
-      queue: "notifications.q.dlq",
+      exchange: "swiftdrop.dead",
+      routingKey: "notifications",
       options: {
         persistent: true,
         headers: {
@@ -227,7 +266,10 @@ describe("RabbitNotificationConsumer", () => {
 
     await test.deliver(message({ ...created, customerEmail: rawEmail }));
 
-    expect(test.sent[0]?.queue).toBe("notifications.q.dlq");
+    expect(test.sent[0]).toMatchObject({
+      exchange: "swiftdrop.dead",
+      routingKey: "notifications",
+    });
     expect(test.sent[0]?.content.toString("utf8")).not.toContain(rawEmail);
     expect(JSON.stringify(test.sent[0]?.options)).not.toContain(rawEmail);
     expect(test.processor.process).not.toHaveBeenCalled();

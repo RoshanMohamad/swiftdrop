@@ -115,7 +115,7 @@ beforeAll(async () => {
         "diff",
         "--from-config-datasource",
         "--to-schema",
-        "prisma/schema.prisma",
+        "prisma",
         "--exit-code",
       ],
       {

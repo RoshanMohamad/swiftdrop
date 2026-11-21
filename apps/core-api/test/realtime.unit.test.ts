@@ -46,13 +46,15 @@ afterEach(async () => {
   httpServer = undefined;
 });
 
-async function harness(options: {
-  expirySeconds?: number;
-  user?: PublicUser;
-  exists?: boolean;
-  allowed?: boolean;
-  privateRecheckMs?: number;
-} = {}) {
+async function harness(
+  options: {
+    expirySeconds?: number;
+    user?: PublicUser;
+    exists?: boolean;
+    allowed?: boolean;
+    privateRecheckMs?: number;
+  } = {},
+) {
   const values = new Map<string, number>();
   const redis = {
     eval: async (
@@ -194,6 +196,20 @@ describe("realtime gateway", () => {
     ).resolves.toEqual({ ok: false, code: "INVALID_ROOM" });
   });
 
+  it("leaves a room explicitly without disconnecting the managed socket", async () => {
+    const test = await harness();
+    const client = await test.connect();
+    await join(client, { kind: "public", trackingNumber });
+    client.emit("room:leave", { kind: "public", trackingNumber });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const events: unknown[] = [];
+    client.on("parcel:status", (event) => events.push(event));
+    await test.gateway.publish(statusEvent(1));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(events).toHaveLength(0);
+    expect(client.connected).toBe(true);
+  });
+
   it("returns the same safe result for unauthorized and unavailable private parcels", async () => {
     const test = await harness({ allowed: false });
     const client = await test.connect();
@@ -296,18 +312,9 @@ describe("database-scoped private access policy", () => {
       canAccess: courierLookup,
     });
     await policy.canJoinPrivate(baseUser, parcelId);
-    await policy.canJoinPrivate(
-      { ...baseUser, role: "MERCHANT" },
-      parcelId,
-    );
-    await policy.canJoinPrivate(
-      { ...baseUser, role: "DISPATCHER" },
-      parcelId,
-    );
-    await policy.canJoinPrivate(
-      { ...baseUser, role: "COURIER" },
-      parcelId,
-    );
+    await policy.canJoinPrivate({ ...baseUser, role: "MERCHANT" }, parcelId);
+    await policy.canJoinPrivate({ ...baseUser, role: "DISPATCHER" }, parcelId);
+    await policy.canJoinPrivate({ ...baseUser, role: "COURIER" }, parcelId);
     expect(where).toEqual([
       { id: parcelId, userId: 7 },
       {
@@ -346,7 +353,8 @@ describe("realtime RabbitMQ consumer", () => {
   it("declares the shared durable parcel.# queue with a 60 second TTL", async () => {
     const calls: unknown[] = [];
     const channel = {
-      assertExchange: async (...args: unknown[]) => calls.push(["exchange", ...args]),
+      assertExchange: async (...args: unknown[]) =>
+        calls.push(["exchange", ...args]),
       assertQueue: async (...args: unknown[]) => calls.push(["queue", ...args]),
       bindQueue: async (...args: unknown[]) => calls.push(["bind", ...args]),
     };
@@ -368,11 +376,8 @@ describe("realtime RabbitMQ consumer", () => {
     const order: string[] = [];
     const channel = {
       ack: () => order.push("ack"),
-      nack: (
-        _message: ConsumeMessage,
-        _all: boolean,
-        requeue: boolean,
-      ) => order.push(`nack:${requeue}`),
+      nack: (_message: ConsumeMessage, _all: boolean, requeue: boolean) =>
+        order.push(`nack:${requeue}`),
     };
     const event = statusEvent(1);
     await expect(

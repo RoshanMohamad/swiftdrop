@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { basename, dirname, resolve, win32 } from "node:path";
 import { notificationLookupResultSchema } from "@swiftdrop/contracts";
 import { signServiceEventToken } from "@swiftdrop/contracts/service-auth";
 import { z } from "zod";
@@ -18,6 +19,31 @@ const signerSchema = z
   })
   .strict();
 
+export async function readSignerPrivateKey(
+  metadataFile: string,
+  configuredFile: string,
+) {
+  try {
+    return await readFile(configuredFile, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const directory = dirname(metadataFile);
+  const names = new Set([
+    basename(configuredFile),
+    win32.basename(configuredFile),
+  ]);
+  for (const name of names) {
+    if (!name || name === ".") continue;
+    try {
+      return await readFile(resolve(directory, name), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  throw new Error("Notification service signing key is unavailable.");
+}
+
 export class ServiceJwtContactLookupClient implements ContactLookupClient {
   constructor(
     private readonly internalApiUrl: string,
@@ -31,7 +57,10 @@ export class ServiceJwtContactLookupClient implements ContactLookupClient {
     );
     const token = await signServiceEventToken({
       ...metadata,
-      privateKey: await readFile(metadata.privateKeyFile, "utf8"),
+      privateKey: await readSignerPrivateKey(
+        this.signerMetadataFile,
+        metadata.privateKeyFile,
+      ),
       eventId: event.eventId,
       parcelId: event.data.parcelId,
     });

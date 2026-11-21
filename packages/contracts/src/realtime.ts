@@ -25,11 +25,28 @@ export const realtimeJoinSchema = z.discriminatedUnion("kind", [
       lastSequence: z.number().int().nonnegative().optional(),
     })
     .strict(),
-  z.object({
-    kind: z.literal("private"),
-    parcelId: z.string().uuid(),
-    lastSequence: z.number().int().nonnegative().optional(),
-  }).strict(),
+  z
+    .object({
+      kind: z.literal("private"),
+      parcelId: z.string().uuid(),
+      lastSequence: z.number().int().nonnegative().optional(),
+    })
+    .strict(),
+]);
+
+export const realtimeLeaveSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("public"),
+      trackingNumber: z.string().min(1).max(16),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("private"),
+      parcelId: z.string().uuid(),
+    })
+    .strict(),
 ]);
 
 export const realtimeReloadSchema = z
@@ -55,6 +72,7 @@ export const realtimeJoinResultSchema = z
 export type PublicRealtimeUpdate = z.infer<typeof publicRealtimeUpdateSchema>;
 export type PrivateRealtimeUpdate = z.infer<typeof privateRealtimeUpdateSchema>;
 export type RealtimeJoin = z.infer<typeof realtimeJoinSchema>;
+export type RealtimeLeave = z.infer<typeof realtimeLeaveSchema>;
 export type RealtimeReload = z.infer<typeof realtimeReloadSchema>;
 export type RealtimeEviction = z.infer<typeof realtimeEvictionSchema>;
 export type RealtimeJoinResult = z.infer<typeof realtimeJoinResultSchema>;
@@ -73,4 +91,5 @@ export interface RealtimeClientToServerEvents {
     request: unknown,
     acknowledge?: (result: RealtimeJoinResult) => void,
   ) => void;
+  "room:leave": (request: RealtimeLeave) => void;
 }
