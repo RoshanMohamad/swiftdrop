@@ -8,6 +8,7 @@ import {
   declareTopology,
   loadWorkspaceEnv,
   onShutdown,
+  resolveWorkspacePath,
   runWithBroker,
   startHealthServer,
 } from "@swiftdrop/messaging";
@@ -54,7 +55,7 @@ const processor = new NotificationProcessor({
   store: new PrismaProgressStore(db),
   lookup: new HttpContactLookup({
     baseUrl: env.CORE_INTERNAL_URL,
-    signerFile: env.NOTIFICATION_SIGNER_FILE,
+    signerFile: resolveWorkspacePath(env.NOTIFICATION_SIGNER_FILE),
   }),
   sender: createChannelSender({
     EMAIL: new SmtpEmailSender(env.SMTP_URL),

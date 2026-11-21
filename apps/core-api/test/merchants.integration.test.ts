@@ -242,6 +242,35 @@ describe("registration and review", () => {
       "MERCHANT_ALREADY_REVIEWED",
     );
   });
+
+  it("waits for a slow concurrent reviewer and answers 409, not a raw transaction timeout", async () => {
+    const { merchant } = await newMerchant("PENDING");
+    // Another reviewer holds the merchant row lock for longer than Prisma's default 5 s
+    // interactive-transaction timeout (a starved database or host looks the same).
+    const holder = db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM merchants WHERE id = ${merchant.id}::uuid FOR UPDATE`;
+        await new Promise((resolve) => setTimeout(resolve, 6_500));
+        await tx.merchant.update({
+          where: { id: merchant.id },
+          data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: adminId },
+        });
+      },
+      { timeout: 20_000 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const [outcome] = await Promise.allSettled([
+      service.review(merchant.id, adminId, "REJECTED"),
+    ]);
+    await holder;
+    expect(outcome.status).toBe("rejected");
+    expect(((outcome as PromiseRejectedResult).reason as HttpError).code).toBe(
+      "MERCHANT_ALREADY_REVIEWED",
+    );
+    expect(
+      (await db.merchant.findUniqueOrThrow({ where: { id: merchant.id } })).status,
+    ).toBe("APPROVED");
+  });
 });
 
 describe("approval gates every merchant capability", () => {

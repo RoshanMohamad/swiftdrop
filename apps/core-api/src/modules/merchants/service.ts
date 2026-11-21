@@ -137,40 +137,49 @@ export class MerchantsService {
     actorId: number,
     decision: MerchantReview["status"],
   ) {
-    return this.db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM merchants WHERE id = ${id}::uuid FOR UPDATE`;
-      const current = await tx.merchant.findUnique({
-        where: { id },
-        include: { user: true },
-      });
-      if (!current)
-        throw new HttpError(404, "NOT_FOUND", "This merchant does not exist.");
-      if (current.status !== "PENDING")
-        throw new HttpError(
-          409,
-          "MERCHANT_ALREADY_REVIEWED",
-          "Only pending merchant applications can be reviewed.",
-        );
-      const changed = await tx.merchant.updateMany({
-        where: { id, status: "PENDING" },
-        data: {
-          status: decision,
-          reviewedAt: new Date(),
-          reviewedById: actorId,
-        },
-      });
-      if (changed.count !== 1)
-        throw new HttpError(
-          409,
-          "MERCHANT_ALREADY_REVIEWED",
-          "Only pending merchant applications can be reviewed.",
-        );
-      const updated = await tx.merchant.findUniqueOrThrow({
-        where: { id },
-        include: { user: true },
-      });
-      return merchantSummary(updated);
-    });
+    return this.db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM merchants WHERE id = ${id}::uuid FOR UPDATE`;
+        const current = await tx.merchant.findUnique({
+          where: { id },
+          include: { user: true },
+        });
+        if (!current)
+          throw new HttpError(
+            404,
+            "NOT_FOUND",
+            "This merchant does not exist.",
+          );
+        if (current.status !== "PENDING")
+          throw new HttpError(
+            409,
+            "MERCHANT_ALREADY_REVIEWED",
+            "Only pending merchant applications can be reviewed.",
+          );
+        const changed = await tx.merchant.updateMany({
+          where: { id, status: "PENDING" },
+          data: {
+            status: decision,
+            reviewedAt: new Date(),
+            reviewedById: actorId,
+          },
+        });
+        if (changed.count !== 1)
+          throw new HttpError(
+            409,
+            "MERCHANT_ALREADY_REVIEWED",
+            "Only pending merchant applications can be reviewed.",
+          );
+        const updated = await tx.merchant.findUniqueOrThrow({
+          where: { id },
+          include: { user: true },
+        });
+        return merchantSummary(updated);
+      },
+      // The row lock makes a competing reviewer wait. Prisma's defaults (2 s to start, 5 s total)
+      // would turn a slow winner into a raw P2028 instead of the 409 the loser should get.
+      { maxWait: 10_000, timeout: 20_000 },
+    );
   }
 
   private async approvedMerchant(userId: number) {

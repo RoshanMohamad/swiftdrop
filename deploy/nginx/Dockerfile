@@ -8,5 +8,6 @@ COPY deploy/nginx/routes.inc /etc/nginx/swiftdrop/routes.inc
 COPY deploy/nginx/proxy.inc /etc/nginx/swiftdrop/proxy.inc
 COPY deploy/nginx/tls.conf /etc/nginx/swiftdrop/tls.conf
 COPY deploy/nginx/40-tls.sh /docker-entrypoint.d/40-tls.sh
-RUN chmod +x /docker-entrypoint.d/40-tls.sh && mkdir -p /etc/nginx/conf.d /etc/nginx/certs
+# The stock default.conf also listens on :80 (including IPv6) and would answer with the welcome page.
+RUN chmod +x /docker-entrypoint.d/40-tls.sh && mkdir -p /etc/nginx/conf.d /etc/nginx/certs && rm -f /etc/nginx/conf.d/default.conf
 EXPOSE 80 443
