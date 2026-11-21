@@ -67,8 +67,31 @@ Integration retry waits are shortened to 400 ms through a test seam; the product
 - **Return to sender:** no enum value added; awaiting the team.
 - **merchantId type (C-14):** unchanged.
 
+## Clean-start check (fresh clone of `m08-eventing-tests`, 2026-11-21)
+
+Followed the README setup in a fresh clone on Windows with Docker, under a separate compose project name so no existing volumes were touched.
+
+| Step | Result |
+|---|---|
+| `pnpm install --frozen-lockfile`, `pnpm auth:keys:generate`, `pnpm db:generate` | Passed |
+| `docker compose up -d --wait` (starts the whole stack, not only infrastructure) | In-container `migrate` and both `provision-*` jobs passed; every service reached healthy. **nginx failed** (fixed, below) |
+| `/api/ready` through the gateway with the relay running | `200 {"status":"ready","outboxRelay":"ready"}` |
+| Relay stopped, then restarted | `503 {"status":"degraded","outboxRelay":"unreachable"}`, then `200 ready` |
+| Host-side `pnpm db:migrate`, `db:seed`, `services:provision`, then `pnpm dev` | **Not completed**: see the port issue below; `pnpm dev` was not run (low memory on the test machine) |
+
+Found and fixed (committed):
+
+- **nginx exited 127.** On Windows with `core.autocrlf=true`, `deploy/nginx/40-tls.sh` was checked out with CRLF. Fixed with a `.gitattributes` (`*.sh text eol=lf`).
+- **`http://localhost` showed the nginx welcome page and 404ed `/api/`.** The image kept the stock `conf.d/default.conf`, which also listens on IPv6. The Dockerfile now removes it and the gateway also listens on `[::]:80`. Verified on `localhost` and `127.0.0.1`.
+
+Found and **not** fixed (needs a team decision):
+
+- **Postgres host port.** `compose.yaml` publishes Postgres on host port **5433** (commit `bcf7150`), but `.env.example`, the README and the compose `seed` service use **5432**. Host-side `pnpm db:migrate`/`db:seed`/`pnpm dev` therefore connect to 5432. On the test machine another process already owns 5432, so they failed with `P1000` authentication errors. CLAUDE.md lists postgres at :5432. Either `compose.yaml` goes back to 5432 or `.env.example` and the README move to 5433.
+- **Stale local volumes.** A developer who ran the stack before 14 Nov has a `postgres-data` volume with a failed `202611130001_dispatch_capacity` migration, and `docker compose up` stops with `P3009`. The fix is `docker compose down -v` on a disposable database; this was not run against the existing volume.
+- **Image builds need registry access.** A rebuild during the check failed with `ETIMEDOUT` reaching `registry.npmjs.org` from inside Docker; this was a network problem on the test machine, not a repository problem.
+
 ## Not verified
 
-- A clean `docker compose up` from a fresh clone.
+- The host-side path (`pnpm db:migrate`, `db:seed`, `pnpm dev`) from a fresh clone, because of the Postgres port mismatch above.
 - Browser behaviour, phone PWA install and the manual test plans in the README.
 - Line coverage of web, relay, webhook-svc, notification-svc and ai-assistant.
