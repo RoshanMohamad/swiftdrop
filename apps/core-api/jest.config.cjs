@@ -7,6 +7,8 @@ const base = {
   testTimeout: 180000,
 };
 module.exports = {
+  // Jest reads testTimeout from the top level; the per-project value in `base` is not applied.
+  testTimeout: 180000,
   projects: [
     {
       ...base,
