@@ -14,29 +14,32 @@ Every row below was run in this session. Numbers are copied from the test output
 | webhook-svc unit | `pnpm --filter webhook-svc test` | **3 suites, 29 tests: all passed** |
 | notification-svc unit | `pnpm --filter notification-svc test` | **1 suite, 12 tests: all passed** |
 | ai-assistant unit | `pnpm --filter ai-assistant test` | **1 suite, 7 tests: all passed** |
-| core-api integration + unit, with coverage (real Postgres, RabbitMQ, MinIO) | `pnpm --filter core-api test:integration` | **26 suites, 476 tests: 475 passed, 1 failed** (see note 2) |
+| core-api integration + unit, with coverage (real Postgres, RabbitMQ, MinIO) | `pnpm --filter core-api test:integration` | **27 suites, 480 tests: 479 passed, 1 failed** in the last full run (see notes 2 and 3) |
+| core-api `auth.integration.test.ts`, run on its own | `jest test/auth.integration.test.ts` | **104 tests: all passed** (166 s) |
+| core-api `merchants.integration.test.ts`, run on its own | `jest test/merchants.integration.test.ts` | **22 tests: all passed** |
 | webhook-svc integration | `pnpm --filter webhook-svc test:integration` | **1 suite, 6 tests: all passed** |
 | notification-svc integration | `pnpm --filter notification-svc test:integration` | **1 suite, 5 tests: all passed** |
 | outbox-relay integration | `pnpm --filter outbox-relay test:integration` | **1 suite, 3 tests: all passed** |
 
-Unit total: 493 tests, all passing. Integration total (four services): 490 tests, 489 passing, 1 failing.
+Unit total: 493 tests, all passing. Integration total (four services) in the last full runs: 494 tests, 493 passing, 1 failing (a timeout, note 3). That failing test, and the whole suite it belongs to, pass when run on their own. **I did not get one single full run with every test green.**
 
 ### Notes on failures and instability
 
 1. **web:** in the first all-workspace `pnpm test` run, 2 tests in `src/features/auth/forms.test.tsx` failed on 11 s timeouts while other suites ran in parallel. The file passed 4/4 when run alone, and the whole web suite passed 137/137 when run on its own afterwards. Treated as load-related; not investigated further.
-2. **core-api integration, 1 failing test:** `merchants.integration.test.ts`, "registration and review: 404s an unknown merchant and lets exactly one of two concurrent decisions win". The losing request failed with Prisma `P2028` (a transaction-API error) instead of the expected `MERCHANT_ALREADY_REVIEWED`. The same suite passed 21/21 when run on its own earlier in the session, and an earlier full run had it failing with a 300 s container start-up timeout in `beforeAll`. So this suite is unstable under a long full run on this machine. The cause was not determined, and the service code was not changed.
-3. **Fixed during this run:** two tests in `auth.integration.test.ts` ("creates first/subsequent admins..." and "lets only an Admin read the trail...") failed with `Exceeded timeout of 5000 ms`. They chain many cost-12 bcrypt hashes. `jest.config.cjs` set `testTimeout: 180000` only inside each project, which Jest did not apply; the value now also sits at the top level. Both tests pass. The coverage gate was not touched.
-4. A direct Jest invocation with a path after `--selectProjects` made Jest treat the path as a project name and run everything; seven suites that import Express then reported `Cannot find module 'debug'`. It did not reproduce with `pnpm --filter core-api test` (21/21). The cause is unexplained.
+2. **Merchant approval race: fixed.** `merchants.integration.test.ts` "concurrent decisions" failed once in a full run with Prisma `P2028` instead of `MERCHANT_ALREADY_REVIEWED`. It did not reproduce in 6 normal and CPU-loaded runs, so I reproduced the mechanism directly with a new test that makes a competing reviewer hold the merchant row lock for 6.5 s. Before the fix that test failed with `Received: "P2028"`. Cause: `MerchantsService.review()` runs in a Prisma interactive transaction with Prisma's default 5 s timeout, so a request waiting on the row lock behind a slow reviewer died with a raw transaction error (a 500) instead of a 409. The transaction now has `{ maxWait: 10000, timeout: 20000 }`. The existing assertion is unchanged; the merchants suite passes 22/22 alone and inside the last full run. The transaction logic itself is unchanged. I could not prove this was the exact cause of the original one-off failure, only that this mechanism produces the identical error and is now covered.
+3. **Slow-run timeout in the auth suite (open).** In the last full core-api run, `auth.integration.test.ts` "lists only the caller's live sessions..." exceeded the 180 s limit. In that run the whole auth suite took 1086 s, against 166 s when run on its own, and the machine had only about 670 MB free memory. The test passes alone (50 s) and the whole suite passes alone (104/104). I treat this as machine starvation, not a defect, but it means the full run is not reliably green on this laptop. The earlier two timeouts at the 5 s default were fixed by the config change below.
+4. **Fixed earlier in this run:** two tests in `auth.integration.test.ts` ("creates first/subsequent admins..." and "lets only an Admin read the trail...") failed with `Exceeded timeout of 5000 ms`. They chain many cost-12 bcrypt hashes. `jest.config.cjs` set `testTimeout: 180000` only inside each project, which Jest did not apply; the value now also sits at the top level. The coverage gate was not touched. A type error in my own new scope test (`pnpm typecheck` rejected an invalid OAuth error code) was also fixed; typecheck is clean.
+5. A direct Jest invocation with a path after `--selectProjects` made Jest treat the path as a project name and run everything; seven suites that import Express then reported `Cannot find module 'debug'`. It did not reproduce with `pnpm --filter core-api test` (21/21). The cause is unexplained.
 
 ## Coverage (core-api, unit + integration projects combined)
 
-From the full `pnpm --filter core-api test:integration` run above (the run with the 1 failing test):
+From the last full `pnpm --filter core-api test:integration` run above (479 of 480 tests passing):
 
 | Metric | Value |
 |---|---|
-| Lines | **92.56%** |
-| Statements | 91.41% |
-| Branches | 85.37% |
+| Lines | **92.62%** |
+| Statements | 91.48% |
+| Branches | 85.45% |
 | Functions | 91.42% |
 
 The 80% line gate is in `apps/core-api/jest.config.cjs` (`coverageThreshold: { global: { lines: 80 } }`) and was not changed. It is measured over the service and domain files listed in `collectCoverageFrom` (module services, pricing strategy, dispatch capacity, auth jwt/password/cleanup/transactions, users admin, service auth/notifications/webhooks/signing, merchant webhook security), not over routes or adapters. The gate did not fail in that run.
@@ -64,6 +67,7 @@ Integration retry waits are shortened to 400 ms through a test seam; the product
 
 - **Relay health in `/api/ready`:** implemented in code (`core-api/src/app.ts`, `shared/relay-health.ts`; reports `outboxRelay` and returns 503 `degraded` when the relay is down). `relay-health.unit.test.ts` is part of the passing core-api unit run. CLAUDE.md still describes this as open, so the two disagree; neither was edited.
 - **Receipts against live MinIO:** exercised by `receipts.integration.test.ts` against a Testcontainers MinIO and it passed. This is a containerised MinIO, not the Compose `minio` service.
+- **Merchant approval concurrency:** a new regression test covers a reviewer waiting behind a slow lock holder (see note 2).
 - **Return to sender:** no enum value added; awaiting the team.
 - **merchantId type (C-14):** unchanged.
 
