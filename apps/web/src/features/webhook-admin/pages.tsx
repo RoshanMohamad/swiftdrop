@@ -10,6 +10,7 @@ import {
   listWebhookDeliveries,
   replayWebhookDelivery,
 } from "./client.js";
+import { Icon } from "../../shared/components/Icon.js";
 
 type Row = Awaited<ReturnType<typeof listWebhookDeliveries>>["items"][number];
 const statusText: Record<WebhookDeliveryStatus, string> = {
@@ -224,7 +225,12 @@ export function AdminWebhookDeliveries() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Administration</span>
-          <h1>Webhook deliveries</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="link" />
+            </span>
+            Webhook deliveries
+          </h1>
           <p className="muted">
             Delivery log for merchant webhooks. Failed deliveries can be
             replayed by an Admin.
@@ -271,7 +277,13 @@ export function AdminWebhookDeliveries() {
       {loading ? (
         <p role="status">Loading webhook deliveries…</p>
       ) : !error && rows.length === 0 ? (
-        <p className="notice">No webhook deliveries match this filter.</p>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="link" />
+          </div>
+          <h2>No webhook deliveries match this filter.</h2>
+          <p>Deliveries appear here once merchants receive events.</p>
+        </div>
       ) : (
         !error && (
           <div className="table-scroll">

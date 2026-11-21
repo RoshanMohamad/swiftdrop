@@ -26,6 +26,7 @@ import {
   type QueueStore,
   type QueuedOperation,
 } from "./queue.js";
+import { Icon } from "../../shared/components/Icon.js";
 
 const NEXT: Partial<Record<ParcelStatus, ParcelStatus[]>> = {
   CREATED: ["PICKED_UP"],
@@ -230,8 +231,9 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
   const [stale, setStale] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [installPrompt, setInstallPrompt] =
-    useState<PromptInstallEvent | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<PromptInstallEvent | null>(
+    null,
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [action, setAction] = useState<ParcelStatus | null>(null);
   const syncing = useRef(false);
@@ -402,7 +404,18 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Courier</span>
-          <h1>Today’s jobs</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="truck" />
+            </span>
+            Today’s jobs
+          </h1>
+          {!loading && (
+            <p className="muted">
+              {jobs.length === 1 ? "1 parcel" : `${jobs.length} parcels`}{" "}
+              assigned · tap a job to update it.
+            </p>
+          )}
         </div>
         {installPrompt && (
           <button
@@ -414,7 +427,7 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
         )}
         {profile && (
           <button
-            className="secondary courier-tap"
+            className={`duty-toggle courier-tap${profile.onDuty ? " on" : ""}`}
             aria-pressed={profile.onDuty}
             onClick={() => void toggleDuty()}
           >
@@ -483,7 +496,13 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
       {loading ? (
         <p role="status">Loading your jobs…</p>
       ) : jobs.length === 0 && !error ? (
-        <p className="notice">No parcels are assigned to you right now.</p>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="truck" />
+          </div>
+          <h2>No parcels are assigned to you right now.</h2>
+          <p>New jobs appear here as soon as a dispatcher assigns them.</p>
+        </div>
       ) : (
         <ul className="parcel-list courier-list">
           {jobs.map((item) => {
@@ -498,14 +517,16 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
                     setAction(null);
                   }}
                 >
-                  <strong>{item.trackingNumber}</strong>
-                  <span>
-                    {item.originTown} → {item.destinationTown}
+                  <span className="courier-job-top">
+                    <strong>{item.trackingNumber}</strong>
+                    <StatusBadge status={status} />
                   </span>
-                  <StatusBadge status={status} />
-                  {status !== item.status && (
-                    <span className="muted">Queued</span>
-                  )}
+                  <span className="courier-job-route">
+                    {item.originTown} → {item.destinationTown}
+                    {status !== item.status && (
+                      <span className="queued-tag">Queued</span>
+                    )}
+                  </span>
                 </button>
               </li>
             );

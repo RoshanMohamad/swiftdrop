@@ -13,6 +13,7 @@ import {
   ApiError,
   updateInvitation,
 } from "../auth/client.js";
+import { Icon } from "../../shared/components/Icon.js";
 
 type Account = Awaited<ReturnType<typeof listUsers>>["items"][number];
 const deliveryText = (delivery: "sent" | "failed" | "not_sent") =>
@@ -144,7 +145,12 @@ export function AdminUsers() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Administration</span>
-          <h1>Users</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="users" />
+            </span>
+            Users
+          </h1>
           <p className="muted">
             Manage account access for all roles. Invited staff choose their own
             password.
@@ -214,7 +220,13 @@ export function AdminUsers() {
       {loading ? (
         <p role="status">Loading users…</p>
       ) : !error && rows.length === 0 ? (
-        <p className="notice">No users match these filters.</p>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="users" />
+          </div>
+          <h2>No users match these filters.</h2>
+          <p>Try another role or status.</p>
+        </div>
       ) : (
         !error && (
           <div className="table-scroll">
@@ -363,7 +375,12 @@ export function NewStaff() {
   return (
     <section className="auth-panel">
       <span className="eyebrow">Administration</span>
-      <h1>Invite staff</h1>
+      <h1>
+        <span className="title-icon">
+          <Icon name="user" />
+        </span>
+        Invite staff
+      </h1>
       <p className="muted">
         The invitee sets a private password. Courier account acceptance remains
         pending until courier setup is ready.

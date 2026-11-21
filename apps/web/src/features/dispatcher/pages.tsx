@@ -12,6 +12,7 @@ import {
   listDispatchParcels,
   updateCourierProfile,
 } from "./client.js";
+import { Icon } from "../../shared/components/Icon.js";
 
 const age = (iso: string) => {
   const minutes = Math.max(
@@ -306,7 +307,12 @@ export function DispatcherConsole() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Dispatch</span>
-          <h1>Dispatcher console</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="send" />
+            </span>
+            Dispatcher console
+          </h1>
           <p className="muted">
             Assign parcels to couriers who are on duty and have free capacity.
           </p>

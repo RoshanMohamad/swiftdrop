@@ -19,6 +19,7 @@ import {
   usePrivateParcelRealtime,
   usePublicParcelRealtime,
 } from "../../shared/realtime/index.js";
+import { Icon } from "../../shared/components/Icon.js";
 const money = (cents: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(
     cents / 100,
@@ -30,6 +31,14 @@ const statusLabel = (status: string) =>
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 const statusClass = (status: string) =>
   `status-badge status-${status.toLowerCase().replaceAll("_", "-")}`;
+/** Happy-path order shown as the progress stepper on public tracking. */
+const TRACKING_STEPS: string[] = [
+  "CREATED",
+  "PICKED_UP",
+  "IN_TRANSIT",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+];
 
 export function NewParcelLegacy() {
   const navigate = useNavigate();
@@ -334,7 +343,12 @@ export function NewParcel() {
   return (
     <section className="auth-panel booking-wizard">
       <span className="eyebrow">Customer booking</span>
-      <h1>Send a parcel.</h1>
+      <h1>
+        <span className="title-icon">
+          <Icon name="send" />
+        </span>
+        Send a parcel.
+      </h1>
       <ol className="wizard-progress" aria-label="Booking progress">
         {["Parcel details", "Recipient", "Review"].map((label, index) => {
           const number = index + 1;
@@ -353,13 +367,19 @@ export function NewParcel() {
         })}
       </ol>
       {step === 1 && (
-        <form onSubmit={(event) => void getQuote(event)}>
+        <form
+          className="wizard-rows"
+          onSubmit={(event) => void getQuote(event)}
+        >
           <h2>Parcel details</h2>
           <p className="muted">
             Your account is the sender. Tell us where the parcel is going and
             how large it is.
           </p>
-          <label htmlFor="originDistrict">Pickup district</label>
+          <label htmlFor="originDistrict">
+            <Icon name="pin" />
+            Pickup district
+          </label>
           <input
             id="originDistrict"
             required
@@ -368,7 +388,10 @@ export function NewParcel() {
               updateRequest({ ...request, originDistrict: event.target.value })
             }
           />
-          <label htmlFor="destinationDistrict">Delivery district</label>
+          <label htmlFor="destinationDistrict">
+            <Icon name="pin" />
+            Delivery district
+          </label>
           <input
             id="destinationDistrict"
             required
@@ -380,7 +403,10 @@ export function NewParcel() {
               })
             }
           />
-          <label htmlFor="weight">Weight (grams)</label>
+          <label htmlFor="weight">
+            <Icon name="box" />
+            Weight (grams)
+          </label>
           <input
             id="weight"
             type="number"
@@ -423,14 +449,18 @@ export function NewParcel() {
           )}
           <button className="primary" disabled={pending}>
             {pending ? "Getting your quote…" : "Continue to recipient"}
+            <Icon name="arrow-right" />
           </button>
         </form>
       )}
       {step === 2 && quote && (
-        <form onSubmit={continueToReview}>
+        <form className="wizard-rows" onSubmit={continueToReview}>
           <h2>Recipient details</h2>
           <p className="muted">Who should receive this parcel?</p>
-          <label htmlFor="recipientName">Recipient name</label>
+          <label htmlFor="recipientName">
+            <Icon name="user" />
+            Recipient name
+          </label>
           <input
             id="recipientName"
             required
@@ -441,7 +471,10 @@ export function NewParcel() {
               setRecipient({ ...recipient, recipientName: event.target.value })
             }
           />
-          <label htmlFor="recipientPhone">Recipient phone</label>
+          <label htmlFor="recipientPhone">
+            <Icon name="phone" />
+            Recipient phone
+          </label>
           <input
             id="recipientPhone"
             required
@@ -452,7 +485,10 @@ export function NewParcel() {
             }
           />
           <small>Use a Sri Lankan mobile number.</small>
-          <label htmlFor="recipientAddress">Delivery address</label>
+          <label htmlFor="recipientAddress">
+            <Icon name="building" />
+            Delivery address
+          </label>
           <input
             id="recipientAddress"
             required
@@ -570,7 +606,12 @@ export function ParcelList() {
       <div className="page-heading">
         <div>
           <span className="eyebrow">Your deliveries</span>
-          <h1>Booking history</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="list" />
+            </span>
+            Booking history
+          </h1>
           <p className="muted">Every parcel you have booked, in one place.</p>
         </div>
         <Link className="button-link primary parcel-action" to="/parcels/new">
@@ -592,6 +633,9 @@ export function ParcelList() {
         </p>
       ) : page?.items.length === 0 && !error ? (
         <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="box" />
+          </div>
           <h2>No bookings yet</h2>
           <p>Your deliveries will appear here after you confirm a booking.</p>
           <Link className="button-link primary" to="/parcels/new">
@@ -733,7 +777,12 @@ export function ParcelDetail() {
       <div className="detail-heading">
         <div>
           <span className="eyebrow">Delivery details</span>
-          <h1>{parcel.trackingNumber}</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="box" />
+            </span>
+            {parcel.trackingNumber}
+          </h1>
           <p className="muted">
             Booked {new Date(parcel.createdAt).toLocaleString()}
           </p>
@@ -959,11 +1008,13 @@ export function PublicTracking() {
         };
       }),
   });
+  const stepIndex = data ? TRACKING_STEPS.indexOf(data.status) : -1;
+  const problem = data?.status === "FAILED" || data?.status === "CANCELLED";
   return (
-    <section className="auth-panel">
+    <section className="auth-panel track-panel">
       <span className="eyebrow">SwiftDrop tracking</span>
-      <h1>{trackingNumber}</h1>
-      <p className="muted" role="status">
+      <h1 className="tracking-no">{trackingNumber}</h1>
+      <p className={`live-indicator live-${realtimeState}`} role="status">
         {realtimeState === "connected"
           ? "Live tracking connected."
           : realtimeState === "reconnecting"
@@ -977,27 +1028,76 @@ export function PublicTracking() {
       {error && (
         <div role="alert" className="notice error">
           {error}
-          <button onClick={() => setRetry((value) => value + 1)}>
+          <button
+            className="secondary compact"
+            onClick={() => setRetry((value) => value + 1)}
+          >
             Try again
           </button>
         </div>
       )}
       {data && (
         <>
-          <p>
-            {data.originTown} → {data.destinationTown}
-          </p>
-          <div className="notice">
-            Current status: <strong>{data.status.toLowerCase()}</strong>
+          <div className="track-card">
+            <div className="track-card-top">
+              <div>
+                <span className="fine">Current status</span>
+                <strong className="track-status">
+                  {statusLabel(data.status)}
+                </strong>
+              </div>
+              <span className={statusClass(data.status)}>
+                {statusLabel(data.status)}
+              </span>
+            </div>
+            <div className="detail-route">
+              <span>
+                <small>From</small>
+                <strong>{data.originTown}</strong>
+              </span>
+              <span className="route-arrow" aria-hidden="true">
+                →
+              </span>
+              <span>
+                <small>To</small>
+                <strong>{data.destinationTown}</strong>
+              </span>
+            </div>
+            {!problem && (
+              <ol className="progress-steps" aria-label="Delivery progress">
+                {TRACKING_STEPS.map((step, index) => (
+                  <li
+                    key={step}
+                    className={
+                      index < stepIndex
+                        ? "done"
+                        : index === stepIndex
+                          ? "current"
+                          : undefined
+                    }
+                    aria-current={index === stepIndex ? "step" : undefined}
+                  >
+                    <span aria-hidden="true" />
+                    {statusLabel(step)}
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
-          <h2>Updates</h2>
-          <ol className="history-list">
-            {data.history.map((item, index) => (
-              <li key={`${item.createdAt}-${index}`}>
-                <strong>{item.status}</strong>
-                <span>
-                  {item.town} · {new Date(item.createdAt).toLocaleString()}
-                </span>
+          <h2 className="section-title">Updates</h2>
+          <ol className="history-list timeline">
+            {[...data.history].reverse().map((item, index) => (
+              <li
+                key={`${item.createdAt}-${index}`}
+                className={index === 0 ? "latest" : undefined}
+              >
+                <span className="timeline-dot" aria-hidden="true" />
+                <div>
+                  <strong>{statusLabel(item.status)}</strong>
+                  <span>
+                    {item.town} · {new Date(item.createdAt).toLocaleString()}
+                  </span>
+                </div>
               </li>
             ))}
           </ol>

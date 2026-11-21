@@ -30,6 +30,59 @@ export const mockAdminUser = {
   profileComplete: true,
 };
 
+/**
+ * Mock mode only: pick which role `/auth/me`, login and refresh return by
+ * setting `localStorage["swiftdrop.mockRole"]` (e.g. "CUSTOMER", "COURIER").
+ * Defaults to the admin so existing tests are unaffected.
+ */
+function mockRole(): string | null {
+  try {
+    return globalThis.localStorage?.getItem("swiftdrop.mockRole") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `GUEST` simulates a signed-out browser so the auth pages can be viewed. */
+function isMockGuest() {
+  return mockRole() === "GUEST";
+}
+
+function signedOut() {
+  return HttpResponse.json(
+    {
+      type: "https://swiftdrop.lk/problems/unauthenticated",
+      title: "Unauthenticated",
+      status: 401,
+      detail: "Sign in to continue.",
+    },
+    { status: 401, headers: { "Content-Type": "application/problem+json" } },
+  );
+}
+
+function currentMockUser() {
+  const role = mockRole();
+  switch (role) {
+    case "CUSTOMER":
+      return mockCustomerUser;
+    case "MERCHANT":
+    case "COURIER":
+    case "DISPATCHER":
+      return {
+        ...mockAdminUser,
+        id: { MERCHANT: 10, COURIER: 5, DISPATCHER: 4 }[role],
+        fullName: {
+          MERCHANT: "Sunil Silva",
+          COURIER: "Rider Courier",
+          DISPATCHER: "Dispatch Staff",
+        }[role],
+        role,
+      } as unknown as typeof mockAdminUser;
+    default:
+      return mockAdminUser;
+  }
+}
+
 export const mockZones = [
   { id: 1, district: "Colombo", town: "Colombo Fort", active: true },
   { id: 2, district: "Kandy", town: "Kandy Town", active: true },
@@ -137,15 +190,22 @@ export const mockMerchantOrders = [
   },
 ];
 
-export const mockMerchantDeliveries = Array.from({ length: 30 }, (_, index) => ({
-  eventId: `55555555-5555-4555-8555-${String(index + 1).padStart(12, "0")}`,
-  eventType: index % 2 === 0 ? "parcel.created" : "parcel.status.changed",
-  status: (["SUCCESS", "FAILED", "PENDING", "SKIPPED", "SUCCESS"] as const)[index % 5]!,
-  createdAt: new Date(Date.UTC(2026, 10, 20 - index, 10, 0)).toISOString(),
-  updatedAt: new Date(Date.UTC(2026, 10, 20 - index, 10, 5)).toISOString(),
-}));
+export const mockMerchantDeliveries = Array.from(
+  { length: 30 },
+  (_, index) => ({
+    eventId: `55555555-5555-4555-8555-${String(index + 1).padStart(12, "0")}`,
+    eventType: index % 2 === 0 ? "parcel.created" : "parcel.status.changed",
+    status: (["SUCCESS", "FAILED", "PENDING", "SKIPPED", "SUCCESS"] as const)[
+      index % 5
+    ]!,
+    createdAt: new Date(Date.UTC(2026, 10, 20 - index, 10, 0)).toISOString(),
+    updatedAt: new Date(Date.UTC(2026, 10, 20 - index, 10, 5)).toISOString(),
+  }),
+);
 
-const mockProblem = (detail = "The Merchant service is temporarily unavailable.") =>
+const mockProblem = (
+  detail = "The Merchant service is temporarily unavailable.",
+) =>
   HttpResponse.json(
     {
       type: "about:blank",
@@ -219,7 +279,8 @@ export const handlers = [
 
   // ── Authentication & Session ────────────────────────────────────────────────
   http.get("/api/v1/auth/me", () => {
-    return HttpResponse.json(mockAdminUser);
+    if (isMockGuest()) return signedOut();
+    return HttpResponse.json(currentMockUser());
   }),
 
   http.post("/api/v1/auth/login", () => {
@@ -228,17 +289,18 @@ export const handlers = [
       accessToken: "mock-jwt-access-token",
       tokenType: "Bearer",
       expiresIn: 900,
-      user: mockAdminUser,
+      user: currentMockUser(),
     });
   }),
 
   http.post("/api/v1/auth/refresh", () => {
+    if (isMockGuest()) return signedOut();
     return HttpResponse.json({
       state: "authenticated",
       accessToken: "mock-jwt-refreshed-token",
       tokenType: "Bearer",
       expiresIn: 900,
-      user: mockAdminUser,
+      user: currentMockUser(),
     });
   }),
 
@@ -252,7 +314,8 @@ export const handlers = [
 
   http.post("/api/v1/auth/register", () => {
     return HttpResponse.json({
-      message: "Registration successful. Please check your email to verify your account.",
+      message:
+        "Registration successful. Please check your email to verify your account.",
     });
   }),
 
@@ -354,7 +417,10 @@ export const handlers = [
     }),
   ),
 
-  http.delete("/api/v1/auth/mfa", () => new HttpResponse(null, { status: 204 })),
+  http.delete(
+    "/api/v1/auth/mfa",
+    () => new HttpResponse(null, { status: 204 }),
+  ),
 
   http.post("/api/v1/auth/reauthenticate", () =>
     HttpResponse.json({ reauthenticatedAt: new Date().toISOString() }),
@@ -425,7 +491,8 @@ export const handlers = [
   }),
 
   http.get("/api/v1/parcels/:id", ({ params }) => {
-    const parcel = mockParcels.find((p) => p.id === params["id"]) || mockParcels[0]!;
+    const parcel =
+      mockParcels.find((p) => p.id === params["id"]) || mockParcels[0]!;
     return HttpResponse.json(parcel);
   }),
 
@@ -471,7 +538,10 @@ export const handlers = [
       id,
       district: (body["district"] as string) || existing?.district || "Colombo",
       town: (body["town"] as string) || existing?.town || "Fort",
-      active: typeof body["active"] === "boolean" ? body["active"] : (existing?.active ?? true),
+      active:
+        typeof body["active"] === "boolean"
+          ? body["active"]
+          : (existing?.active ?? true),
     };
     return HttpResponse.json(updated);
   }),
@@ -492,7 +562,8 @@ export const handlers = [
       destinationZoneId: body["destinationZoneId"] as number,
       baseCents: body["baseCents"] as number,
       perExtraKgCents: body["perExtraKgCents"] as number,
-      effectiveFrom: (body["effectiveFrom"] as string) || new Date().toISOString(),
+      effectiveFrom:
+        (body["effectiveFrom"] as string) || new Date().toISOString(),
     };
     return HttpResponse.json(created, { status: 201 });
   }),
@@ -521,7 +592,9 @@ export const handlers = [
   }),
 
   http.post("/api/v1/admin/users/:id/invitation", ({ params }) => {
-    const user = mockStaffUsers.find((u) => u.id === Number(params["id"])) || mockStaffUsers[0]!;
+    const user =
+      mockStaffUsers.find((u) => u.id === Number(params["id"])) ||
+      mockStaffUsers[0]!;
     return HttpResponse.json({
       user,
       delivery: "sent" as const,
@@ -530,7 +603,9 @@ export const handlers = [
 
   http.patch("/api/v1/admin/users/:id/status", async ({ params, request }) => {
     const body = (await request.json()) as { status: "ACTIVE" | "SUSPENDED" };
-    const user = mockStaffUsers.find((u) => u.id === Number(params["id"])) || mockStaffUsers[0]!;
+    const user =
+      mockStaffUsers.find((u) => u.id === Number(params["id"])) ||
+      mockStaffUsers[0]!;
     return HttpResponse.json({
       ...user,
       status: body.status,
@@ -539,7 +614,8 @@ export const handlers = [
 
   // ── Merchants ───────────────────────────────────────────────────────────────
   http.post("/api/v1/merchant/register", ({ request }) => {
-    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    if (new URL(request.url).searchParams.get("mock") === "error")
+      return mockProblem();
     return HttpResponse.json(
       { message: "Application submitted for review." },
       { status: 201 },
@@ -555,7 +631,8 @@ export const handlers = [
   }),
 
   http.post("/api/v1/merchant/clients", async ({ request }) => {
-    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    if (new URL(request.url).searchParams.get("mock") === "error")
+      return mockProblem();
     const body = (await request.json()) as { name?: string; scopes?: string[] };
     const result = {
       client: {
@@ -573,15 +650,23 @@ export const handlers = [
   }),
 
   http.post("/api/v1/merchant/clients/:id/rotate", ({ params, request }) => {
-    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    if (new URL(request.url).searchParams.get("mock") === "error")
+      return mockProblem();
     const client = mockMerchantClients.find((item) => item.id === params["id"]);
-    if (!client) return HttpResponse.json({
-      type: "about:blank",
-      title: "Not Found",
-      status: 404,
-      detail: "API client was not found.",
-      correlationId: "mock-correlation-id",
-    }, { status: 404, headers: { "Content-Type": "application/problem+json" } });
+    if (!client)
+      return HttpResponse.json(
+        {
+          type: "about:blank",
+          title: "Not Found",
+          status: 404,
+          detail: "API client was not found.",
+          correlationId: "mock-correlation-id",
+        },
+        {
+          status: 404,
+          headers: { "Content-Type": "application/problem+json" },
+        },
+      );
     client.rotatedAt = new Date().toISOString();
     return HttpResponse.json({
       client,
@@ -590,15 +675,23 @@ export const handlers = [
   }),
 
   http.post("/api/v1/merchant/clients/:id/revoke", ({ params, request }) => {
-    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    if (new URL(request.url).searchParams.get("mock") === "error")
+      return mockProblem();
     const client = mockMerchantClients.find((item) => item.id === params["id"]);
-    if (!client) return HttpResponse.json({
-      type: "about:blank",
-      title: "Not Found",
-      status: 404,
-      detail: "API client was not found.",
-      correlationId: "mock-correlation-id",
-    }, { status: 404, headers: { "Content-Type": "application/problem+json" } });
+    if (!client)
+      return HttpResponse.json(
+        {
+          type: "about:blank",
+          title: "Not Found",
+          status: 404,
+          detail: "API client was not found.",
+          correlationId: "mock-correlation-id",
+        },
+        {
+          status: 404,
+          headers: { "Content-Type": "application/problem+json" },
+        },
+      );
     client.revokedAt = new Date().toISOString();
     return new HttpResponse(null, { status: 204 });
   }),
@@ -607,9 +700,12 @@ export const handlers = [
     const query = new URL(request.url).searchParams;
     if (query.get("mock") === "error") return mockProblem();
     const status = query.get("status");
-    const items = query.get("mock") === "empty"
-      ? []
-      : mockMerchantOrders.filter((order) => !status || order.status === status);
+    const items =
+      query.get("mock") === "empty"
+        ? []
+        : mockMerchantOrders.filter(
+            (order) => !status || order.status === status,
+          );
     return HttpResponse.json({ items });
   }),
 
@@ -624,7 +720,8 @@ export const handlers = [
   ),
 
   http.put("/api/v1/merchant/webhook", async ({ request }) => {
-    if (new URL(request.url).searchParams.get("mock") === "error") return mockProblem();
+    if (new URL(request.url).searchParams.get("mock") === "error")
+      return mockProblem();
     const body = (await request.json()) as { url?: string };
     return HttpResponse.json({
       settings: {
@@ -646,7 +743,8 @@ export const handlers = [
     const query = new URL(request.url).searchParams;
     if (query.get("mock") === "error") return mockProblem();
     let items = mockMerchantDeliveries.filter(
-      (delivery) => !query.has("status") || delivery.status === query.get("status"),
+      (delivery) =>
+        !query.has("status") || delivery.status === query.get("status"),
     );
     if (query.get("mock") === "empty") items = [];
     const limit = Math.min(100, Math.max(1, Number(query.get("limit") ?? 25)));
@@ -665,15 +763,21 @@ export const handlers = [
     });
   }),
 
-  http.patch("/api/v1/admin/merchants/:id/review", async ({ params, request }) => {
-    const body = (await request.json()) as { status: "APPROVED" | "REJECTED" };
-    const merchant = mockMerchants.find((m) => m.id === params["id"]) || mockMerchants[0]!;
-    return HttpResponse.json({
-      ...merchant,
-      status: body.status,
-      reviewedAt: new Date().toISOString(),
-    });
-  }),
+  http.patch(
+    "/api/v1/admin/merchants/:id/review",
+    async ({ params, request }) => {
+      const body = (await request.json()) as {
+        status: "APPROVED" | "REJECTED";
+      };
+      const merchant =
+        mockMerchants.find((m) => m.id === params["id"]) || mockMerchants[0]!;
+      return HttpResponse.json({
+        ...merchant,
+        status: body.status,
+        reviewedAt: new Date().toISOString(),
+      });
+    },
+  ),
 
   // ── Reports ─────────────────────────────────────────────────────────────────
   http.get("/api/v1/admin/reports/daily", () => {
@@ -683,14 +787,16 @@ export const handlers = [
   // ── Assistant ───────────────────────────────────────────────────────────────
   http.post("/api/v1/assistant/chat", () => {
     return HttpResponse.json({
-      reply: "Hello! I am your SwiftDrop Assistant. I can help answer questions about deliveries, rates, or schedules.",
+      reply:
+        "Hello! I am your SwiftDrop Assistant. I can help answer questions about deliveries, rates, or schedules.",
       toolsUsed: [],
     });
   }),
 
   // ── Dispatch and courier (M06 / M07) ────────────────────────────────────────
   http.get("/api/v1/dispatch/parcels", ({ request }) => {
-    const state = new URL(request.url).searchParams.get("state") ?? "unassigned";
+    const state =
+      new URL(request.url).searchParams.get("state") ?? "unassigned";
     return HttpResponse.json({
       items: [
         {
@@ -713,37 +819,70 @@ export const handlers = [
   http.get("/api/v1/dispatch/couriers", () => {
     return HttpResponse.json({
       items: [
-        { userId: 10, fullName: "Demo Courier", onDuty: true, capacity: 5, workload: 1, hasProfile: true },
-        { userId: 11, fullName: "Night Courier", onDuty: false, capacity: 5, workload: 0, hasProfile: true },
+        {
+          userId: 10,
+          fullName: "Demo Courier",
+          onDuty: true,
+          capacity: 5,
+          workload: 1,
+          hasProfile: true,
+        },
+        {
+          userId: 11,
+          fullName: "Night Courier",
+          onDuty: false,
+          capacity: 5,
+          workload: 0,
+          hasProfile: true,
+        },
       ],
     });
   }),
 
-  http.patch("/api/v1/dispatch/couriers/:courierId", async ({ params, request }) => {
-    const body = (await request.json()) as { onDuty?: boolean; capacity?: number };
-    return HttpResponse.json({
-      userId: Number(params["courierId"]),
-      fullName: "Demo Courier",
-      onDuty: body.onDuty ?? true,
-      capacity: body.capacity ?? 5,
-      workload: 1,
-      hasProfile: true,
-    });
-  }),
+  http.patch(
+    "/api/v1/dispatch/couriers/:courierId",
+    async ({ params, request }) => {
+      const body = (await request.json()) as {
+        onDuty?: boolean;
+        capacity?: number;
+      };
+      return HttpResponse.json({
+        userId: Number(params["courierId"]),
+        fullName: "Demo Courier",
+        onDuty: body.onDuty ?? true,
+        capacity: body.capacity ?? 5,
+        workload: 1,
+        hasProfile: true,
+      });
+    },
+  ),
 
-  http.post("/api/v1/dispatch/parcels/:id/assign", async ({ params, request }) => {
-    const body = (await request.json()) as { courierId: number; version: number };
-    return HttpResponse.json({
-      parcelId: params["id"],
-      courierId: body.courierId,
-      version: body.version + 1,
-      changed: true,
-    });
-  }),
+  http.post(
+    "/api/v1/dispatch/parcels/:id/assign",
+    async ({ params, request }) => {
+      const body = (await request.json()) as {
+        courierId: number;
+        version: number;
+      };
+      return HttpResponse.json({
+        parcelId: params["id"],
+        courierId: body.courierId,
+        version: body.version + 1,
+        changed: true,
+      });
+    },
+  ),
 
   http.get("/api/v1/courier/jobs", () => {
     return HttpResponse.json({
-      profile: { userId: 10, fullName: "Demo Courier", onDuty: true, capacity: 5, workload: 1, hasProfile: true },
+      profile: {
+        userId: 10,
+        fullName: "Demo Courier",
+        onDuty: true,
+        capacity: 5,
+        workload: 1,
+        hasProfile: true,
+      },
       items: [
         {
           id: "33333333-3333-4333-8333-333333333333",
@@ -774,7 +913,9 @@ export const handlers = [
 
   http.post("/api/v1/courier/jobs/:id/proof", () => {
     return HttpResponse.json(
-      { proofObjectKey: `proofs/${crypto.randomUUID()}/${crypto.randomUUID()}.jpg` },
+      {
+        proofObjectKey: `proofs/${crypto.randomUUID()}/${crypto.randomUUID()}.jpg`,
+      },
       { status: 201 },
     );
   }),
@@ -782,7 +923,12 @@ export const handlers = [
   http.patch("/api/v1/courier/duty", async ({ request }) => {
     const body = (await request.json()) as { onDuty: boolean };
     return HttpResponse.json({
-      userId: 10, fullName: "Demo Courier", onDuty: body.onDuty, capacity: 5, workload: 1, hasProfile: true,
+      userId: 10,
+      fullName: "Demo Courier",
+      onDuty: body.onDuty,
+      capacity: 5,
+      workload: 1,
+      hasProfile: true,
     });
   }),
 ];
