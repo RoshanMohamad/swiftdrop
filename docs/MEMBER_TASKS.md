@@ -64,7 +64,7 @@ Rules for everyone:
 3. Test: notification recipients are stored masked (`077***4521`).
 4. Test: a customer cannot join the room of someone else's parcel.
 
-## M10: Platform kernel and web (chamoth, `lavin-dev`) | reviewer: M07
+## M10: Platform kernel and web (Lavin Chamoth Low Chiong, `lavin-dev`) | reviewer: M07
 1. Test: the error middleware returns RFC 7807 with `correlationId` and no stack trace.
 2. Test: the logger redacts `password`, `phone`, `address` and `authorization`.
 3. Test: cursor pagination returns stable pages.

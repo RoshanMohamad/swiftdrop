@@ -14,7 +14,7 @@ check each other's integration seam. Source: `work_distribution.txt`.
 | M07 | muzny100 | `feature/m07-courier-pwa` | Courier delivery and offline PWA | Courier job list (assigned only), Delivered (recipient/photo proof) and Failed (reason) updates, offline operation queue, installable mobile PWA | `core-api/src/modules/courier`; `web/src/features/courier` |
 | M08 | Roshan | `feature/eventing-webhooks` | Eventing and webhook delivery | Outbox relay (1 s poll, publisher confirms), RabbitMQ topology and DLQs, webhook dispatcher (HMAC-SHA256, 5 s timeout, 6 retries), admin webhook replay and logs UI | `apps/outbox-relay`, `apps/webhook-svc`, `packages/messaging`; `web/src/features/webhook-admin` |
 | M09 | akeel | `notifications-realtime` | Notifications and realtime | Notification worker (Mailpit email, mock SMS, dedup by eventId, masked recipients), Socket.IO gateway with Redis adapter and public/private rooms, realtime client hooks | `apps/notification-svc`, `core-api/src/modules/realtime`; `web/src/shared/realtime` |
-| M10 | chamoth | `lavin-dev` | Platform kernel and web foundation | App shell, design tokens and role guards, RFC 7807 errors, redacted logger, correlation IDs, cursor pagination, OpenAPI generation and typed client, MSW mocks, bundle budgets and accessibility checks, seeds | `core-api/src/shared`, `app.ts`; `web/src/shared`, `mocks`, `routes.tsx` |
+| M10 | Lavin Chamoth Low Chiong (LavinLowchiong) | `lavin-dev` | Platform kernel and web foundation | App shell, design tokens and role guards, RFC 7807 errors, redacted logger, correlation IDs, cursor pagination, OpenAPI generation and typed client, MSW mocks, bundle budgets and accessibility checks, seeds | `core-api/src/shared`, `app.ts`; `web/src/shared`, `mocks`, `routes.tsx` |
 
 ## Review pairs
 
@@ -22,10 +22,28 @@ M01 and M02 (human auth and machine identity), M03 and M04 (quotes and booking),
 (lifecycle and dispatch locks), M07 and M10 (courier PWA and web foundation), M08 and M09
 (event producers and consumers).
 
-## Reference: git commit counts by author
+## Git identities (inferred from commit history, 22 November 2026)
 
-Commit counts show who has pushed to the repository. They are not a mapping to slices.
-Git author names differ from team names, so the team should assign them.
+Team names in the table above differ from git author names. The mapping below is inferred from branch
+names, commit authorship and `docs/handover.md`; each member should confirm theirs before submission.
+Commit counts are across all branches and include merge and documentation commits, so they show activity,
+not marks.
+
+| ID | Member (team name) | Git author name(s) seen | Commits |
+|---|---|---|---|
+| M01 | doktur-umair | doktur-umair, UMAIR M.H.M, umair | 15 |
+| M02 | Abdhullah | abdhullah-mn, Abdhullah Noufal | 21 |
+| M03 | umar | UmarYusuf03, Ali Y.A.M.M.U | 17 |
+| M04 | Nihaaj | Nihaaj Ahamed | 5 |
+| M05 | shazan | Shazan, Shazan Faslan | 5 |
+| M06 | Noora | NooraRafiuddeen | 2 |
+| M07 | muzny100 | muzny100 | 7 |
+| M08 | Roshan | RoshanMohamad, RoshanSM | 59 |
+| M09 | akeel | Mohamed Rishan Akeel | 17 |
+| M10 | Lavin Chamoth Low Chiong | Lavin Chamoth Low Chiong (LavinLowchiong) | 7 |
+
+M05's and M06's commit counts are low; check their branches for work that was merged under another
+author's name before presenting those rows.
 
 ## Branches
 
