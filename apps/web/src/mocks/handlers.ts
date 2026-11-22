@@ -436,6 +436,16 @@ export const handlers = [
     });
   }),
 
+  http.patch("/api/v1/auth/me", async ({ request }) => {
+    const body = (await request.json()) as Record<string, string>;
+    const user = currentMockUser();
+    return HttpResponse.json({
+      ...user,
+      fullName: body["fullName"] ?? user.fullName,
+      phone: body["phone"] ?? user.phone,
+    });
+  }),
+
   http.post("/api/v1/auth/accept-invite", () => {
     return HttpResponse.json({
       message: "Invitation accepted. You can now log in.",

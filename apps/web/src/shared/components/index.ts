@@ -4,3 +4,4 @@ export * from "./StatusBadge.js";
 export * from "./Icon.js";
 export * from "./ErrorBoundary.js";
 export * from "./Account.js";
+export * from "./Profile.js";

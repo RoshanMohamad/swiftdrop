@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { roleHome, useSession } from "../../features/auth/session.js";
 import { logout } from "../../features/auth/client.js";
 import { ChatWidget } from "../../features/assistant/index.js";
+import { initials } from "../components/Profile.js";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -155,6 +156,19 @@ export function AppShell({ children }: AppShellProps) {
         )}
         {user && (
           <nav aria-label="Account" className="account-nav">
+            <NavLink
+              to="/profile"
+              className="profile-chip"
+              title="Your profile"
+            >
+              <span className="avatar" aria-hidden="true">
+                {initials(user.fullName, user.email)}
+              </span>
+              <span className="profile-chip-name">
+                {user.fullName?.split(/\s+/)[0] ?? "Profile"}
+              </span>
+              <span className="visually-hidden">: your profile</span>
+            </NavLink>
             <button
               type="button"
               disabled={pending}

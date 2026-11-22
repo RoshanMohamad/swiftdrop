@@ -174,6 +174,10 @@ export function Account() {
           <Icon name="refresh" />
           {pending ? "Checking…" : "Check session"}
         </button>
+        <Link to="/profile" className="dash-link">
+          <Icon name="user" />
+          Edit profile
+        </Link>
         <Link to="/settings/security" className="dash-link">
           <Icon name="shield" />
           Security settings

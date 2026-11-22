@@ -347,6 +347,16 @@ export const completeProfileSchema = z
       ),
   })
   .strict();
+/** PATCH /api/v1/auth/me: change your own name and/or phone (email changes need re-verification). */
+export const updateProfileSchema = completeProfileSchema
+  .partial()
+  .refine(
+    (value) => value.fullName !== undefined || value.phone !== undefined,
+    {
+      message: "Change your name or phone number.",
+    },
+  );
+export type ProfileUpdate = z.infer<typeof updateProfileSchema>;
 export const googleLinkSchema = z
   .object({
     password: z
@@ -718,6 +728,7 @@ export const auditEventTypes = [
   "MFA_ENABLED",
   "MFA_DISABLED",
   "MFA_RECOVERY_CODES_REGENERATED",
+  "PROFILE_UPDATED",
 ] as const;
 export const auditEventTypeSchema = z.enum(auditEventTypes);
 export const auditEventSchema = z.object({

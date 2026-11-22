@@ -7,6 +7,7 @@ import {
   type Registration,
   type Session,
   completeProfileSchema,
+  updateProfileSchema,
   quoteSchema,
   parcelSchema,
   parcelPageSchema,
@@ -866,6 +867,25 @@ export async function completeProfile(input: {
     const user = await checked(
       await api.POST("/api/v1/auth/complete-profile", {
         body: completeProfileSchema.parse(input),
+        headers: {
+          "X-CSRF-Token": context.csrfToken,
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+      }),
+    );
+    return publicUserSchema.parse(user);
+  });
+}
+/** Edit your own name and/or phone. Any signed-in role. */
+export async function updateProfile(input: {
+  fullName?: string;
+  phone?: string;
+}) {
+  return authenticated(async (session) => {
+    const context = await csrf();
+    const user = await checked(
+      await api.PATCH("/api/v1/auth/me", {
+        body: updateProfileSchema.parse(input),
         headers: {
           "X-CSRF-Token": context.csrfToken,
           Authorization: `Bearer ${session.accessToken}`,

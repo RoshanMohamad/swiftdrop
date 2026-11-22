@@ -372,6 +372,33 @@ export class AuthService {
     });
     return user;
   }
+  /** Own-profile edit for any role. Email is not editable here (it needs re-verification). */
+  async updateProfile(
+    userId: number,
+    input: { fullName?: string; phone?: string },
+  ) {
+    return this.db.$transaction(async (tx) => {
+      await this.lockUser(tx, userId);
+      const current = await tx.user.findUnique({ where: { id: userId } });
+      if (!current || current.status !== "ACTIVE") throw unauthorised();
+      const data: { fullName?: string; phone?: string } = {};
+      if (input.fullName !== undefined && input.fullName !== current.fullName)
+        data.fullName = input.fullName;
+      if (input.phone !== undefined && input.phone !== current.phone)
+        data.phone = input.phone;
+      if (Object.keys(data).length === 0) return current;
+      const updated = await tx.user.update({ where: { id: userId }, data });
+      await recordAudit(tx, {
+        type: "PROFILE_UPDATED",
+        outcome: "SUCCESS",
+        actorId: userId,
+        targetId: userId,
+        // Field names only: the values are PII and never enter the audit trail.
+        metadata: { reason: Object.keys(data).sort().join(",") },
+      });
+      return updated;
+    });
+  }
   async register(input: Registration) {
     const passwordHash = await hashPassword(input.password);
     try {
