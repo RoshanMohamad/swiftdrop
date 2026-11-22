@@ -69,6 +69,10 @@ export function AppShell({ children }: AppShellProps) {
   const [pending, setPending] = useState(false);
   const user = state.user;
   const workspace = Boolean(user) && !isPublicPath(location.pathname);
+  // The hero illustration belongs to the sign-in page and each role's dashboard only.
+  const showHero =
+    location.pathname === "/auth/login" ||
+    (Boolean(user) && location.pathname === roleHome(user!.role));
 
   async function handleSignOut(all = false) {
     setPending(true);
@@ -186,21 +190,26 @@ export function AppShell({ children }: AppShellProps) {
           </nav>
         )}
       </header>
-      <main id="main" className="shell-split">
-        <aside className="intro" aria-label="Welcome and hero banner">
-          <div className="intro-top">
-            <span className="eyebrow">Across Sri Lanka</span>
-            <p className="hero-title">
-              A little closer.
-              <br /> With every
-              <br /> <span>delivery.</span>
-            </p>
-            <p className="intro-copy">
-              The first step to sending something good.
-            </p>
-          </div>
-          <HeroArt />
-        </aside>
+      <main
+        id="main"
+        className={showHero ? "shell-split" : "shell-split no-hero"}
+      >
+        {showHero && (
+          <aside className="intro" aria-label="Welcome and hero banner">
+            <div className="intro-top">
+              <span className="eyebrow">Across Sri Lanka</span>
+              <p className="hero-title">
+                A little closer.
+                <br /> With every
+                <br /> <span>delivery.</span>
+              </p>
+              <p className="intro-copy">
+                The first step to sending something good.
+              </p>
+            </div>
+            <HeroArt />
+          </aside>
+        )}
         <div
           className={workspace ? "stage" : "content"}
           key={location.pathname}

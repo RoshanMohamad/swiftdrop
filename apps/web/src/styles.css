@@ -394,7 +394,7 @@
     color: var(--color-ink-muted);
   }
 
-  /* Every page: hero on the left, a white content panel on the right */
+  /* Sign-in and dashboards: hero on the left, a white content panel on the right */
   .shell-split {
     flex: 1;
     display: grid;
@@ -402,6 +402,18 @@
     align-items: start;
     width: 100%;
     max-width: 1440px;
+    margin-inline: auto;
+  }
+  /* Every other page: no hero, the panel takes the full width */
+  .shell-split.no-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .no-hero .panel {
+    min-height: 0;
+  }
+  .no-hero .content .panel {
+    width: 100%;
+    max-width: 720px;
     margin-inline: auto;
   }
   .intro {
