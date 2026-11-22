@@ -193,8 +193,6 @@ export function Account() {
     }
   }
 
-  const customer = user?.role === "CUSTOMER";
-
   return (
     <section className="account dash dash-customer">
       <div className="dash-main">
@@ -208,16 +206,14 @@ export function Account() {
         </div>
 
         <section className="dash-profile" aria-label="Your profile">
-          {
-            <div className="dash-avatar" aria-hidden="true">
-              {initials(user?.fullName, user?.email)}
-              {user?.emailVerified && (
-                <span className="dash-avatar-check">
-                  <Icon name="check-circle" />
-                </span>
-              )}
-            </div>
-          }
+          <div className="dash-avatar" aria-hidden="true">
+            {initials(user?.fullName, user?.email)}
+            {user?.emailVerified && (
+              <span className="dash-avatar-check">
+                <Icon name="check-circle" />
+              </span>
+            )}
+          </div>
           <dl>
             <div>
               <dt>
