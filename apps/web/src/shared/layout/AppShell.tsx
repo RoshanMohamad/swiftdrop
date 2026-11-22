@@ -14,6 +14,9 @@ function isPublicPath(pathname: string) {
   return pathname.startsWith("/auth/") || pathname.startsWith("/track/");
 }
 
+/** Signed-in account pages that keep the hero beside their narrow forms. */
+const HERO_ACCOUNT_PATHS = new Set(["/profile", "/settings/security"]);
+
 /** Decorative hero art: hills, a parcel box and the dashed route it travels. */
 function HeroArt() {
   return (
@@ -69,10 +72,13 @@ export function AppShell({ children }: AppShellProps) {
   const [pending, setPending] = useState(false);
   const user = state.user;
   const workspace = Boolean(user) && !isPublicPath(location.pathname);
-  // The hero illustration belongs to the sign-in page and each role's dashboard only.
+  // The hero illustration belongs to the sign-in page, each role's dashboard,
+  // and the narrow account pages (profile, security) that would otherwise sit in empty space.
   const showHero =
     location.pathname === "/auth/login" ||
-    (Boolean(user) && location.pathname === roleHome(user!.role));
+    (Boolean(user) &&
+      (location.pathname === roleHome(user!.role) ||
+        HERO_ACCOUNT_PATHS.has(location.pathname)));
 
   async function handleSignOut(all = false) {
     setPending(true);
