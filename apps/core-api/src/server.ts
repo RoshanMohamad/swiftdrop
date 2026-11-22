@@ -7,6 +7,7 @@ import { loadConfig } from "./shared/config.js";
 import { createTokenService } from "./modules/auth/jwt.js";
 import { createAuthMailer } from "./modules/auth/mail.js";
 import pino from "pino";
+import { REDACT_PATHS } from "./shared/logger.js";
 import { startParcelEventWorkers } from "./modules/parcels/events.js";
 import { ReceiptService } from "./modules/receipts/service.js";
 import { MerchantsService } from "./modules/merchants/index.js";
@@ -26,23 +27,7 @@ redis.on("error", () => {
 });
 const tokens = await createTokenService(config);
 const logger = pino({
-  redact: {
-    paths: [
-      "password",
-      "*.password",
-      "authorization",
-      "*.authorization",
-      "cookie",
-      "*.cookie",
-      "token",
-      "*.token",
-      "email",
-      "*.email",
-      "phone",
-      "*.phone",
-    ],
-    censor: "[REDACTED]",
-  },
+  redact: { paths: REDACT_PATHS, censor: "[REDACTED]" },
 });
 const workerState = { connected: false };
 const realtimeWorkerState = { connected: false };

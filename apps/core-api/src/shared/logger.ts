@@ -27,7 +27,7 @@
 import pino, { type Logger } from "pino";
 
 /** Paths whose values are replaced with `"[REDACTED]"` in every log line. */
-const REDACT_PATHS = [
+export const REDACT_PATHS = [
   "password",
   "*.password",
   "token",
@@ -46,6 +46,15 @@ const REDACT_PATHS = [
   "*.phone",
   "email",
   "*.email",
+  // CLAUDE.md: the logger redacts password, phone, address and authorization.
+  "address",
+  "*.address",
+  "recipientAddress",
+  "*.recipientAddress",
+  "recipientPhone",
+  "*.recipientPhone",
+  "recipientName",
+  "*.recipientName",
   // Pickup contact details are PII (parcel booking and merchant defaults).
   "pickupAddress",
   "*.pickupAddress",
