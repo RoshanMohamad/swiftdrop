@@ -223,7 +223,7 @@ describe("NotificationProcessor (FR-I3)", () => {
     expect(calls.claim).toBe(0);
   });
 
-  it("rejects when no contact data exists and requeues when the lookup is unavailable", async () => {
+  it("rejects when no contact data exists and retries when the lookup is unavailable", async () => {
     const missing = harness({
       lookup: {
         fetch: async () => {
@@ -240,14 +240,14 @@ describe("NotificationProcessor (FR-I3)", () => {
         },
       },
     });
-    expect(await down.processor.handle(body(created))).toBe("requeue");
+    expect(await down.processor.handle(body(created))).toBe("retry");
     expect(down.calls.release).toBe(1);
     expect(down.calls.complete).toBe(0);
   });
 
   it("retries only the message that failed", async () => {
     const run = harness({ failChannel: "SMS" });
-    expect(await run.processor.handle(body(created))).toBe("requeue");
+    expect(await run.processor.handle(body(created))).toBe("retry");
     expect(run.sent.map((m) => m.channel)).toEqual(["EMAIL"]);
     expect(run.calls.release).toBe(1);
     run.heal();
@@ -258,7 +258,7 @@ describe("NotificationProcessor (FR-I3)", () => {
   it("never logs contact details when a send fails", async () => {
     const logs: string[] = [];
     const { processor } = harness({ failChannel: "EMAIL", logs });
-    expect(await processor.handle(body(created))).toBe("requeue");
+    expect(await processor.handle(body(created))).toBe("retry");
     const output = logs.join("");
     expect(output).toContain("notification_send_failed");
     for (const secret of [

@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type { Channel, ConsumeMessage } from "amqplib";
+import type { ConfirmChannel, ConsumeMessage } from "amqplib";
 import { correlationIdFromHeaders } from "@swiftdrop/contracts";
 import { createDatabase } from "@swiftdrop/db";
 import {
+  NOTIFICATION_REDELIVERIES,
   QUEUES,
   createLogger,
   declareTopology,
@@ -19,6 +20,7 @@ import {
   SmtpEmailSender,
   createChannelSender,
 } from "./senders.js";
+import { settle } from "./settle.js";
 import { PrismaProgressStore } from "./store.js";
 
 const env = z
@@ -65,11 +67,10 @@ const processor = new NotificationProcessor({
   logger,
 });
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 let connected = false;
 const abort = new AbortController();
 
-async function consume(channel: Channel) {
+async function consume(channel: ConfirmChannel) {
   const inflight = new Set<Promise<void>>();
   await channel.prefetch(8);
   const { consumerTag } = await channel.consume(
@@ -81,18 +82,12 @@ async function consume(channel: Channel) {
           message.content,
           correlationIdFromHeaders(message.properties.headers),
         );
-        try {
-          if (disposition === "ack") channel.ack(message);
-          // Poison goes to the DLQ through the queue's dead-letter policy.
-          else if (disposition === "reject")
-            channel.nack(message, false, false);
-          else {
-            await sleep(2000); // no hot loop while a dependency is down
-            channel.nack(message, false, true);
-          }
-        } catch {
-          /* channel closed: the broker redelivers the unacknowledged message */
-        }
+        // Poison and exhausted retries go to the DLQ through the queue's dead-letter policy.
+        await settle(channel, message, disposition, {
+          queue: QUEUES.notifications,
+          maxRetries: NOTIFICATION_REDELIVERIES,
+          delayMs: 2000, // no hot loop while a dependency is down
+        });
       })();
       inflight.add(work);
       void work.finally(() => inflight.delete(work));
@@ -112,7 +107,8 @@ const broker = runWithBroker({
     connected = state;
   },
   session: async (connection, { closed, signal }) => {
-    const channel = await connection.createChannel();
+    // Confirm channel: a retry republish must be confirmed before the original is acked.
+    const channel = await connection.createConfirmChannel();
     channel.on("error", () => undefined);
     await declareTopology(channel);
     const stop = await consume(channel);
