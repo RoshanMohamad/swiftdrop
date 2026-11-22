@@ -38,6 +38,11 @@ x-core-env: &core-env
   MFA_SECRET_FILE: /run/swiftdrop/auth/mfa.key
   MFA_REQUIRED_ROLES: ${SD_MFA_REQUIRED_ROLES:-}
   COOKIE_SECURE: ${SD_COOKIE_SECURE:-false}
+  # Google sign-in is opt-in: leave these empty to keep it disabled.
+  # The callback must use APP_ORIGIN, e.g. http://localhost/api/v1/auth/google/callback
+  GOOGLE_CLIENT_ID: ${SD_GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${SD_GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_CALLBACK_URL: ${SD_GOOGLE_CALLBACK_URL:-}
   OUTBOX_RELAY_URL: http://outbox-relay:3101
 
 services:
