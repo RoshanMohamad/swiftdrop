@@ -165,6 +165,33 @@ describe("Google OIDC adapter protocol", () => {
     ).rejects.toThrow();
   });
 
+  it("retries discovery after a failed attempt instead of caching the failure", async () => {
+    const { fetchFixture } = await fixture();
+    let failNext = true;
+    const client = new GoogleOidc(
+      {
+        GOOGLE_CLIENT_ID: clientId,
+        GOOGLE_CLIENT_SECRET: "fixture-secret",
+        GOOGLE_CALLBACK_URL:
+          "http://localhost:5173/api/v1/auth/google/callback",
+        oauthSecret: "x".repeat(64),
+      },
+      async (input, options) => {
+        if (failNext) {
+          failNext = false;
+          throw new TypeError("fetch failed");
+        }
+        return fetchFixture(input, options);
+      },
+    );
+    await expect(
+      client.authorizationUrl(state, nonce, verifier),
+    ).rejects.toThrow();
+    await expect(
+      client.authorizationUrl(state, nonce, verifier),
+    ).resolves.toContain("https://accounts.google.com/o/oauth2/v2/auth");
+  });
+
   it("bounds discovery and token requests", async () => {
     const client = new GoogleOidc(
       {

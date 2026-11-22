@@ -684,6 +684,54 @@ describe("customer HTTP boundary", () => {
       googleSub: "google-subject-1",
     });
   });
+  it("lets any signed-in role edit its own name and phone, audited without PII", async () => {
+    const account = await user("COURIER");
+    const agent = request.agent(api.app);
+    const login = await post(agent, "login", { email: input.email, password });
+    const patch = async (body: object, withCsrf = true) => {
+      const csrf = await agent.get("/api/v1/auth/csrf");
+      const call = agent
+        .patch("/api/v1/auth/me")
+        .set("Origin", config.APP_ORIGIN)
+        .set("Authorization", `Bearer ${login.body.accessToken}`);
+      return (
+        withCsrf ? call.set("X-CSRF-Token", csrf.body.csrfToken) : call
+      ).send(body);
+    };
+    const updated = await patch({
+      fullName: "Renamed Courier",
+      phone: "0779876543",
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({
+      id: account.id,
+      fullName: "Renamed Courier",
+      phone: "+94779876543",
+      role: "COURIER",
+    });
+    expect((await patch({ phone: "12345" })).status).toBe(400);
+    expect((await patch({})).status).toBe(400);
+    expect(
+      (await patch({ fullName: "Valid Name", email: "other@example.test" }))
+        .status,
+    ).toBe(400);
+    expect((await patch({ fullName: "Without Token" }, false)).status).toBe(
+      403,
+    );
+    expect(
+      await db.user.findUniqueOrThrow({ where: { id: account.id } }),
+    ).toMatchObject({
+      email: input.email,
+      fullName: "Renamed Courier",
+      phone: "+94779876543",
+    });
+    const events = await db.authAuditEvent.findMany({
+      where: { eventType: "PROFILE_UPDATED", targetUserId: account.id },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.metadata).toEqual({ reason: "fullName,phone" });
+    expect(JSON.stringify(events)).not.toContain("779876543");
+  });
   it("links Google only after fresh password proof and preserves the customer account", async () => {
     const original = await user();
     googleIdentityEmail = input.email;

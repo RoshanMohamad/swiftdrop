@@ -4,6 +4,7 @@ import { completeProfileSchema } from "@swiftdrop/contracts";
 import { beginGoogleLink, completeProfile, errorMessage } from "./client.js";
 import { roleHome, useSession } from "./session.js";
 import { ActiveSessions, ChangePasswordForm, MfaSettings } from "./security.js";
+import { Icon } from "../../shared/components/Icon.js";
 
 export function CompleteProfile() {
   const { state, updateUser } = useSession();
@@ -146,13 +147,28 @@ export function SecuritySettings() {
   const [reloadKey, setReloadKey] = useState(0);
   if (!state.user) return <Navigate to="/auth/login" replace />;
   return (
-    <section className="auth-panel" aria-labelledby="security-title">
-      <span className="eyebrow">Security settings</span>
-      <h1 id="security-title">Your account security.</h1>
-      <ChangePasswordForm onChanged={() => setReloadKey((key) => key + 1)} />
-      <MfaSettings />
-      <ActiveSessions reloadKey={reloadKey} />
-      {state.user.role === "CUSTOMER" && <LinkGoogle />}
+    <section className="settings-page" aria-labelledby="security-title">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">Security settings</span>
+          <h1 id="security-title">
+            <span className="title-icon">
+              <Icon name="shield" />
+            </span>
+            Your account security.
+          </h1>
+          <p className="muted">
+            Signed in as <strong>{state.user.email}</strong>. Keep your password
+            fresh and turn on two-step verification.
+          </p>
+        </div>
+      </header>
+      <div className="settings-stack">
+        <ChangePasswordForm onChanged={() => setReloadKey((key) => key + 1)} />
+        <MfaSettings />
+        <ActiveSessions reloadKey={reloadKey} />
+        {state.user.role === "CUSTOMER" && <LinkGoogle />}
+      </div>
     </section>
   );
 }

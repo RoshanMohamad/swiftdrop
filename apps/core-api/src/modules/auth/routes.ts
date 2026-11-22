@@ -17,6 +17,7 @@ import {
   reauthenticateSchema,
   MFA_CHALLENGE_SECONDS,
   completeProfileSchema,
+  updateProfileSchema,
   googleLinkSchema,
   acceptInvitationSchema,
 } from "@swiftdrop/contracts";
@@ -96,7 +97,7 @@ export function createAuthRouter(
   });
   router.use(
     (req, res, next) =>
-      req.method === "POST" || req.method === "DELETE"
+      req.method === "POST" || req.method === "PATCH" || req.method === "DELETE"
         ? originCheck(req, res, next)
         : next(),
     csrf.doubleCsrfProtection,
@@ -288,6 +289,17 @@ export function createAuthRouter(
     async (req, res) => {
       const input = completeProfileSchema.parse(req.body);
       const user = await service.completeProfile(res.locals.user.id, input);
+      res.json(publicUser(user));
+    },
+  );
+  // Any signed-in role edits its own name and phone; the id comes from the token only.
+  router.patch(
+    "/me",
+    limiter.middleware("profile-update", 20, 900),
+    authenticate(service),
+    async (req, res) => {
+      const input = updateProfileSchema.parse(req.body);
+      const user = await service.updateProfile(res.locals.user.id, input);
       res.json(publicUser(user));
     },
   );

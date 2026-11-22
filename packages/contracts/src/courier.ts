@@ -45,6 +45,16 @@ export const courierJobSchema = z.object({
   recipientName: z.string(),
   recipientPhone: z.string(),
   recipientAddress: z.string(),
+  // Pickup and item details, only ever returned for the courier's own assigned parcels.
+  pickupAddress: z.string().nullable().optional(),
+  pickupContactName: z.string().nullable().optional(),
+  pickupContactPhone: z.string().nullable().optional(),
+  itemDescription: z.string().nullable().optional(),
+  handlingNote: z
+    .enum(["FRAGILE", "KEEP_DRY", "THIS_WAY_UP", "HANDLE_WITH_CARE"])
+    .nullable()
+    .optional(),
+  preferredPickupDate: z.string().nullable().optional(),
   assignedAt: z.string().datetime(),
 });
 export type CourierJob = z.infer<typeof courierJobSchema>;

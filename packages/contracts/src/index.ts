@@ -68,6 +68,77 @@ export const registrationSchema = z
   })
   .strict();
 export type Registration = z.infer<typeof registrationSchema>;
+const sriLankanPhoneSchema = z
+  .string()
+  .trim()
+  .regex(/^(?:0|\+94)[1-9]\d{8}$/)
+  .transform((value) =>
+    value.startsWith("0") ? `+94${value.slice(1)}` : value,
+  );
+const contactNameSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(120)
+  .regex(/^[^\p{Cc}]+$/u);
+const streetAddressSchema = z
+  .string()
+  .trim()
+  .min(5)
+  .max(300)
+  .regex(/^[^\p{Cc}]+$/u);
+/** Fixed list so handling notes are never free text. */
+export const handlingNoteSchema = z.enum([
+  "FRAGILE",
+  "KEEP_DRY",
+  "THIS_WAY_UP",
+  "HANDLE_WITH_CARE",
+]);
+export type HandlingNote = z.infer<typeof handlingNoteSchema>;
+/** Where the courier collects the parcel. PII: never put these in events or public tracking. */
+export const pickupFieldsShape = {
+  pickupAddress: streetAddressSchema.optional(),
+  pickupContactName: contactNameSchema.optional(),
+  pickupContactPhone: sriLankanPhoneSchema.optional(),
+};
+/** What is in the parcel. Informational only: not used for pricing. */
+export const itemFieldsShape = {
+  itemDescription: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^[^\p{Cc}]+$/u)
+    .optional(),
+  handlingNote: handlingNoteSchema.optional(),
+  /** Integer cents (LKR). Not used for pricing; insurance is out of scope. */
+  declaredValueCents: z.number().int().min(0).max(100_000_000).optional(),
+  preferredPickupDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => {
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return (
+        !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+      );
+    }, "Enter a real calendar date.")
+    .optional(),
+};
+/** The three pickup fields are all-or-none, so a courier never gets half a pickup point. */
+const pickupAllOrNone = (value: {
+  pickupAddress?: unknown;
+  pickupContactName?: unknown;
+  pickupContactPhone?: unknown;
+}) => {
+  const given = [
+    value.pickupAddress,
+    value.pickupContactName,
+    value.pickupContactPhone,
+  ].filter((item) => item !== undefined).length;
+  return given === 0 || given === 3;
+};
+const pickupAllOrNoneMessage =
+  "Give the pickup address, contact name and contact phone together.";
 export const merchantRegistrationSchema = registrationSchema
   .extend({
     businessName: z
@@ -76,8 +147,14 @@ export const merchantRegistrationSchema = registrationSchema
       .min(2)
       .max(160)
       .regex(/^[^\p{Cc}]+$/u),
+    // Optional default pickup point, used by orders that omit their own.
+    ...pickupFieldsShape,
   })
-  .strict();
+  .strict()
+  .refine(pickupAllOrNone, {
+    message: pickupAllOrNoneMessage,
+    path: ["pickupAddress"],
+  });
 export type MerchantRegistration = z.infer<typeof merchantRegistrationSchema>;
 export const merchantStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 export const merchantReviewSchema = z
@@ -137,8 +214,14 @@ export const merchantOrderRequestSchema = z
       .min(5)
       .max(300)
       .regex(/^[^\p{Cc}]+$/u),
+    ...pickupFieldsShape,
+    ...itemFieldsShape,
   })
-  .strict();
+  .strict()
+  .refine(pickupAllOrNone, {
+    message: pickupAllOrNoneMessage,
+    path: ["pickupAddress"],
+  });
 export type MerchantOrderRequest = z.infer<typeof merchantOrderRequestSchema>;
 export const merchantOrderStatusSchema = z.enum([
   "CREATED",
@@ -347,6 +430,16 @@ export const completeProfileSchema = z
       ),
   })
   .strict();
+/** PATCH /api/v1/auth/me: change your own name and/or phone (email changes need re-verification). */
+export const updateProfileSchema = completeProfileSchema
+  .partial()
+  .refine(
+    (value) => value.fullName !== undefined || value.phone !== undefined,
+    {
+      message: "Change your name or phone number.",
+    },
+  );
+export type ProfileUpdate = z.infer<typeof updateProfileSchema>;
 export const googleLinkSchema = z
   .object({
     password: z
@@ -397,8 +490,14 @@ export const bookingRequestSchema = z
       .min(5)
       .max(300)
       .regex(/^[^\p{Cc}]+$/u),
+    ...pickupFieldsShape,
+    ...itemFieldsShape,
   })
-  .strict();
+  .strict()
+  .refine(pickupAllOrNone, {
+    message: pickupAllOrNoneMessage,
+    path: ["pickupAddress"],
+  });
 export type BookingRequest = z.infer<typeof bookingRequestSchema>;
 export const parcelSchema = z.object({
   id: z.string().uuid(),
@@ -415,6 +514,13 @@ export const parcelSchema = z.object({
   recipientName: z.string(),
   recipientPhone: z.string(),
   recipientAddress: z.string(),
+  pickupAddress: z.string().nullable().optional(),
+  pickupContactName: z.string().nullable().optional(),
+  pickupContactPhone: z.string().nullable().optional(),
+  itemDescription: z.string().nullable().optional(),
+  handlingNote: handlingNoteSchema.nullable().optional(),
+  declaredValueCents: z.number().int().nonnegative().nullable().optional(),
+  preferredPickupDate: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   history: z
     .array(
@@ -718,6 +824,7 @@ export const auditEventTypes = [
   "MFA_ENABLED",
   "MFA_DISABLED",
   "MFA_RECOVERY_CODES_REGENERATED",
+  "PROFILE_UPDATED",
 ] as const;
 export const auditEventTypeSchema = z.enum(auditEventTypes);
 export const auditEventSchema = z.object({

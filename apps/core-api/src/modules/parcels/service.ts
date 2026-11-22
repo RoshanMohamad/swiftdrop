@@ -36,6 +36,15 @@ const publicParcel = (
   recipientName: parcel.recipientName,
   recipientPhone: parcel.recipientPhone,
   recipientAddress: parcel.recipientAddress,
+  pickupAddress: parcel.pickupAddress,
+  pickupContactName: parcel.pickupContactName,
+  pickupContactPhone: parcel.pickupContactPhone,
+  itemDescription: parcel.itemDescription,
+  handlingNote: parcel.handlingNote,
+  declaredValueCents: parcel.declaredValueCents,
+  preferredPickupDate: parcel.preferredPickupDate
+    ? parcel.preferredPickupDate.toISOString().slice(0, 10)
+    : null,
   createdAt: iso(parcel.createdAt),
   history: parcel.history.slice(0, 100).map((item) => ({
     status: item.status,
@@ -43,6 +52,43 @@ const publicParcel = (
     createdAt: iso(item.createdAt),
   })),
 });
+/** Pickup and item columns for a new parcel. Pickup is all-or-none (enforced by the schema). */
+const pickupData = (
+  input: BookingInput | MerchantOrderInput,
+  fallback?: {
+    defaultPickupAddress: string | null;
+    defaultPickupContactName: string | null;
+    defaultPickupContactPhone: string | null;
+  },
+) => {
+  const own = input.pickupAddress !== undefined;
+  return {
+    pickupAddress: own
+      ? input.pickupAddress
+      : (fallback?.defaultPickupAddress ?? null),
+    pickupContactName: own
+      ? input.pickupContactName
+      : (fallback?.defaultPickupContactName ?? null),
+    pickupContactPhone: own
+      ? input.pickupContactPhone
+      : (fallback?.defaultPickupContactPhone ?? null),
+    itemDescription: input.itemDescription ?? null,
+    handlingNote: input.handlingNote ?? null,
+    declaredValueCents: input.declaredValueCents ?? null,
+    preferredPickupDate: input.preferredPickupDate
+      ? new Date(`${input.preferredPickupDate}T00:00:00.000Z`)
+      : null,
+  };
+};
+/** A preferred pickup date earlier than yesterday (UTC) is a mistake; one day of slack covers Sri Lanka's offset. */
+const assertPickupDateNotPast = (date: string | undefined, now: Date) => {
+  if (date && Date.parse(`${date}T00:00:00.000Z`) < now.getTime() - 86_400_000 * 2)
+    throw new HttpError(
+      422,
+      "PICKUP_DATE_PAST",
+      "The preferred pickup date cannot be in the past.",
+    );
+};
 const parcelInclude = {
   originZone: { select: { town: true } },
   destinationZone: { select: { town: true } },
@@ -95,6 +141,7 @@ export class ParcelService {
         async (tx) => {
           await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${principalKey + operation + idempotencyKey}, 0))`;
           const now = new Date();
+          assertPickupDateNotPast(input.preferredPickupDate, now);
           await tx.idempotencyRecord.deleteMany({
             where: {
               principalKey,
@@ -180,6 +227,7 @@ export class ParcelService {
               recipientName: input.recipientName,
               recipientPhone: input.recipientPhone,
               recipientAddress: input.recipientAddress,
+              ...pickupData(input),
               history: {
                 create: {
                   status: "CREATED",
@@ -282,6 +330,7 @@ export class ParcelService {
               "Order access is available only to active, approved merchants.",
             );
           const now = new Date();
+          assertPickupDateNotPast(input.preferredPickupDate, now);
           await tx.idempotencyRecord.deleteMany({
             where: {
               principalKey,
@@ -407,6 +456,7 @@ export class ParcelService {
               recipientName: input.recipientName,
               recipientPhone: input.recipientPhone,
               recipientAddress: input.recipientAddress,
+              ...pickupData(input, merchant),
               history: {
                 create: {
                   status: "CREATED",

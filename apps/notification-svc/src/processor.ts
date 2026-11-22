@@ -5,8 +5,14 @@ import type { MessageSender } from "./senders.js";
 import type { ProgressStore } from "./store.js";
 import { renderMessages } from "./templates.js";
 
-/** What the consumer does with the broker message. */
-export type Disposition = "ack" | "reject" | "requeue";
+/**
+ * What the consumer does with the broker message.
+ * - `retry`: delivery failed (send, contact lookup, unexpected error). Counts towards the
+ *   redelivery limit; the last failure goes to `notifications.dlq`.
+ * - `requeue`: nothing was attempted (another worker holds the lease, or the progress store is
+ *   unreachable). Does not count, so a stale lease or a short DB outage never dead-letters.
+ */
+export type Disposition = "ack" | "reject" | "retry" | "requeue";
 
 const LEASE_MS = 60_000;
 
@@ -107,7 +113,7 @@ export class NotificationProcessor {
       }
       if (failures > 0) {
         await store.release(event.eventId);
-        return "requeue";
+        return "retry";
       }
       await store.complete(event.eventId);
       return "ack";
@@ -118,7 +124,7 @@ export class NotificationProcessor {
         message: error instanceof Error ? error.message : "unknown",
       });
       await store.release(event.eventId).catch(() => undefined);
-      return "requeue";
+      return "retry";
     }
   }
 }

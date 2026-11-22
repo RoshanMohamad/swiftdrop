@@ -102,6 +102,9 @@ export class MerchantsService {
           data: {
             userId: user.id,
             businessName: input.businessName,
+            defaultPickupAddress: input.pickupAddress ?? null,
+            defaultPickupContactName: input.pickupContactName ?? null,
+            defaultPickupContactPhone: input.pickupContactPhone ?? null,
             status: "PENDING",
           },
         });

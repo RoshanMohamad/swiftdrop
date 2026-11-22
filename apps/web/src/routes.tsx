@@ -31,6 +31,7 @@ import { DispatcherConsole } from "./features/dispatcher/index.js";
 import { CourierJobs } from "./features/courier/index.js";
 import { Guard } from "./shared/auth/Guard.js";
 import { Account } from "./shared/components/Account.js";
+import { Profile } from "./shared/components/Profile.js";
 
 const APP_ROLES = [
   "CUSTOMER",
@@ -93,6 +94,16 @@ export function AppRoutes() {
       <Route path="/auth/accept-invite" element={<AcceptInvite />} />
       <Route path="/auth/google/result" element={<GoogleResult />} />
       <Route path="/auth/complete-profile" element={<CompleteProfile />} />
+
+      {/* Your own profile: every signed-in role */}
+      <Route
+        path="/profile"
+        element={
+          <Guard roles={[...APP_ROLES]}>
+            <Profile />
+          </Guard>
+        }
+      />
 
       {/* Customer Routes */}
       <Route path="/settings/security" element={<SecuritySettings />} />

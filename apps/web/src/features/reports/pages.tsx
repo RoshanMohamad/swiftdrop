@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDailyReport, downloadDailyReportCsv } from "../auth/client.js";
 import type { DailyReportSummary } from "@swiftdrop/contracts";
+import { Icon } from "../../shared/components/Icon.js";
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "The action could not be completed.";
@@ -52,32 +53,34 @@ export function AdminReports() {
   }
 
   return (
-    <section className="auth-panel" style={{ maxWidth: "800px" }}>
-      <span className="eyebrow">Operations & Analytics</span>
-      <h1>Daily Delivery Reports</h1>
-      <p style={{ color: "#666", marginBottom: "1.5rem" }}>
-        Review daily delivery volumes, failure rates, and active shipments.
-        Export summary data as CSV for offline audits.
-      </p>
-
-      {/* Filter and Export Form */}
-      <form
-        onSubmit={handleFilter}
-        style={{
-          display: "flex",
-          gap: "1rem",
-          alignItems: "flex-end",
-          flexWrap: "wrap",
-          marginBottom: "1.5rem",
-        }}
-      >
+    <section className="admin-panel">
+      <header className="admin-heading">
         <div>
-          <label
-            htmlFor="from"
-            style={{ display: "block", marginBottom: "0.25rem" }}
-          >
-            From
-          </label>
+          <span className="eyebrow">Operations & Analytics</span>
+          <h1>
+            <span className="title-icon">
+              <Icon name="chart" />
+            </span>
+            Daily Delivery Reports
+          </h1>
+          <p className="muted">
+            Review daily delivery volumes, failure rates, and active shipments.
+            Export summary data as CSV for offline audits.
+          </p>
+        </div>
+        <div className="heading-actions">
+          <Link to="/admin/zones" className="text-button">
+            Manage districts
+          </Link>
+          <Link to="/admin/pricing" className="text-button">
+            Manage pricing
+          </Link>
+        </div>
+      </header>
+
+      <form onSubmit={handleFilter} className="filter-row stacked">
+        <div>
+          <label htmlFor="from">From</label>
           <input
             id="from"
             type="date"
@@ -87,12 +90,7 @@ export function AdminReports() {
           />
         </div>
         <div>
-          <label
-            htmlFor="to"
-            style={{ display: "block", marginBottom: "0.25rem" }}
-          >
-            To
-          </label>
+          <label htmlFor="to">To</label>
           <input
             id="to"
             type="date"
@@ -101,159 +99,88 @@ export function AdminReports() {
             required
           />
         </div>
-        <button className="primary" type="submit" disabled={pending}>
-          {pending ? "Filtering…" : "Filter"}
-        </button>
-        <button
-          className="secondary"
-          type="button"
-          onClick={() => void handleExportCsv()}
-          disabled={downloading || pending}
-        >
-          {downloading ? "Exporting…" : "Export CSV"}
-        </button>
+        <div className="filter-actions">
+          <button className="primary" type="submit" disabled={pending}>
+            <Icon name="filter" />
+            {pending ? "Filtering…" : "Filter"}
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => void handleExportCsv()}
+            disabled={downloading || pending}
+          >
+            <Icon name="download" />
+            {downloading ? "Exporting…" : "Export CSV"}
+          </button>
+        </div>
       </form>
 
       {error && (
-        <p role="alert" style={{ color: "#d32f2f" }}>
+        <p role="alert" className="notice error">
           {error}
         </p>
       )}
 
-      {/* KPI Summary Cards */}
       {report && (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "1rem",
-              marginBottom: "2rem",
-            }}
-          >
-            <div
-              style={{
-                padding: "1rem",
-                borderRadius: "8px",
-                border: "1px solid #ddd",
-                background: "#fafafa",
-              }}
-            >
-              <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                Total Booked
-              </div>
-              <div style={{ fontSize: "1.75rem", fontWeight: "bold" }}>
-                {report.totalBooked}
-              </div>
+          <div className="stat-grid">
+            <div className="stat-tile">
+              <Icon name="box" />
+              <span className="stat-label">Total Booked</span>
+              <strong className="stat-value">{report.totalBooked}</strong>
             </div>
-            <div
-              style={{
-                padding: "1rem",
-                borderRadius: "8px",
-                border: "1px solid #ddd",
-                background: "#fafafa",
-              }}
-            >
-              <div style={{ fontSize: "0.85rem", color: "#2e7d32" }}>
-                Delivered
-              </div>
-              <div
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: "bold",
-                  color: "#2e7d32",
-                }}
-              >
-                {report.totalDelivered}
-              </div>
+            <div className="stat-tile tone-success">
+              <Icon name="check-circle" />
+              <span className="stat-label">Delivered</span>
+              <strong className="stat-value">{report.totalDelivered}</strong>
             </div>
-            <div
-              style={{
-                padding: "1rem",
-                borderRadius: "8px",
-                border: "1px solid #ddd",
-                background: "#fafafa",
-              }}
-            >
-              <div style={{ fontSize: "0.85rem", color: "#c62828" }}>
-                Failed
-              </div>
-              <div
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: "bold",
-                  color: "#c62828",
-                }}
-              >
-                {report.totalFailed}
-              </div>
+            <div className="stat-tile tone-danger">
+              <Icon name="x-circle" />
+              <span className="stat-label">Failed</span>
+              <strong className="stat-value">{report.totalFailed}</strong>
             </div>
-            <div
-              style={{
-                padding: "1rem",
-                borderRadius: "8px",
-                border: "1px solid #ddd",
-                background: "#fafafa",
-              }}
-            >
-              <div style={{ fontSize: "0.85rem", color: "#1565c0" }}>
-                Success Rate
-              </div>
-              <div
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: "bold",
-                  color: "#1565c0",
-                }}
-              >
+            <div className="stat-tile feature">
+              <Icon name="chart" />
+              <span className="stat-label">Success Rate</span>
+              <strong className="stat-value">
                 {report.overallSuccessRatePercent.toFixed(1)}%
-              </div>
+              </strong>
             </div>
           </div>
 
-          {/* Daily Breakdown Table */}
-          <h2>Daily Breakdown</h2>
+          <div className="section-head">
+            <h2>Daily Breakdown</h2>
+            <span className="fine">
+              {from} to {to}
+            </span>
+          </div>
           {report.days.length === 0 ? (
-            <p>No delivery activity found in the selected date range.</p>
+            <div className="empty-state">
+              <p>No delivery activity found in the selected date range.</p>
+            </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  textAlign: "left",
-                  marginTop: "0.5rem",
-                  marginBottom: "1.5rem",
-                }}
-              >
+            <div className="table-scroll">
+              <table>
                 <thead>
-                  <tr style={{ borderBottom: "2px solid #ccc" }}>
-                    <th style={{ padding: "0.5rem" }}>Date</th>
-                    <th style={{ padding: "0.5rem" }}>Booked</th>
-                    <th style={{ padding: "0.5rem" }}>Delivered</th>
-                    <th style={{ padding: "0.5rem" }}>Failed</th>
-                    <th style={{ padding: "0.5rem" }}>In Transit</th>
-                    <th style={{ padding: "0.5rem" }}>Success Rate</th>
+                  <tr>
+                    <th>Date</th>
+                    <th className="num">Booked</th>
+                    <th className="num">Delivered</th>
+                    <th className="num">Failed</th>
+                    <th className="num">In Transit</th>
+                    <th className="num">Success Rate</th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.days.map((row) => (
-                    <tr
-                      key={row.date}
-                      style={{ borderBottom: "1px solid #eee" }}
-                    >
-                      <td style={{ padding: "0.5rem" }}>{row.date}</td>
-                      <td style={{ padding: "0.5rem" }}>{row.totalBooked}</td>
-                      <td style={{ padding: "0.5rem", color: "#2e7d32" }}>
-                        {row.totalDelivered}
-                      </td>
-                      <td style={{ padding: "0.5rem", color: "#c62828" }}>
-                        {row.totalFailed}
-                      </td>
-                      <td style={{ padding: "0.5rem" }}>
-                        {row.totalInTransit}
-                      </td>
-                      <td style={{ padding: "0.5rem", fontWeight: "600" }}>
+                    <tr key={row.date}>
+                      <td>{row.date}</td>
+                      <td className="num">{row.totalBooked}</td>
+                      <td className="num text-success">{row.totalDelivered}</td>
+                      <td className="num text-danger">{row.totalFailed}</td>
+                      <td className="num">{row.totalInTransit}</td>
+                      <td className="num strong">
                         {row.successRatePercent.toFixed(1)}%
                       </td>
                     </tr>
@@ -264,11 +191,6 @@ export function AdminReports() {
           )}
         </>
       )}
-
-      <div style={{ marginTop: "1rem" }} className="account-links">
-        <Link to="/admin/zones">Manage districts</Link>
-        <Link to="/admin/pricing">Manage pricing</Link>
-      </div>
     </section>
   );
 }

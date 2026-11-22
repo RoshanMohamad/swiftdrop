@@ -82,6 +82,12 @@ export class GoogleOidc {
         configuration.timeout = 5;
         oidc.enableNonRepudiationChecks(configuration);
         return configuration;
+      })
+      .catch((error: unknown) => {
+        // Never cache a failed discovery: one network blip must not disable
+        // Google sign-in until the process restarts. The next request retries.
+        this.configuration = undefined;
+        throw error;
       }));
   }
   async authorizationUrl(state: string, nonce: string, verifier: string) {

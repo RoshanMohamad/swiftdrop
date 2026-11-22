@@ -239,6 +239,73 @@ describe("customer parcel booking wizard", () => {
     });
   });
 
+  it("sends pickup and item details, converting rupees to integer cents and dropping blanks", async () => {
+    page();
+    const user = userEvent.setup();
+    await completeParcelDetails(user);
+    await user.click(
+      screen.getByRole("button", { name: "Continue to recipient" }),
+    );
+    await user.type(screen.getByLabelText("Recipient name"), "Receiver Name");
+    await user.type(screen.getByLabelText("Recipient phone"), "0771234567");
+    await user.type(
+      screen.getByLabelText("Delivery address"),
+      "12 Main Street, Kandy",
+    );
+    await user.type(
+      screen.getByLabelText("Pickup address"),
+      "5 Galle Road, Colombo 03",
+    );
+    await user.type(screen.getByLabelText("Pickup contact name"), "Nimal Silva");
+    await user.type(screen.getByLabelText("Pickup contact phone"), "0711112222");
+    await user.type(screen.getByLabelText("Item description"), "Boxed shirts");
+    await user.selectOptions(screen.getByLabelText("Handling note"), "FRAGILE");
+    await user.type(screen.getByLabelText("Declared value (LKR)"), "2500.50");
+    await user.click(screen.getByRole("button", { name: "Review booking" }));
+    await screen.findByRole("heading", { name: "Review booking" });
+    await user.click(screen.getByRole("button", { name: "Confirm booking" }));
+
+    expect(createParcel).toHaveBeenCalledTimes(1);
+    const sent = vi.mocked(createParcel).mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(sent).toMatchObject({
+      pickupAddress: "5 Galle Road, Colombo 03",
+      pickupContactName: "Nimal Silva",
+      pickupContactPhone: "+94711112222",
+      itemDescription: "Boxed shirts",
+      handlingNote: "FRAGILE",
+      declaredValueCents: 250050,
+    });
+    expect(sent).not.toHaveProperty("preferredPickupDate");
+  });
+
+  it("refuses a partial pickup before calling the API", async () => {
+    page();
+    const user = userEvent.setup();
+    await completeParcelDetails(user);
+    await user.click(
+      screen.getByRole("button", { name: "Continue to recipient" }),
+    );
+    await user.type(screen.getByLabelText("Recipient name"), "Receiver Name");
+    await user.type(screen.getByLabelText("Recipient phone"), "0771234567");
+    await user.type(
+      screen.getByLabelText("Delivery address"),
+      "12 Main Street, Kandy",
+    );
+    await user.type(
+      screen.getByLabelText("Pickup address"),
+      "5 Galle Road, Colombo 03",
+    );
+    await user.click(screen.getByRole("button", { name: "Review booking" }));
+
+    expect(
+      await screen.findByText(/pickup address, contact name and contact phone/i),
+    ).toBeInTheDocument();
+    expect(createParcel).not.toHaveBeenCalled();
+  });
+
   describe("customer parcel history and details", () => {
     it("renders real booking summaries and requests the next cursor", async () => {
       vi.mocked(listParcels)

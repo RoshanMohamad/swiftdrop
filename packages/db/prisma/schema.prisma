@@ -26,6 +26,12 @@ enum ParcelStatus {
   FAILED
   CANCELLED
 }
+enum HandlingNote {
+  FRAGILE
+  KEEP_DRY
+  THIS_WAY_UP
+  HANDLE_WITH_CARE
+}
 model Role {
   id    RoleName @id
   users User[]
@@ -71,6 +77,10 @@ model Merchant {
   userId       Int            @unique @map("user_id")
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   businessName String         @map("business_name") @db.VarChar(160)
+  // Default pickup point, copied onto each order that omits its own pickup details.
+  defaultPickupAddress String?  @map("default_pickup_address") @db.VarChar(300)
+  defaultPickupContactName String? @map("default_pickup_contact_name") @db.VarChar(120)
+  defaultPickupContactPhone String? @map("default_pickup_contact_phone") @db.VarChar(16)
   status       MerchantStatus @default(PENDING)
   reviewedAt   DateTime?      @map("reviewed_at") @db.Timestamptz(3)
   reviewedById Int?           @map("reviewed_by_id")
@@ -274,6 +284,15 @@ model Parcel {
   recipientName String @map("recipient_name") @db.VarChar(120)
   recipientPhone String @map("recipient_phone") @db.VarChar(16)
   recipientAddress String @map("recipient_address") @db.VarChar(300)
+  // Pickup and item details. Nullable: additive v1 change, existing parcels have no values.
+  // Pickup contact data is PII: never put it in events or public tracking.
+  pickupAddress String? @map("pickup_address") @db.VarChar(300)
+  pickupContactName String? @map("pickup_contact_name") @db.VarChar(120)
+  pickupContactPhone String? @map("pickup_contact_phone") @db.VarChar(16)
+  itemDescription String? @map("item_description") @db.VarChar(200)
+  handlingNote HandlingNote? @map("handling_note")
+  declaredValueCents Int? @map("declared_value_cents")
+  preferredPickupDate DateTime? @map("preferred_pickup_date") @db.Date
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   history ParcelHistory[]
   receipt Receipt?

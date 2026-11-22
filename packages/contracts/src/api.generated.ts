@@ -206,6 +206,14 @@ export interface paths {
                         recipientName: string;
                         recipientPhone: string;
                         recipientAddress: string;
+                        pickupAddress?: string;
+                        pickupContactName?: string;
+                        pickupContactPhone?: string;
+                        itemDescription?: string;
+                        /** @enum {string} */
+                        handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE";
+                        declaredValueCents?: number;
+                        preferredPickupDate?: string;
                     };
                 };
             };
@@ -234,6 +242,14 @@ export interface paths {
                             recipientName: string;
                             recipientPhone: string;
                             recipientAddress: string;
+                            pickupAddress?: string | null;
+                            pickupContactName?: string | null;
+                            pickupContactPhone?: string | null;
+                            itemDescription?: string | null;
+                            /** @enum {string|null} */
+                            handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                            declaredValueCents?: number | null;
+                            preferredPickupDate?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             history: {
@@ -2282,6 +2298,359 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** me */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            /** Format: email */
+                            email: string;
+                            fullName: string | null;
+                            phone: string | null;
+                            /** @enum {string} */
+                            role: "CUSTOMER" | "MERCHANT" | "COURIER" | "DISPATCHER" | "ADMIN";
+                            /** @enum {string} */
+                            status: "ACTIVE";
+                            emailVerified: boolean;
+                            profileComplete: boolean;
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** me */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        fullName?: string;
+                        phone?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            /** Format: email */
+                            email: string;
+                            fullName: string | null;
+                            phone: string | null;
+                            /** @enum {string} */
+                            role: "CUSTOMER" | "MERCHANT" | "COURIER" | "DISPATCHER" | "ADMIN";
+                            /** @enum {string} */
+                            status: "ACTIVE";
+                            emailVerified: boolean;
+                            profileComplete: boolean;
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+                /** @description Request rejected */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            correlationId: string;
+                            errors?: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/api/v1/auth/google/link": {
@@ -4628,187 +4997,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** me */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Success */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            id: number;
-                            /** Format: email */
-                            email: string;
-                            fullName: string | null;
-                            phone: string | null;
-                            /** @enum {string} */
-                            role: "CUSTOMER" | "MERCHANT" | "COURIER" | "DISPATCHER" | "ADMIN";
-                            /** @enum {string} */
-                            status: "ACTIVE";
-                            emailVerified: boolean;
-                            profileComplete: boolean;
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                413: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                415: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-                /** @description Request rejected */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": {
-                            type: string;
-                            title: string;
-                            status: number;
-                            detail: string;
-                            code: string;
-                            correlationId: string;
-                            errors?: {
-                                [key: string]: string[];
-                            };
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/merchant/register": {
         parameters: {
             query?: never;
@@ -4835,6 +5023,9 @@ export interface paths {
                         phone: string;
                         password: string;
                         businessName: string;
+                        pickupAddress?: string;
+                        pickupContactName?: string;
+                        pickupContactPhone?: string;
                     };
                 };
             };
@@ -7678,6 +7869,14 @@ export interface paths {
                                 recipientName: string;
                                 recipientPhone: string;
                                 recipientAddress: string;
+                                pickupAddress?: string | null;
+                                pickupContactName?: string | null;
+                                pickupContactPhone?: string | null;
+                                itemDescription?: string | null;
+                                /** @enum {string|null} */
+                                handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                                declaredValueCents?: number | null;
+                                preferredPickupDate?: string | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 history: {
@@ -7922,6 +8121,14 @@ export interface paths {
                         recipientName: string;
                         recipientPhone: string;
                         recipientAddress: string;
+                        pickupAddress?: string;
+                        pickupContactName?: string;
+                        pickupContactPhone?: string;
+                        itemDescription?: string;
+                        /** @enum {string} */
+                        handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE";
+                        declaredValueCents?: number;
+                        preferredPickupDate?: string;
                     };
                 };
             };
@@ -7950,6 +8157,14 @@ export interface paths {
                             recipientName: string;
                             recipientPhone: string;
                             recipientAddress: string;
+                            pickupAddress?: string | null;
+                            pickupContactName?: string | null;
+                            pickupContactPhone?: string | null;
+                            itemDescription?: string | null;
+                            /** @enum {string|null} */
+                            handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                            declaredValueCents?: number | null;
+                            preferredPickupDate?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             history: {
@@ -8222,6 +8437,14 @@ export interface paths {
                             recipientName: string;
                             recipientPhone: string;
                             recipientAddress: string;
+                            pickupAddress?: string | null;
+                            pickupContactName?: string | null;
+                            pickupContactPhone?: string | null;
+                            itemDescription?: string | null;
+                            /** @enum {string|null} */
+                            handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                            declaredValueCents?: number | null;
+                            preferredPickupDate?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             history: {
@@ -10747,7 +10970,7 @@ export interface paths {
                                 /** Format: date-time */
                                 occurredAt: string;
                                 /** @enum {string} */
-                                eventType: "LOGIN" | "LOGOUT" | "LOGOUT_ALL" | "REFRESH_REUSE" | "PASSWORD_RESET_REQUESTED" | "PASSWORD_RESET" | "PASSWORD_CHANGE" | "SESSION_REVOKED" | "REAUTHENTICATE" | "MFA_CHALLENGE" | "MFA_RECOVERY_CODE_USED" | "MFA_ENROL_STARTED" | "MFA_ENABLED" | "MFA_DISABLED" | "MFA_RECOVERY_CODES_REGENERATED";
+                                eventType: "LOGIN" | "LOGOUT" | "LOGOUT_ALL" | "REFRESH_REUSE" | "PASSWORD_RESET_REQUESTED" | "PASSWORD_RESET" | "PASSWORD_CHANGE" | "SESSION_REVOKED" | "REAUTHENTICATE" | "MFA_CHALLENGE" | "MFA_RECOVERY_CODE_USED" | "MFA_ENROL_STARTED" | "MFA_ENABLED" | "MFA_DISABLED" | "MFA_RECOVERY_CODES_REGENERATED" | "PROFILE_UPDATED";
                                 /** @enum {string} */
                                 outcome: "SUCCESS" | "FAILURE";
                                 actorUserId: number | null;
@@ -15097,6 +15320,13 @@ export interface paths {
                                 recipientName: string;
                                 recipientPhone: string;
                                 recipientAddress: string;
+                                pickupAddress?: string | null;
+                                pickupContactName?: string | null;
+                                pickupContactPhone?: string | null;
+                                itemDescription?: string | null;
+                                /** @enum {string|null} */
+                                handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                                preferredPickupDate?: string | null;
                                 /** Format: date-time */
                                 assignedAt: string;
                             }[];

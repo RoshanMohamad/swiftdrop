@@ -31,6 +31,7 @@ import {
   reauthenticateResultSchema,
   auditPageSchema,
   completeProfileSchema,
+  updateProfileSchema,
   googleLinkSchema,
   quoteRequestSchema,
   quoteSchema,
@@ -303,6 +304,7 @@ for (const [method, suffix, input, output, status, bearer] of [
     200,
     true,
   ],
+  ["patch", "me", updateProfileSchema, publicUserSchema, 200, true],
   [
     "post",
     "google/link",
@@ -351,7 +353,7 @@ for (const [method, suffix, input, output, status, bearer] of [
     path: `/api/v1/auth/${suffix}`,
     summary: suffix,
     security:
-      method === "post"
+      method !== "get"
         ? [{ csrfHeader: [], ...(bearer ? { bearerAuth: [] } : {}) }]
         : bearer
           ? [{ bearerAuth: [] }]

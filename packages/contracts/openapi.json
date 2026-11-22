@@ -507,6 +507,46 @@
                     "minLength": 5,
                     "maxLength": 300,
                     "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupAddress": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 300,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupContactName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupContactPhone": {
+                    "type": "string",
+                    "pattern": "^(?:0|\\+94)[1-9]\\d{8}$"
+                  },
+                  "itemDescription": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "handlingNote": {
+                    "type": "string",
+                    "enum": [
+                      "FRAGILE",
+                      "KEEP_DRY",
+                      "THIS_WAY_UP",
+                      "HANDLE_WITH_CARE"
+                    ]
+                  },
+                  "declaredValueCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100000000
+                  },
+                  "preferredPickupDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   }
                 },
                 "required": [
@@ -597,6 +637,42 @@
                     },
                     "recipientAddress": {
                       "type": "string"
+                    },
+                    "pickupAddress": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pickupContactName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pickupContactPhone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "itemDescription": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "handlingNote": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "FRAGILE",
+                        "KEEP_DRY",
+                        "THIS_WAY_UP",
+                        "HANDLE_WITH_CARE",
+                        null
+                      ]
+                    },
+                    "declaredValueCents": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 0
+                    },
+                    "preferredPickupDate": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string",
@@ -5135,6 +5211,832 @@
         }
       }
     },
+    "/api/v1/auth/me": {
+      "patch": {
+        "summary": "me",
+        "security": [
+          {
+            "csrfHeader": [],
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "pattern": "^(?:0|\\+94)[1-9]\\d{8}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "fullName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "CUSTOMER",
+                        "MERCHANT",
+                        "COURIER",
+                        "DISPATCHER",
+                        "ADMIN"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ACTIVE"
+                      ]
+                    },
+                    "emailVerified": {
+                      "type": "boolean"
+                    },
+                    "profileComplete": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "fullName",
+                    "phone",
+                    "role",
+                    "status",
+                    "emailVerified",
+                    "profileComplete"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "me",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "fullName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "CUSTOMER",
+                        "MERCHANT",
+                        "COURIER",
+                        "DISPATCHER",
+                        "ADMIN"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ACTIVE"
+                      ]
+                    },
+                    "emailVerified": {
+                      "type": "boolean"
+                    },
+                    "profileComplete": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "fullName",
+                    "phone",
+                    "role",
+                    "status",
+                    "emailVerified",
+                    "profileComplete"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code",
+                    "correlationId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/google/link": {
       "post": {
         "summary": "google/link",
@@ -7304,6 +8206,7 @@
         "summary": "mfa",
         "security": [
           {
+            "csrfHeader": [],
             "bearerAuth": []
           }
         ],
@@ -10322,408 +11225,6 @@
         }
       }
     },
-    "/api/v1/auth/me": {
-      "get": {
-        "summary": "me",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "exclusiveMinimum": true
-                    },
-                    "email": {
-                      "type": "string",
-                      "format": "email"
-                    },
-                    "fullName": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "phone": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "role": {
-                      "type": "string",
-                      "enum": [
-                        "CUSTOMER",
-                        "MERCHANT",
-                        "COURIER",
-                        "DISPATCHER",
-                        "ADMIN"
-                      ]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "ACTIVE"
-                      ]
-                    },
-                    "emailVerified": {
-                      "type": "boolean"
-                    },
-                    "profileComplete": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "email",
-                    "fullName",
-                    "phone",
-                    "role",
-                    "status",
-                    "emailVerified",
-                    "profileComplete"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Request rejected",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "number"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "correlationId": {
-                      "type": "string"
-                    },
-                    "errors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status",
-                    "detail",
-                    "code",
-                    "correlationId"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/merchant/register": {
       "post": {
         "summary": "/api/v1/merchant/register",
@@ -10762,6 +11263,22 @@
                     "minLength": 2,
                     "maxLength": 160,
                     "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupAddress": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 300,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupContactName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupContactPhone": {
+                    "type": "string",
+                    "pattern": "^(?:0|\\+94)[1-9]\\d{8}$"
                   }
                 },
                 "required": [
@@ -17348,6 +17865,46 @@
                     "minLength": 5,
                     "maxLength": 300,
                     "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupAddress": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 300,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupContactName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "pickupContactPhone": {
+                    "type": "string",
+                    "pattern": "^(?:0|\\+94)[1-9]\\d{8}$"
+                  },
+                  "itemDescription": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[^\\p{Cc}]+$/u"
+                  },
+                  "handlingNote": {
+                    "type": "string",
+                    "enum": [
+                      "FRAGILE",
+                      "KEEP_DRY",
+                      "THIS_WAY_UP",
+                      "HANDLE_WITH_CARE"
+                    ]
+                  },
+                  "declaredValueCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100000000
+                  },
+                  "preferredPickupDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   }
                 },
                 "required": [
@@ -17433,6 +17990,42 @@
                     },
                     "recipientAddress": {
                       "type": "string"
+                    },
+                    "pickupAddress": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pickupContactName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pickupContactPhone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "itemDescription": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "handlingNote": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "FRAGILE",
+                        "KEEP_DRY",
+                        "THIS_WAY_UP",
+                        "HANDLE_WITH_CARE",
+                        null
+                      ]
+                    },
+                    "declaredValueCents": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 0
+                    },
+                    "preferredPickupDate": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string",
@@ -18107,6 +18700,42 @@
                           },
                           "recipientAddress": {
                             "type": "string"
+                          },
+                          "pickupAddress": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "pickupContactName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "pickupContactPhone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "itemDescription": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "handlingNote": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "FRAGILE",
+                              "KEEP_DRY",
+                              "THIS_WAY_UP",
+                              "HANDLE_WITH_CARE",
+                              null
+                            ]
+                          },
+                          "declaredValueCents": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 0
+                          },
+                          "preferredPickupDate": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "createdAt": {
                             "type": "string",
@@ -18789,6 +19418,42 @@
                     },
                     "recipientAddress": {
                       "type": "string"
+                    },
+                    "pickupAddress": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pickupContactName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pickupContactPhone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "itemDescription": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "handlingNote": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "FRAGILE",
+                        "KEEP_DRY",
+                        "THIS_WAY_UP",
+                        "HANDLE_WITH_CARE",
+                        null
+                      ]
+                    },
+                    "declaredValueCents": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 0
+                    },
+                    "preferredPickupDate": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string",
@@ -24667,7 +25332,8 @@
                               "MFA_ENROL_STARTED",
                               "MFA_ENABLED",
                               "MFA_DISABLED",
-                              "MFA_RECOVERY_CODES_REGENERATED"
+                              "MFA_RECOVERY_CODES_REGENERATED",
+                              "PROFILE_UPDATED"
                             ]
                           },
                           "outcome": {
@@ -34966,6 +35632,37 @@
                           },
                           "recipientAddress": {
                             "type": "string"
+                          },
+                          "pickupAddress": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "pickupContactName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "pickupContactPhone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "itemDescription": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "handlingNote": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "FRAGILE",
+                              "KEEP_DRY",
+                              "THIS_WAY_UP",
+                              "HANDLE_WITH_CARE",
+                              null
+                            ]
+                          },
+                          "preferredPickupDate": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "assignedAt": {
                             "type": "string",

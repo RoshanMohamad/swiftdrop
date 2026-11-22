@@ -25,6 +25,7 @@ import {
   webhookDeliveryStatusSchema,
   type WebhookDeliveryStatus,
 } from "@swiftdrop/contracts";
+import { Icon } from "../../shared/components/Icon.js";
 
 type Merchant = Awaited<ReturnType<typeof listMerchants>>["items"][number];
 type MerchantApiClient = Awaited<
@@ -43,6 +44,21 @@ const webhookStatusText: Record<WebhookDeliveryStatus, string> = {
   FAILED: "Failed",
   SKIPPED: "Skipped",
 };
+
+const webhookStatusClass: Record<WebhookDeliveryStatus, string> = {
+  PENDING: "status-badge status-in-transit",
+  SUCCESS: "status-badge status-delivered",
+  FAILED: "status-badge status-failed",
+  SKIPPED: "status-badge status-skipped",
+};
+
+const orderStatusClass = (value: string) =>
+  `status-badge status-${value.toLowerCase().replaceAll("_", "-")}`;
+const orderStatusText = (value: string) =>
+  value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/^\w/, (letter) => letter.toUpperCase());
 
 export function MerchantOrders() {
   const [status, setStatus] = useState("");
@@ -78,7 +94,12 @@ export function MerchantOrders() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Merchant platform</span>
-          <h1>Orders</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="box" />
+            </span>
+            Orders
+          </h1>
           <p className="muted">Orders created through your merchant account.</p>
         </div>
       </div>
@@ -87,19 +108,23 @@ export function MerchantOrders() {
           {error}
         </p>
       )}
-      <label htmlFor="merchant-order-status">Filter by status</label>
-      <select
-        id="merchant-order-status"
-        value={status}
-        onChange={(event) => setStatus(event.target.value)}
-      >
-        <option value="">All statuses</option>
-        {merchantOrderStatusSchema.options.map((value) => (
-          <option key={value} value={value}>
-            {value.replaceAll("_", " ")}
-          </option>
-        ))}
-      </select>
+      <div className="filter-row">
+        <div>
+          <label htmlFor="merchant-order-status">Filter by status</label>
+          <select
+            id="merchant-order-status"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="">All statuses</option>
+            {merchantOrderStatusSchema.options.map((value) => (
+              <option key={value} value={value}>
+                {value.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       {loading ? (
         <p role="status">Loading orders…</p>
       ) : error ? (
@@ -110,7 +135,13 @@ export function MerchantOrders() {
           Retry
         </button>
       ) : orders.length === 0 ? (
-        <p className="notice">No orders found for this status.</p>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="box" />
+          </div>
+          <h2>No orders found for this status.</h2>
+          <p>Orders you create through the API will appear here.</p>
+        </div>
       ) : (
         <div className="table-scroll">
           <table>
@@ -127,8 +158,12 @@ export function MerchantOrders() {
             <tbody>
               {orders.map((order) => (
                 <tr key={order.trackingNumber}>
-                  <td>{order.trackingNumber}</td>
-                  <td>{order.status.replaceAll("_", " ")}</td>
+                  <td className="mono">{order.trackingNumber}</td>
+                  <td>
+                    <span className={orderStatusClass(order.status)}>
+                      {orderStatusText(order.status)}
+                    </span>
+                  </td>
                   <td>
                     {order.originDistrict} → {order.destinationDistrict}
                   </td>
@@ -190,29 +225,38 @@ export function MerchantWebhookHistory() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Merchant platform</span>
-          <h1>Webhook delivery history</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="list" />
+            </span>
+            Webhook delivery history
+          </h1>
           <p className="muted">
             View delivery status for events sent to your configured webhook.
           </p>
         </div>
       </div>
-      <label htmlFor="merchant-webhook-status">Filter by status</label>
-      <select
-        id="merchant-webhook-status"
-        value={status}
-        onChange={(event) => {
-          setStatus(event.target.value as typeof status);
-          setCursor(undefined);
-          setHistory([]);
-        }}
-      >
-        <option value="">All statuses</option>
-        {webhookDeliveryStatusSchema.options.map((value) => (
-          <option key={value} value={value}>
-            {webhookStatusText[value]}
-          </option>
-        ))}
-      </select>
+      <div className="filter-row">
+        <div>
+          <label htmlFor="merchant-webhook-status">Filter by status</label>
+          <select
+            id="merchant-webhook-status"
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value as typeof status);
+              setCursor(undefined);
+              setHistory([]);
+            }}
+          >
+            <option value="">All statuses</option>
+            {webhookDeliveryStatusSchema.options.map((value) => (
+              <option key={value} value={value}>
+                {webhookStatusText[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       {error && (
         <p className="notice error" role="alert">
           {error}
@@ -254,7 +298,11 @@ export function MerchantWebhookHistory() {
                   <td>
                     <code>{delivery.eventId}</code>
                   </td>
-                  <td>{webhookStatusText[delivery.status]}</td>
+                  <td>
+                    <span className={webhookStatusClass[delivery.status]}>
+                      {webhookStatusText[delivery.status]}
+                    </span>
+                  </td>
                   <td>{new Date(delivery.createdAt).toLocaleString()}</td>
                   <td>{new Date(delivery.updatedAt).toLocaleString()}</td>
                 </tr>
@@ -417,7 +465,12 @@ export function MerchantClients() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Merchant platform</span>
-          <h1>API clients</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="key" />
+            </span>
+            API clients
+          </h1>
           <p className="muted">
             Create credentials for your integration. Secrets are shown once and
             stored as hashes.
@@ -660,7 +713,12 @@ export function MerchantWebhookSettings() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Merchant platform</span>
-          <h1>Webhook settings</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="webhook" />
+            </span>
+            Webhook settings
+          </h1>
           <p className="muted">
             Configure a public HTTPS endpoint to receive delivery events. The
             signing secret is encrypted at rest and shown only when created or
@@ -965,7 +1023,12 @@ export function AdminMerchants() {
       <div className="admin-heading">
         <div>
           <span className="eyebrow">Administration</span>
-          <h1>Merchant applications</h1>
+          <h1>
+            <span className="title-icon">
+              <Icon name="store" />
+            </span>
+            Merchant applications
+          </h1>
           <p className="muted">
             Review business registrations before API access is enabled.
           </p>
@@ -988,7 +1051,13 @@ export function AdminMerchants() {
       {loading ? (
         <p role="status">Loading applications…</p>
       ) : rows.length === 0 ? (
-        <p className="notice">No merchant applications yet.</p>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="store" />
+          </div>
+          <h2>No merchant applications yet.</h2>
+          <p>New business registrations will appear here for your review.</p>
+        </div>
       ) : (
         <div className="table-scroll">
           <table>
@@ -1011,22 +1080,30 @@ export function AdminMerchants() {
                   <td>{row.email}</td>
                   <td>{row.phone}</td>
                   <td>{new Date(row.createdAt).toLocaleDateString()}</td>
-                  <td>{row.status}</td>
+                  <td>
+                    <span
+                      className={`user-status user-status-${row.status.toLowerCase()}`}
+                    >
+                      {orderStatusText(row.status)}
+                    </span>
+                  </td>
                   <td>
                     {row.status === "PENDING" && (
                       <div className="row-actions">
                         <button
-                          className="primary"
+                          className="pill-action success"
                           disabled={busyId !== null}
                           onClick={() => void decide(row, "APPROVED")}
                         >
+                          <Icon name="check-circle" />
                           {busyId === row.id ? "Working…" : "Approve"}
                         </button>
                         <button
-                          className="secondary"
+                          className="pill-action danger"
                           disabled={busyId !== null}
                           onClick={() => void decide(row, "REJECTED")}
                         >
+                          <Icon name="x-circle" />
                           Reject
                         </button>
                       </div>

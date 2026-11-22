@@ -107,6 +107,12 @@ export class CourierService {
               recipientName: true,
               recipientPhone: true,
               recipientAddress: true,
+              pickupAddress: true,
+              pickupContactName: true,
+              pickupContactPhone: true,
+              itemDescription: true,
+              handlingNote: true,
+              preferredPickupDate: true,
               originZone: { select: { town: true } },
               destinationZone: { select: { town: true } },
             },
@@ -127,6 +133,14 @@ export class CourierService {
         recipientName: parcel.recipientName,
         recipientPhone: parcel.recipientPhone,
         recipientAddress: parcel.recipientAddress,
+        pickupAddress: parcel.pickupAddress,
+        pickupContactName: parcel.pickupContactName,
+        pickupContactPhone: parcel.pickupContactPhone,
+        itemDescription: parcel.itemDescription,
+        handlingNote: parcel.handlingNote,
+        preferredPickupDate: parcel.preferredPickupDate
+          ? parcel.preferredPickupDate.toISOString().slice(0, 10)
+          : null,
         assignedAt: assignedAt.toISOString(),
       })),
     };
