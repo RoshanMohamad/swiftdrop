@@ -12,7 +12,9 @@ import {
 } from "../auth/client.js";
 import {
   bookingRequestSchema,
+  handlingNoteSchema,
   quoteRequestSchema,
+  type HandlingNote,
   type QuoteRequest,
 } from "@swiftdrop/contracts";
 import {
@@ -39,6 +41,55 @@ const TRACKING_STEPS: string[] = [
   "OUT_FOR_DELIVERY",
   "DELIVERED",
 ];
+
+const handlingNoteLabel: Record<HandlingNote, string> = {
+  FRAGILE: "Fragile",
+  KEEP_DRY: "Keep dry",
+  THIS_WAY_UP: "This way up",
+  HANDLE_WITH_CARE: "Handle with care",
+};
+type BookingExtras = {
+  pickupAddress: string;
+  pickupContactName: string;
+  pickupContactPhone: string;
+  preferredPickupDate: string;
+  itemDescription: string;
+  handlingNote: string;
+  declaredValue: string;
+};
+const emptyExtras: BookingExtras = {
+  pickupAddress: "",
+  pickupContactName: "",
+  pickupContactPhone: "",
+  preferredPickupDate: "",
+  itemDescription: "",
+  handlingNote: "",
+  declaredValue: "",
+};
+/** Drops blank optional fields so the API never receives empty strings; LKR text becomes integer cents. */
+function bookingExtras(extras: BookingExtras) {
+  const out: Record<string, string | number> = {};
+  for (const key of [
+    "pickupAddress",
+    "pickupContactName",
+    "pickupContactPhone",
+    "preferredPickupDate",
+    "itemDescription",
+    "handlingNote",
+  ] as const) {
+    const value = extras[key].trim();
+    if (value) out[key] = value;
+  }
+  const declared = extras.declaredValue.trim();
+  if (declared) {
+    if (!/^\d{1,7}(\.\d{1,2})?$/.test(declared))
+      throw new Error(
+        "Enter the declared value in rupees, such as 2500 or 2500.50.",
+      );
+    out["declaredValueCents"] = Math.round(Number(declared) * 100);
+  }
+  return out;
+}
 
 export function NewParcelLegacy() {
   const navigate = useNavigate();
@@ -274,6 +325,7 @@ export function NewParcel() {
     recipientPhone: "",
     recipientAddress: "",
   });
+  const [extras, setExtras] = useState<BookingExtras>(emptyExtras);
   const [key, setKey] = useState("");
   const [attempted, setAttempted] = useState<ReturnType<
     typeof bookingRequestSchema.parse
@@ -288,7 +340,11 @@ export function NewParcel() {
 
   function validateRecipient() {
     try {
-      return bookingRequestSchema.parse({ quoteId: quote?.id, ...recipient });
+      return bookingRequestSchema.parse({
+        quoteId: quote?.id,
+        ...recipient,
+        ...bookingExtras(extras),
+      });
     } catch (reason) {
       setError(errorMessage(reason));
       return null;
@@ -503,6 +559,86 @@ export function NewParcel() {
               })
             }
           />
+          <fieldset>
+            <legend>Pickup (where the courier collects it)</legend>
+            <label htmlFor="pickupAddress">Pickup address</label>
+            <input
+              id="pickupAddress"
+              minLength={5}
+              maxLength={300}
+              autoComplete="off"
+              value={extras.pickupAddress}
+              onChange={(event) =>
+                setExtras({ ...extras, pickupAddress: event.target.value })
+              }
+            />
+            <label htmlFor="pickupContactName">Pickup contact name</label>
+            <input
+              id="pickupContactName"
+              minLength={2}
+              maxLength={120}
+              value={extras.pickupContactName}
+              onChange={(event) =>
+                setExtras({ ...extras, pickupContactName: event.target.value })
+              }
+            />
+            <label htmlFor="pickupContactPhone">Pickup contact phone</label>
+            <input
+              id="pickupContactPhone"
+              autoComplete="off"
+              value={extras.pickupContactPhone}
+              onChange={(event) =>
+                setExtras({ ...extras, pickupContactPhone: event.target.value })
+              }
+            />
+            <small>Give all three pickup details, or leave all three empty.</small>
+            <label htmlFor="preferredPickupDate">Preferred pickup date</label>
+            <input
+              id="preferredPickupDate"
+              type="date"
+              value={extras.preferredPickupDate}
+              onChange={(event) =>
+                setExtras({ ...extras, preferredPickupDate: event.target.value })
+              }
+            />
+          </fieldset>
+          <fieldset>
+            <legend>What is in the parcel (optional)</legend>
+            <label htmlFor="itemDescription">Item description</label>
+            <input
+              id="itemDescription"
+              maxLength={200}
+              value={extras.itemDescription}
+              onChange={(event) =>
+                setExtras({ ...extras, itemDescription: event.target.value })
+              }
+            />
+            <label htmlFor="handlingNote">Handling note</label>
+            <select
+              id="handlingNote"
+              value={extras.handlingNote}
+              onChange={(event) =>
+                setExtras({ ...extras, handlingNote: event.target.value })
+              }
+            >
+              <option value="">None</option>
+              {handlingNoteSchema.options.map((note) => (
+                <option key={note} value={note}>
+                  {handlingNoteLabel[note]}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="declaredValue">Declared value (LKR)</label>
+            <input
+              id="declaredValue"
+              inputMode="decimal"
+              value={extras.declaredValue}
+              onChange={(event) =>
+                setExtras({ ...extras, declaredValue: event.target.value })
+              }
+            />
+            <small>For information only. It does not change the fee.</small>
+          </fieldset>
           {error && (
             <p className="field-error" role="alert">
               {error}
@@ -542,6 +678,17 @@ export function NewParcel() {
             <p>
               <strong>Address</strong> {recipient.recipientAddress}
             </p>
+            {extras.pickupAddress && (
+              <p>
+                <strong>Pickup</strong> {extras.pickupAddress} ·{" "}
+                {extras.pickupContactName} · {extras.pickupContactPhone}
+              </p>
+            )}
+            {extras.itemDescription && (
+              <p>
+                <strong>Item</strong> {extras.itemDescription}
+              </p>
+            )}
             <strong className="quote-total">{money(quote.feeCents)}</strong>
             <p>
               Quote valid until {new Date(quote.expiresAt).toLocaleString()}.
@@ -824,6 +971,28 @@ export function ParcelDetail() {
           <p>{parcel.recipientPhone}</p>
           <p>{parcel.recipientAddress}</p>
         </section>
+        {parcel.pickupAddress && (
+          <section className="detail-card">
+            <h2>Pickup</h2>
+            <p>
+              <strong>{parcel.pickupContactName}</strong>
+            </p>
+            <p>{parcel.pickupContactPhone}</p>
+            <p>{parcel.pickupAddress}</p>
+            {parcel.preferredPickupDate && (
+              <p>Preferred date: {parcel.preferredPickupDate}</p>
+            )}
+          </section>
+        )}
+        {(parcel.itemDescription || parcel.handlingNote) && (
+          <section className="detail-card">
+            <h2>Item</h2>
+            {parcel.itemDescription && <p>{parcel.itemDescription}</p>}
+            {parcel.handlingNote && (
+              <p>Handling: {handlingNoteLabel[parcel.handlingNote]}</p>
+            )}
+          </section>
+        )}
         <section className="detail-card">
           <h2>Parcel information</h2>
           <dl className="detail-facts">

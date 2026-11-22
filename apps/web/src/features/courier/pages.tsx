@@ -549,6 +549,31 @@ export function CourierJobs({ store: injected }: { store?: QueueStore } = {}) {
             </dd>
             <dt>Address</dt>
             <dd>{job.recipientAddress}</dd>
+            {job.pickupAddress && (
+              <>
+                <dt>Pickup</dt>
+                <dd>{job.pickupAddress}</dd>
+                <dt>Pickup contact</dt>
+                <dd>
+                  {job.pickupContactName} ·{" "}
+                  <a href={`tel:${job.pickupContactPhone}`}>
+                    {job.pickupContactPhone}
+                  </a>
+                </dd>
+              </>
+            )}
+            {job.itemDescription && (
+              <>
+                <dt>Item</dt>
+                <dd>{job.itemDescription}</dd>
+              </>
+            )}
+            {job.handlingNote && (
+              <>
+                <dt>Handling</dt>
+                <dd>{job.handlingNote.replaceAll("_", " ").toLowerCase()}</dd>
+              </>
+            )}
             <dt>Attempts</dt>
             <dd>{job.attemptCount} of 3</dd>
           </dl>

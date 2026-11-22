@@ -46,6 +46,13 @@ const REDACT_PATHS = [
   "*.phone",
   "email",
   "*.email",
+  // Pickup contact details are PII (parcel booking and merchant defaults).
+  "pickupAddress",
+  "*.pickupAddress",
+  "pickupContactName",
+  "*.pickupContactName",
+  "pickupContactPhone",
+  "*.pickupContactPhone",
 ];
 
 function buildLogger(): Logger {

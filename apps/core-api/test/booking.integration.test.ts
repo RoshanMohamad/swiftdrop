@@ -601,3 +601,130 @@ describe("merchant orders (FR-M4)", () => {
     expect(await db.idempotencyRecord.count()).toBe(0);
   });
 });
+
+describe("pickup and item details", () => {
+  const pickup = {
+    pickupAddress: "5 Galle Road, Colombo 03",
+    pickupContactName: "Nimal Silva",
+    pickupContactPhone: "+94711112222",
+  };
+  const secrets = [
+    pickup.pickupAddress,
+    pickup.pickupContactName,
+    pickup.pickupContactPhone,
+    "Secret gift",
+  ];
+  const merchantRow = (extra: Record<string, unknown> = {}) =>
+    newUser("MERCHANT").then((user) =>
+      db.merchant.create({
+        data: {
+          userId: user.id,
+          businessName: `Shop ${user.id}`,
+          status: "APPROVED",
+          reviewedAt: new Date(),
+          ...extra,
+        },
+      }),
+    );
+
+  it("stores pickup and item details from a customer booking and returns them to the owner", async () => {
+    const { parcel } = await book(customerId, KEY, {
+      ...pickup,
+      itemDescription: "2 shirts, boxed",
+      handlingNote: "FRAGILE",
+      declaredValueCents: 250000,
+      preferredPickupDate: "2999-01-02",
+    });
+    expect(parcel).toMatchObject({
+      ...pickup,
+      itemDescription: "2 shirts, boxed",
+      handlingNote: "FRAGILE",
+      declaredValueCents: 250000,
+      preferredPickupDate: "2999-01-02",
+    });
+    expect(await parcels.detail(customerId, parcel.id)).toMatchObject(pickup);
+  });
+
+  it("leaves the fields null when omitted, and the fee does not depend on them", async () => {
+    const plain = await book(customerId, "plain-key-000000001");
+    const rich = await book(customerId, "rich-key-0000000001", {
+      ...pickup,
+      declaredValueCents: 99_000_000,
+    });
+    expect(plain.parcel).toMatchObject({ pickupAddress: null, handlingNote: null });
+    expect(plain.parcel.feeCents).toBe(rich.parcel.feeCents);
+  });
+
+  it("treats a changed pickup address under a repeated key as an idempotency conflict", async () => {
+    const quote = await pricing.createQuote(customerId, route);
+    const body = { quoteId: quote.id, ...recipient, ...pickup } as never;
+    const first = await parcels.book(customerId, KEY, body);
+    expect((await parcels.book(customerId, KEY, body)).id).toBe(first.id);
+    const changed = {
+      quoteId: quote.id,
+      ...recipient,
+      ...pickup,
+      pickupAddress: "Elsewhere 9, Colombo",
+    } as never;
+    expect((await rejection(parcels.book(customerId, KEY, changed))).code).toBe(
+      "IDEMPOTENCY_CONFLICT",
+    );
+  });
+
+  it("rejects a preferred pickup date in the past", async () => {
+    const error = await rejection(book(customerId, KEY, { preferredPickupDate: "2020-01-01" }));
+    expect([error.status, error.code]).toEqual([422, "PICKUP_DATE_PAST"]);
+  });
+
+  it("keeps pickup details out of public tracking and out of the outbox event", async () => {
+    const { parcel } = await book(customerId, KEY, { ...pickup, itemDescription: "Secret gift" });
+    const tracking = JSON.stringify(await parcels.track(parcel.trackingNumber));
+    const events = await db.outboxEvent.findMany({ where: { aggregateId: parcel.id } });
+    expect(events.length).toBeGreaterThan(0);
+    const payload = JSON.stringify(events.map((event) => event.payload));
+    for (const value of secrets) {
+      expect(tracking).not.toContain(value);
+      expect(payload).not.toContain(value);
+    }
+  });
+
+  it("does not show another customer's pickup details", async () => {
+    const { parcel } = await book(customerId, KEY, pickup);
+    expect((await rejection(parcels.detail(otherId, parcel.id))).status).toBe(404);
+  });
+
+  it("uses the merchant's default pickup when an order omits its own, and copies it onto the parcel", async () => {
+    const m = await merchantRow({
+      defaultPickupAddress: "Shop 1, Main Street, Colombo",
+      defaultPickupContactName: "Shop Owner",
+      defaultPickupContactPhone: "+94712223333",
+    });
+    const parcel = await parcels.createMerchantOrder(m.id, KEY, { ...route, ...recipient } as never);
+    expect(parcel).toMatchObject({
+      pickupAddress: "Shop 1, Main Street, Colombo",
+      pickupContactName: "Shop Owner",
+      pickupContactPhone: "+94712223333",
+    });
+    await db.merchant.update({ where: { id: m.id }, data: { defaultPickupAddress: "Moved" } });
+    expect((await db.parcel.findUniqueOrThrow({ where: { id: parcel.id } })).pickupAddress).toBe(
+      "Shop 1, Main Street, Colombo",
+    );
+  });
+
+  it("lets an order's own pickup override the merchant default, and has no pickup without either", async () => {
+    const withDefault = await merchantRow({
+      defaultPickupAddress: "Default Road 1, Colombo",
+      defaultPickupContactName: "Default Name",
+      defaultPickupContactPhone: "+94712223333",
+    });
+    const own = await parcels.createMerchantOrder(withDefault.id, KEY, {
+      ...route,
+      ...recipient,
+      ...pickup,
+    } as never);
+    expect(own).toMatchObject(pickup);
+    const bare = await merchantRow();
+    const none = await parcels.createMerchantOrder(bare.id, KEY, { ...route, ...recipient } as never);
+    expect(none).toMatchObject({ pickupAddress: null, pickupContactPhone: null });
+  });
+});

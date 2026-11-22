@@ -487,6 +487,11 @@ export const handlers = [
       recipientName: (body["recipientName"] as string) || "Recipient",
       recipientPhone: (body["recipientPhone"] as string) || "+94771234567",
       recipientAddress: (body["recipientAddress"] as string) || "Address",
+      pickupAddress: (body["pickupAddress"] as string | undefined) ?? null,
+      pickupContactName:
+        (body["pickupContactName"] as string | undefined) ?? null,
+      pickupContactPhone:
+        (body["pickupContactPhone"] as string | undefined) ?? null,
       status: "CREATED" as const,
       createdAt: new Date().toISOString(),
       history: [

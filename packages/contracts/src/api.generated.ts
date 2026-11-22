@@ -206,6 +206,14 @@ export interface paths {
                         recipientName: string;
                         recipientPhone: string;
                         recipientAddress: string;
+                        pickupAddress?: string;
+                        pickupContactName?: string;
+                        pickupContactPhone?: string;
+                        itemDescription?: string;
+                        /** @enum {string} */
+                        handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE";
+                        declaredValueCents?: number;
+                        preferredPickupDate?: string;
                     };
                 };
             };
@@ -234,6 +242,14 @@ export interface paths {
                             recipientName: string;
                             recipientPhone: string;
                             recipientAddress: string;
+                            pickupAddress?: string | null;
+                            pickupContactName?: string | null;
+                            pickupContactPhone?: string | null;
+                            itemDescription?: string | null;
+                            /** @enum {string|null} */
+                            handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                            declaredValueCents?: number | null;
+                            preferredPickupDate?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             history: {
@@ -5007,6 +5023,9 @@ export interface paths {
                         phone: string;
                         password: string;
                         businessName: string;
+                        pickupAddress?: string;
+                        pickupContactName?: string;
+                        pickupContactPhone?: string;
                     };
                 };
             };
@@ -7850,6 +7869,14 @@ export interface paths {
                                 recipientName: string;
                                 recipientPhone: string;
                                 recipientAddress: string;
+                                pickupAddress?: string | null;
+                                pickupContactName?: string | null;
+                                pickupContactPhone?: string | null;
+                                itemDescription?: string | null;
+                                /** @enum {string|null} */
+                                handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                                declaredValueCents?: number | null;
+                                preferredPickupDate?: string | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 history: {
@@ -8094,6 +8121,14 @@ export interface paths {
                         recipientName: string;
                         recipientPhone: string;
                         recipientAddress: string;
+                        pickupAddress?: string;
+                        pickupContactName?: string;
+                        pickupContactPhone?: string;
+                        itemDescription?: string;
+                        /** @enum {string} */
+                        handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE";
+                        declaredValueCents?: number;
+                        preferredPickupDate?: string;
                     };
                 };
             };
@@ -8122,6 +8157,14 @@ export interface paths {
                             recipientName: string;
                             recipientPhone: string;
                             recipientAddress: string;
+                            pickupAddress?: string | null;
+                            pickupContactName?: string | null;
+                            pickupContactPhone?: string | null;
+                            itemDescription?: string | null;
+                            /** @enum {string|null} */
+                            handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                            declaredValueCents?: number | null;
+                            preferredPickupDate?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             history: {
@@ -8394,6 +8437,14 @@ export interface paths {
                             recipientName: string;
                             recipientPhone: string;
                             recipientAddress: string;
+                            pickupAddress?: string | null;
+                            pickupContactName?: string | null;
+                            pickupContactPhone?: string | null;
+                            itemDescription?: string | null;
+                            /** @enum {string|null} */
+                            handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                            declaredValueCents?: number | null;
+                            preferredPickupDate?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             history: {
@@ -15269,6 +15320,13 @@ export interface paths {
                                 recipientName: string;
                                 recipientPhone: string;
                                 recipientAddress: string;
+                                pickupAddress?: string | null;
+                                pickupContactName?: string | null;
+                                pickupContactPhone?: string | null;
+                                itemDescription?: string | null;
+                                /** @enum {string|null} */
+                                handlingNote?: "FRAGILE" | "KEEP_DRY" | "THIS_WAY_UP" | "HANDLE_WITH_CARE" | null;
+                                preferredPickupDate?: string | null;
                                 /** Format: date-time */
                                 assignedAt: string;
                             }[];
