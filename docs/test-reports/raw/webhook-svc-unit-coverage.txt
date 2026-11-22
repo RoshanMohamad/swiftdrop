@@ -1,0 +1,30 @@
+Running one project: unit
+(node:20048) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3316) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19408) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=============================== Coverage summary ===============================
+Statements   : 91.2% ( 166/182 )
+Branches     : 86.84% ( 99/114 )
+Functions    : 85.29% ( 29/34 )
+Lines        : 92.26% ( 155/168 )
+================================================================================
+------------------|---------|----------|---------|---------|-------------------
+File              | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+------------------|---------|----------|---------|---------|-------------------
+All files         |    91.2 |    86.84 |   85.29 |   92.26 |                   
+ config-source.ts |   79.16 |       80 |   42.85 |   78.26 | 26,40-45,123      
+ destination.ts   |   84.09 |    81.81 |     100 |   87.17 | 85,88,132-134     
+ processor.ts     |   94.87 |    86.36 |   88.88 |   95.94 | 170-174,316       
+ sender.ts        |     100 |    95.23 |     100 |     100 | 67                
+ signing.ts       |     100 |      100 |     100 |     100 |                   
+------------------|---------|----------|---------|---------|-------------------
+
+Test Suites: 3 passed, 3 total
+Tests:       29 passed, 29 total
+Snapshots:   0 total
+Time:        30.705 s
+Ran all test suites.

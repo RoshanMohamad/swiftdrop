@@ -1,0 +1,96 @@
+$ pnpm --filter core-api test:integration && pnpm --filter webhook-svc test:integration && pnpm --filter notification-svc test:integration && pnpm --filter outbox-relay test:integration
+$ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration unit --runInBand --coverage
+Running 2 projects:
+- integration
+- unit
+(node:26996) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26996) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+{"level":50,"time":1795335373966,"pid":26996,"hostname":"DESKTOP-2FHDKVC","correlationId":"f86656c9-c8d5-472f-a8d8-a371112bf4f6","event":"request_failed"}
+(node:26996) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+----------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------
+File                  | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                                                                                
+----------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------
+All files             |   91.51 |    85.77 |   91.54 |   92.76 |                                                                                                                  
+ assistant            |   80.95 |    76.27 |     100 |   80.72 |                                                                                                                  
+  service.ts          |   80.95 |    76.27 |     100 |   80.72 | 73,90,143,242,267,311-322,328                                                                                    
+ auth                 |   89.75 |    86.45 |   88.63 |   91.57 |                                                                                                                  
+  cleanup.ts          |   80.76 |      100 |   44.44 |      80 | 53,56,59,62,65                                                                                                   
+  jwt.ts              |   98.07 |    89.09 |     100 |     100 | 27,108,121-147,160                                                                                               
+  password.ts         |     100 |      100 |     100 |     100 |                                                                                                                  
+  service.ts          |    89.1 |    85.67 |    92.3 |   91.09 | 90,97,131,142,144,166,180-184,212,242,265-269,280-284,324-342,364,366,421,435,441,474,608,654,792,1117,1140,1161 
+  transactions.ts     |     100 |      100 |     100 |     100 |                                                                                                                  
+ courier              |   97.22 |    81.69 |     100 |     100 |                                                                                                                  
+  service.ts          |   97.22 |    81.69 |     100 |     100 | 67-82,170-175,203,226,284-287,322                                                                                
+ dispatch             |   90.32 |       80 |     100 |   95.29 |                                                                                                                  
+  capacity.ts         |   94.73 |     87.5 |     100 |     100 | 35,87                                                                                                            
+  service.ts          |   89.18 |    78.37 |     100 |   94.11 | 232,303-312                                                                                                      
+ lifecycle            |   83.05 |    70.58 |     100 |   82.45 |                                                                                                                  
+  service.ts          |   83.05 |    70.58 |     100 |   82.45 | 56,146-155,179,182,186,249-258                                                                                   
+ merchants            |   94.11 |    91.42 |   91.11 |   96.11 |                                                                                                                  
+  service.ts          |   98.51 |    95.87 |     100 |    98.5 | 121,171                                                                                                          
+  webhook-security.ts |   82.69 |    81.39 |   66.66 |   89.13 | 80-89                                                                                                            
+ parcels              |   89.13 |    84.37 |   68.18 |   88.72 |                                                                                                                  
+  service.ts          |   89.13 |    84.37 |   68.18 |   88.72 | 126,209,281-290,441,510-519,598-613                                                                              
+ pricing              |    97.8 |    95.71 |     100 |   97.77 |                                                                                                                  
+  service.ts          |   98.38 |    97.67 |     100 |   98.36 | 279                                                                                                              
+  strategy.ts         |   96.55 |    92.59 |     100 |   96.55 | 63                                                                                                               
+ receipts             |   96.59 |    77.27 |     100 |   96.38 |                                                                                                                  
+  service.ts          |   96.59 |    77.27 |     100 |   96.38 | 88,120,139                                                                                                       
+ reports              |     100 |    69.56 |     100 |     100 |                                                                                                                  
+  service.ts          |     100 |    69.56 |     100 |     100 | 29-31,76-77,97,122                                                                                               
+ services             |   96.73 |    98.01 |   84.61 |   96.55 |                                                                                                                  
+  auth.ts             |     100 |     98.3 |     100 |     100 | 53                                                                                                               
+  notifications.ts    |   90.47 |    95.45 |   66.66 |   90.47 | 55,92                                                                                                            
+  webhooks.ts         |   96.15 |      100 |      75 |      96 | 76                                                                                                               
+ users                |   91.02 |    86.17 |     100 |      92 |                                                                                                                  
+  admin.ts            |     100 |      100 |     100 |     100 |                                                                                                                  
+  service.ts          |   89.78 |    85.47 |     100 |   90.83 | 70,100,117,160,192,221,223,233,240,257,319,367                                                                   
+ webhooks             |   93.02 |    85.29 |    90.9 |   97.22 |                                                                                                                  
+  service.ts          |   93.02 |    85.29 |    90.9 |   97.22 | 121                                                                                                              
+----------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------
+
+Test Suites: 32 passed, 32 total
+Tests:       530 passed, 530 total
+Snapshots:   0 total
+Time:        718.752 s, estimated 1130 s
+Ran all test suites in 2 projects.
+$ node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand
+Running one project: integration
+(node:18724) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18724) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+FAIL integration test/eventflow.integration.test.ts (86.287 s)
+
+
+  ● Test suite failed to run
+
+    thrown: "Exceeded timeout of 5000 ms for a hook.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (../../node_modules/.pnpm/jest-circus@30.5.2_supports-color@10.2.2/node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+     
+
+        [0m [90m 145 |[39m }[33m,[39m [35m300[39m_000)[33m;[39m
+         [90m 146 |[39m
+        [31m[1m>[22m[39m[90m 147 |[39m afterAll([36masync[39m () [33m=>[39m {
+         [90m     |[39m [31m[1m^[22m[39m
+         [90m 148 |[39m   [36mawait[39m consumer[33m?[39m[33m.[39mstop()[33m;[39m
+         [90m 149 |[39m   [36mawait[39m connection[33m?[39m[33m.[39mclose()[33m.[39m[36mcatch[39m(() [33m=>[39m undefined)[33m;[39m
+         [90m 150 |[39m   receiver[33m?[39m[33m.[39mcloseAllConnections()[33m;[39m[0m
+
+          at test/eventflow.integration.test.ts:147:1
+
+Test Suites: 1 failed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        88.076 s
+Ran all test suites.
+D:\personal\swiftdrop\apps\webhook-svc:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] webhook-svc@ test:integration: `node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand`
+Exit status 1
+[ELIFECYCLE] Command failed with exit code 1.
+exit 1

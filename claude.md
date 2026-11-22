@@ -9,7 +9,7 @@ This file condenses the design report (*SwiftDrop Design Documentation*, Oct 202
 | Concern | Choice |
 |---|---|
 | Frontend | React 18, Vite, TypeScript, Tailwind CSS (one SPA, role-based routes) |
-| Backend | Node.js 20, Express, TypeScript |
+| Backend | Node.js 24 LTS, Express, TypeScript |
 | Validation | Zod, with schemas shared by the API and the SPA |
 | Database | PostgreSQL 16 + Prisma |
 | Messaging | RabbitMQ 3.13, topic exchange `swiftdrop.events` |
@@ -102,15 +102,15 @@ Tables: `roles`, `users`, `merchants`, `api_clients`, `couriers`, `zones`, `pric
 CREATED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED
 CREATED → CANCELLED                      (before pickup only)
 OUT_FOR_DELIVERY → FAILED                (reason required)
-FAILED → IN_TRANSIT                      (re-attempt scheduled, max 2 attempts)
-FAILED → return to sender                (final attempt failed)
+FAILED → OUT_FOR_DELIVERY                (re-attempt scheduled; 3 delivery attempts in total, i.e. 1 + 2 re-attempts)
+FAILED (terminal)                        (final attempt failed; physical return to sender is out of scope)
 ```
 
-The report doesn't name a status for "return to sender". The UI designs use a `Returned` badge. Confirm the enum value with the team before adding it.
+There is no "return to sender" status: after the final failed attempt the parcel stays `FAILED`. The transition table is `PARCEL_TRANSITIONS` in `packages/contracts/src/lifecycle.ts` (`MAX_DELIVERY_ATTEMPTS = 3`). Don't add a `Returned` status without a team decision.
 
 - All allowed transitions live in **one table in the Parcels module**. The courier API, the dispatcher console and the tests all import it. Never duplicate it.
 - An invalid transition returns **409** (`invalid-transition` problem type).
-- `DELIVERED` requires proof: the recipient's name, a photo, or both. `FAILED` requires a reason from a fixed list.
+- `DELIVERED` requires the recipient's name; a photo is optional. `FAILED` requires a reason from a fixed list.
 
 ## Events and the outbox
 
@@ -148,7 +148,7 @@ The report doesn't name a status for "return to sender". The UI designs use a `R
 **Webhook dispatch:**
 
 - Sign the body with HMAC-SHA256 in the `X-SwiftDrop-Signature` header, and include a timestamp.
-- Timeout is 5 s. Make up to 6 attempts (about 30 minutes in total), then move the message to the DLQ and mark it failed.
+- Timeout is 5 s. Make 1 initial attempt plus 6 retries at 30, 60, 120, 240, 480 and 960 s (31.5 minutes of delay in total), then move the message to the DLQ and mark it failed.
 - Record every attempt in `webhook_deliveries`.
 - Retry delays use RabbitMQ TTL and dead-lettering. **Never hold timers in memory.**
 

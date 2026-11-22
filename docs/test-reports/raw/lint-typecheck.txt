@@ -1,0 +1,21 @@
+$ eslint .
+$ pnpm -r typecheck
+Scope: 9 of 10 workspace projects
+packages/contracts typecheck$ tsc
+apps/ai-assistant typecheck$ tsc
+packages/db typecheck$ tsc
+packages/db typecheck: Done
+apps/ai-assistant typecheck: Done
+packages/contracts typecheck: Done
+apps/web typecheck$ tsc
+packages/messaging typecheck$ tsc
+packages/messaging typecheck: Done
+apps/outbox-relay typecheck$ tsc
+apps/core-api typecheck$ tsc
+apps/notification-svc typecheck$ tsc
+apps/outbox-relay typecheck: Done
+apps/webhook-svc typecheck$ tsc
+apps/notification-svc typecheck: Done
+apps/web typecheck: Done
+apps/webhook-svc typecheck: Done
+apps/core-api typecheck: Done
