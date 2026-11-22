@@ -3449,3 +3449,80 @@
 .stage {
   padding-block: 14px 28px;
 }
+
+/* Dropdown menus: themed select with chevron, green focus and styled list */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 46px;
+  padding: 10px 42px 10px 16px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 14px;
+  background-color: var(--color-surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23245c47' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  box-shadow: 0 6px 16px -12px rgb(24 59 51 / 35%);
+  font-weight: 500;
+  cursor: pointer;
+}
+select:hover:not(:disabled) {
+  border-color: var(--color-forest-600);
+  background-color: #f4f9f1;
+}
+select:focus {
+  border-color: var(--color-forest-600);
+  box-shadow: 0 0 0 3px rgb(63 155 69 / 22%);
+  outline: 0;
+}
+select:disabled {
+  background-color: var(--color-panel);
+  cursor: not-allowed;
+}
+select option {
+  padding: 10px 14px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+select option:checked {
+  background: #e3f0dd;
+  color: var(--color-forest-800);
+  font-weight: 650;
+}
+@supports (appearance: base-select) {
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
+  select {
+    background-image: none;
+    padding-right: 14px;
+  }
+  select::picker-icon {
+    color: var(--color-forest-700);
+    transition: transform 160ms ease;
+  }
+  select:open::picker-icon {
+    transform: rotate(180deg);
+  }
+  select::picker(select) {
+    margin-top: 6px;
+    padding: 6px;
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    background: var(--color-surface);
+    box-shadow: 0 18px 40px -16px rgb(24 59 51 / 35%);
+  }
+  select option {
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  select option:hover,
+  select option:focus-visible {
+    background: #eef6ea;
+  }
+  select option::checkmark {
+    color: #3f9b45;
+  }
+}

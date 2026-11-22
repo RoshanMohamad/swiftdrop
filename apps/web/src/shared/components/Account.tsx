@@ -34,29 +34,76 @@ const TILES: Partial<Record<Role, Tile[]>> = {
     },
   ],
   MERCHANT: [
-    { to: "/merchant/orders", title: "Orders", icon: "box" },
-    { to: "/merchant/clients", title: "Manage API clients", icon: "key" },
-    { to: "/merchant/webhook", title: "Webhook settings", icon: "webhook" },
+    {
+      to: "/merchant/orders",
+      title: "Orders",
+      icon: "box",
+      desc: "Review and track your merchant orders.",
+    },
+    {
+      to: "/merchant/clients",
+      title: "Manage API clients",
+      icon: "key",
+      desc: "Create and rotate API credentials.",
+    },
+    {
+      to: "/merchant/webhook",
+      title: "Webhook settings",
+      icon: "webhook",
+      desc: "Set your endpoint and signing secret.",
+    },
     {
       to: "/merchant/webhook-deliveries",
       title: "Webhook delivery history",
       icon: "link",
+      desc: "See every delivery attempt and its result.",
     },
   ],
   ADMIN: [
-    { to: "/admin/users", title: "Users", icon: "users" },
+    {
+      to: "/admin/users",
+      title: "Users",
+      icon: "users",
+      desc: "Manage accounts, roles and access.",
+    },
     {
       to: "/admin/merchants",
       title: "Merchant applications",
       icon: "store",
+      desc: "Review and approve new merchants.",
     },
-    { to: "/admin/zones", title: "Service districts", icon: "pin" },
-    { to: "/admin/pricing", title: "Pricing", icon: "tag" },
-    { to: "/admin/reports", title: "Operations Reports", icon: "chart" },
-    { to: "/admin/webhooks", title: "Webhook deliveries", icon: "link" },
+    {
+      to: "/admin/zones",
+      title: "Service districts",
+      icon: "pin",
+      desc: "Manage delivery zones.",
+    },
+    {
+      to: "/admin/pricing",
+      title: "Pricing",
+      icon: "tag",
+      desc: "Edit fees by zone and size.",
+    },
+    {
+      to: "/admin/reports",
+      title: "Operations Reports",
+      icon: "chart",
+      desc: "Volumes, delivery rates and KPIs.",
+    },
+    {
+      to: "/admin/webhooks",
+      title: "Webhook deliveries",
+      icon: "link",
+      desc: "Monitor and replay failed webhooks.",
+    },
   ],
   DISPATCHER: [
-    { to: "/admin/reports", title: "Operations Reports", icon: "chart" },
+    {
+      to: "/admin/reports",
+      title: "Operations Reports",
+      icon: "chart",
+      desc: "Volumes, delivery rates and KPIs.",
+    },
   ],
 };
 
@@ -149,9 +196,7 @@ export function Account() {
   const customer = user?.role === "CUSTOMER";
 
   return (
-    <section
-      className={customer ? "account dash dash-customer" : "account dash"}
-    >
+    <section className="account dash dash-customer">
       <div className="dash-main">
         <div className="dash-hero">
           <span className="eyebrow">Your workspace</span>
@@ -163,7 +208,7 @@ export function Account() {
         </div>
 
         <section className="dash-profile" aria-label="Your profile">
-          {customer && (
+          {
             <div className="dash-avatar" aria-hidden="true">
               {initials(user?.fullName, user?.email)}
               {user?.emailVerified && (
@@ -172,7 +217,7 @@ export function Account() {
                 </span>
               )}
             </div>
-          )}
+          }
           <dl>
             <div>
               <dt>
@@ -284,7 +329,7 @@ export function Account() {
           {notice}
         </p>
       </div>
-      {customer && <DashArt />}
+      <DashArt />
     </section>
   );
 }
