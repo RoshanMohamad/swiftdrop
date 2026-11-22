@@ -1,5 +1,44 @@
 # SwiftDrop: Test Report
 
+## Latest run: 2026-11-22 (branch `web-redesign`, Windows 11, Node v24.22.1, Docker 29.9.3)
+
+Raw output for every row is saved in [`raw/`](raw/). Numbers are copied from that output. Nothing was re-run for the older section below.
+
+| Suite | Result | Raw output |
+|---|---|---|
+| `pnpm lint` and `pnpm typecheck` | clean | `raw/lint-typecheck.txt` |
+| core-api unit | 25 suites, 321 tests passed | `raw/core-api-unit.txt` |
+| core-api unit + integration, with coverage (real Postgres, RabbitMQ, MinIO) | 32 suites, 530 tests passed | `raw/integration-all.txt` |
+| web (Vitest) | 23 files, 157 tests passed | `raw/web-unit.txt` |
+| messaging unit | 3 suites, 16 tests passed | `raw/messaging-unit.txt` |
+| outbox-relay unit / integration | 6 tests / 3 tests passed | `raw/outbox-relay-unit-coverage.txt`, `raw/outbox-relay-integration.txt` |
+| webhook-svc unit / integration | 29 tests / 6 tests passed | `raw/webhook-svc-unit-coverage.txt`, `raw/webhook-svc-integration.txt` |
+| notification-svc unit / integration | 56 tests / 6 tests passed | `raw/notification-svc-unit-coverage.txt`, `raw/notification-svc-integration.txt` |
+| ai-assistant unit | 7 tests passed | `raw/ai-assistant-unit-coverage.txt` |
+
+### Line coverage by workspace
+
+| Workspace | Lines | Measured by |
+|---|---|---|
+| core-api (unit + integration; gate 80% on service/domain files) | **92.76%** (statements 91.51%, branches 85.77%, functions 91.54%) | `pnpm test:integration` |
+| outbox-relay | 100% | unit project |
+| webhook-svc | 92.26% | unit project |
+| notification-svc | 74.14% | unit project only |
+| ai-assistant | 67.56% | unit project only |
+| web | **not measured**: `@vitest/coverage-v8` is not installed | - |
+
+notification-svc and ai-assistant coverage is from the unit project alone; their integration tests add to it but were not combined into one figure.
+
+### Failures and instability seen in this run
+
+1. **webhook-svc integration, `afterAll` timeout (fixed).** In the first all-workspace run all 6 tests passed, but the suite was reported failed because the `afterAll` hook (stopping the consumer and two containers) hit Jest's default 5 s hook timeout on a loaded machine. A re-run passed. The hook now has an explicit 120 s timeout (`apps/webhook-svc/test/eventflow.integration.test.ts`). The full all-workspace command stopped at this failure, so notification-svc and outbox-relay integration were run separately afterwards; both passed.
+2. **core-api unit, one aborted run.** The first `pnpm --filter core-api test` run stopped after 4 of 25 suites with `UNKNOWN: unknown error, realpath '...\src\internal-app.ts'` (a Windows file-system error, not an assertion). The identical command passed 25/25 on the next run. Cause not investigated.
+3. A demo Docker Compose stack was running during these runs and was healthy (`/api/ready` returned `outboxRelay: ready`); it competes for memory with Testcontainers.
+
+---
+
+## Earlier run: 2026-11-21 (branch `m08-eventing-tests`)
+
 Run 2026-11-21 on Windows 11, Node v24.22.1, pnpm workspace, Docker 29.9.3, branch `m08-eventing-tests`.
 Every row below was run in this session. Numbers are copied from the test output.
 

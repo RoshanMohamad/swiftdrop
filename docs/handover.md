@@ -19,6 +19,14 @@ Integration target: `main`. Current reconciliation: fetched `origin/main` at `36
 
 No other member branches were inspected for this checkpoint. No merge order or combined integration verification is claimed.
 
+### Verification checkpoint (22 November 2026)
+
+- Branch check (`git rev-list origin/main..<branch>` after `git fetch`): the M01-M08 and M10 branches, `m08-eventing-tests` and `integration/merge-all` have no commits that `origin/main` lacks. Only `web-redesign` (13 commits) and `notifications-realtime` (3 commits) are ahead; a `git merge-tree` dry run shows both merge into `origin/main` without conflicts. Nothing was merged or pushed. The "Not assessed" cells above describe the earlier checkpoint and were not individually re-reviewed.
+- A running Compose stack (all 12 services) was healthy and `/api/ready` returned `outboxRelay: ready`.
+- Tests re-run on `web-redesign`: see `docs/test-reports/TEST_REPORT.md` (latest run) and `docs/test-reports/raw/`.
+- `CLAUDE.md` was updated to match the code: Node.js 24, three delivery attempts with `FAILED -> OUT_FOR_DELIVERY` and no return-to-sender status, recipient name required for `DELIVERED` (photo optional), webhook retry schedule of 31.5 minutes.
+- Not done: Google login against a real client, the phone PWA install, a Kubernetes/Helm deployment, browser (end-to-end) tests, demo screenshots, and web coverage (no coverage plugin installed).
+
 ### Main reconciliation register (21 November 2026)
 
 | ID | Producer / consumer | Evidence and resolution | Status / next step |

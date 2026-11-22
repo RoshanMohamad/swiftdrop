@@ -1,0 +1,22 @@
+Running one project: unit
+[BABEL] Note: The code generator has deoptimised the styling of D:\personal\swiftdrop\packages\db\src\generated\internal\class.ts as it exceeds the max of 500KB.
+(node:22656) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=============================== Coverage summary ===============================
+Statements   : 100% ( 35/35 )
+Branches     : 95.45% ( 21/22 )
+Functions    : 100% ( 5/5 )
+Lines        : 100% ( 34/34 )
+================================================================================
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+----------|---------|----------|---------|---------|-------------------
+All files |     100 |    95.45 |     100 |     100 |                   
+ relay.ts |     100 |    95.45 |     100 |     100 | 109               
+----------|---------|----------|---------|---------|-------------------
+Test Suites: 1 passed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        18.337 s
+Ran all test suites.

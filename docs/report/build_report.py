@@ -169,7 +169,7 @@ def build_pages():
     ['Real-time','Socket.IO, Redis adapter','Fallback to long-polling and cross-replica room delivery.'],
     ['Object storage','MinIO, private S3-compatible buckets','Proof photos and receipts outside the database; authorised signed URLs.'],
     ['Authentication','RS256 JWT, Google OIDC, OAuth client credentials','User access, social sign-in and scoped machine access.'],
-    ['Testing','Jest, Supertest, Testcontainers; Vitest and React Testing Library','Planned checks against real database/broker dependencies and UI component tests.'],
+    ['Testing','Jest, Supertest, Testcontainers; Vitest and React Testing Library','Checks against real database/broker dependencies (Testcontainers) and UI component tests; results are in docs/test-reports.'],
     ['Deployment','Docker Compose baseline; Kubernetes/Helm optional','Reproducible local environment; reuse images if stretch work proceeds.']
     ],[75,157,CW-232])
     end()
@@ -535,7 +535,7 @@ def build_pages():
     ],[98,139,CW-237],9.4);end()
 
     start(35,'10 API Design');sub('10.1 Conventions')
-    para('Version business endpoints under /api/v1; /oauth/token is the OAuth endpoint. Use plural resources, cursor pagination and one problem-details error format. OpenAPI generation from Zod and /api/docs are planned. Creation and courier mutations use a principal-scoped Idempotency-Key with request hash; state changes require expectedVersion. All paths below are full paths.')
+    para('Version business endpoints under /api/v1; /oauth/token is the OAuth endpoint. Use plural resources, cursor pagination and one problem-details error format. OpenAPI is generated from the Zod schemas and served at /api/docs. Creation and courier mutations use a principal-scoped Idempotency-Key with request hash; state changes require expectedVersion. All paths below are full paths.')
     sub('10.2 Main endpoints')
     text('Table 12: Key REST endpoints (summary; not exhaustive)',style=CAP)
     table(['Method and path','Role / purpose'],[
@@ -569,7 +569,7 @@ def build_pages():
 
     start(37,'11 Testing Approach')
     para('The testing strategy covers domain rules, database transactions, access control, event delivery and user interfaces. Integration and concurrency tests exercise failure paths as well as successful operations.')
-    text('Table 13: Planned test levels',style=CAP)
+    text('Table 13: Test levels',style=CAP)
     table(['Level / tools','Meaningful scenarios'],[
     ['Unit: Jest','Integer pricing and quote expiry; legal transitions; proof/name and failure reason rules; first plus two re-attempts; public/private payload projection.'],
     ['Integration: Supertest, Testcontainers (PostgreSQL, RabbitMQ)','Atomic state/history/outbox/idempotency writes and rollback; relay crash after confirm; duplicate operation keys; refreshed token reuse; private proof authorisation.'],

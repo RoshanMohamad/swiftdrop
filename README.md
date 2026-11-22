@@ -1,6 +1,18 @@
 # SwiftDrop
 
-Customer authentication and the next customer booking/tracking increment are implemented locally: password signup/login, optional mailbox verification, Google customer sign-in/linking, profile completion, rotating sessions, quotes, booking/history, public tracking, Admin zone/pricing maintenance, staff invitations, all-role suspension/reactivation, operator admin creation RabbitMQ event relay/consumer, a standalone outbox relay (`apps/outbox-relay`) and a webhook dispatcher with Admin delivery log/replay (`apps/webhook-svc`; see [docs/messaging.md](docs/messaging.md)). On the integration branch the dispatcher console (queue, safe assign/reassign, courier workload), courier PWA with offline queue and private proof photos, `apps/notification-svc` (Mailpit email, mock SMS) and the Socket.IO realtime gateway are also implemented; see [docs/operations.md](docs/operations.md). Production security gates, live-provider acceptance and several peer reviews remain outstanding (see [handover.md](handover.md)).
+SwiftDrop is a parcel delivery and courier management platform for Sri Lanka: customers book and track parcels, merchants create orders through an API and receive webhooks, dispatchers assign couriers, and couriers update status from a mobile PWA. It is a modular monolith (`apps/core-api`) plus event-driven workers (outbox relay, notification service, webhook service, AI assistant) on PostgreSQL, RabbitMQ, Redis and MinIO. Google sign-in needs private credentials (see below); live-provider acceptance, a Kubernetes cluster deploy and several peer reviews are still outstanding (see [handover.md](handover.md)).
+
+## Assignment deliverables
+
+| Deliverable | Where |
+|---|---|
+| Source code and setup instructions | this repository; setup is in [Start locally](#start-locally) below, one-command stack: `docker compose up` |
+| Design documentation (PDF) | [output/pdf/SwiftDrop_Design_Report_Corrected.pdf](output/pdf/SwiftDrop_Design_Report_Corrected.pdf) (current); Markdown source: [SWIFTDROP_DESIGN_DOCUMENTATION.md](SWIFTDROP_DESIGN_DOCUMENTATION.md). `SwiftDrop_Design_Report.pdf` is the earlier version and `DOCUMENTATION_AUDIT.md` is a historical review of it. The report is a design document; where it and the code differ, `CLAUDE.md` and the code are current |
+| Test reports and coverage summary | [docs/test-reports/TEST_REPORT.md](docs/test-reports/TEST_REPORT.md), [docs/test-reports/COVERAGE_SUMMARY.md](docs/test-reports/COVERAGE_SUMMARY.md), raw output in [docs/test-reports/raw/](docs/test-reports/raw/) |
+| Contribution sheet | [CONTRIBUTIONS.md](CONTRIBUTIONS.md) and [docs/SwiftDrop_Contribution_Sheet.docx](docs/SwiftDrop_Contribution_Sheet.docx) |
+| Demo walkthrough | [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) |
+
+Latest test run (2026-11-22): core-api 530 tests passing at 92.76% line coverage; web 157 tests; relay, webhook, notification, AI-assistant and messaging suites passing. Web and messaging coverage were not measured.
 
 ## Start locally
 

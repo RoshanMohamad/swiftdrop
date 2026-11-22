@@ -1,0 +1,24 @@
+$ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit
+Running one project: unit
+(node:27556) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":50,"time":1795336442707,"pid":27556,"hostname":"DESKTOP-2FHDKVC","correlationId":"c2102cf8-ca8b-4235-ac80-e65449f2ff8a","event":"request_failed"}
+(node:28480) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15548) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11432) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18616) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31428) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15520) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+Test Suites: 25 passed, 25 total
+Tests:       321 passed, 321 total
+Snapshots:   0 total
+Time:        145.735 s
+Ran all test suites.

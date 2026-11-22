@@ -1,0 +1,23 @@
+Running one project: unit
+(node:22732) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=============================== Coverage summary ===============================
+Statements   : 67.08% ( 53/79 )
+Branches     : 66.66% ( 18/27 )
+Functions    : 72.72% ( 16/22 )
+Lines        : 67.56% ( 50/74 )
+================================================================================
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+----------|---------|----------|---------|---------|-------------------
+All files |   67.08 |    66.66 |   72.72 |   67.56 |                   
+ app.ts   |       8 |       50 |   14.28 |    8.69 | 13-49             
+ rest.ts  |     100 |    57.14 |     100 |     100 | 17,24-29,45-51    
+ tools.ts |   91.89 |    88.88 |     100 |   91.42 | 92,157,182        
+----------|---------|----------|---------|---------|-------------------
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        16.562 s
+Ran all test suites.

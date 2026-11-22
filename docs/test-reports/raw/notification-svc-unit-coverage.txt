@@ -1,0 +1,48 @@
+Running one project: unit
+(node:4876) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14372) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22376) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26140) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11348) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[BABEL] Note: The code generator has deoptimised the styling of D:\personal\swiftdrop\packages\db\src\generated\internal\class.ts as it exceeds the max of 500KB.
+(node:26124) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12916) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+=============================== Coverage summary ===============================
+Statements   : 72.15% ( 381/528 )
+Branches     : 61.13% ( 162/265 )
+Functions    : 66.37% ( 77/116 )
+Lines        : 74.14% ( 367/495 )
+================================================================================
+--------------|---------|----------|---------|---------|---------------------------------------------------------------------------------
+File          | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                                               
+--------------|---------|----------|---------|---------|---------------------------------------------------------------------------------
+All files     |   72.15 |    61.13 |   66.37 |   74.14 |                                                                                 
+ app.ts       |   85.41 |    77.27 |   83.33 |   88.63 | 89-93,97,106-107                                                                
+ config.ts    |    37.5 |       75 |      60 |    37.5 | 52-59,87-89                                                                     
+ logger.ts    |     100 |      100 |     100 |     100 |                                                                                 
+ lookup.ts    |   27.27 |    21.05 |   22.22 |   29.26 | 16,41-78,117-180                                                                
+ mask.ts      |   81.81 |       50 |   66.66 |   88.88 | 18                                                                              
+ masking.ts   |     100 |    33.33 |     100 |     100 | 2-3                                                                             
+ processor.ts |      96 |    86.36 |   66.66 |   97.82 | 64                                                                              
+ rabbit.ts    |   81.69 |    67.79 |   88.46 |   83.44 | 110-111,160,193-194,198,201-204,226-232,246-247,264-265,329,361,372,385,399-400 
+ senders.ts   |   31.25 |    11.11 |   33.33 |   33.33 | 17-48,70-86                                                                     
+ service.ts   |   88.63 |    66.66 |     100 |   88.09 | 73-80,86-110,148                                                                
+ settle.ts    |   88.23 |    88.23 |      50 |   93.75 | 47,92                                                                           
+ store.ts     |   37.83 |    39.13 |   31.81 |    38.8 | 152,199-380                                                                     
+ templates.ts |     100 |    91.66 |     100 |     100 | 27                                                                              
+--------------|---------|----------|---------|---------|---------------------------------------------------------------------------------
+
+Test Suites: 7 passed, 7 total
+Tests:       56 passed, 56 total
+Snapshots:   0 total
+Time:        84.667 s
+Ran all test suites.

@@ -152,7 +152,7 @@ afterAll(async () => {
   await db?.$disconnect();
   await rabbit?.stop();
   await postgres?.stop();
-});
+}, 120_000);
 
 describe("webhook delivery over real RabbitMQ and PostgreSQL", () => {
   it("delivers a signed webhook for a merchant parcel event", async () => {

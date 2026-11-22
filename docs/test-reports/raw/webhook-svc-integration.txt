@@ -1,0 +1,10 @@
+$ node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand
+Running one project: integration
+(node:9296) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9296) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+Test Suites: 1 passed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        70.805 s, estimated 87 s
+Ran all test suites.
