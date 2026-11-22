@@ -63,7 +63,8 @@ export function ChatWidget() {
           onClick={() => setIsOpen(true)}
           aria-label="Open AI delivery assistant"
         >
-          💬 AI Assistant
+          <span aria-hidden="true">💬</span>
+          <span className="chat-label">AI Assistant</span>
         </button>
       )}
 

@@ -65,6 +65,7 @@
    ------------------------------------------------------------------ */
 @layer base {
   html {
+    scrollbar-gutter: stable;
     font-family: var(--font-sans);
     color: var(--color-ink);
     background: var(--color-page);
@@ -192,7 +193,7 @@
   td {
     padding: 14px 16px;
     border-bottom: 1px solid var(--color-line);
-    vertical-align: top;
+    vertical-align: middle;
   }
   th {
     background: var(--color-panel);
@@ -407,6 +408,12 @@
   /* Every other page: no hero, the panel takes the full width */
   .shell-split.no-hero {
     grid-template-columns: minmax(0, 1fr);
+    max-width: none;
+  }
+  /* Panel edges line up with the header's content edges */
+  .no-hero .content,
+  .no-hero .stage {
+    padding-inline: clamp(16px, 4vw, 56px);
   }
   .no-hero .panel {
     min-height: 0;
@@ -568,7 +575,7 @@
     min-width: 0;
   }
   .workspace .auth-panel {
-    max-width: 680px;
+    max-width: none;
     margin-inline: 0;
   }
   .workspace .parcel-page,
@@ -2588,6 +2595,246 @@
   .filter-row.stacked .filter-actions button {
     width: 100%;
   }
+
+  /* ================================================================
+     Layout polish: alignment and spacing pass
+     ================================================================ */
+  .label-short {
+    display: none;
+  }
+
+  /* Page heading: action buttons centre against the title block */
+  .admin-heading,
+  .page-heading,
+  .detail-heading {
+    align-items: center;
+  }
+  .admin-heading > .button-link,
+  .admin-heading > button,
+  .page-heading > .button-link,
+  .page-heading > button,
+  .heading-actions {
+    flex: none;
+  }
+  .heading-actions {
+    align-items: center;
+  }
+  .admin-heading > div:first-child .eyebrow,
+  .page-heading > div:first-child .eyebrow {
+    margin-bottom: 8px;
+  }
+
+  /* Section headings that sit between tables and cards */
+  .workspace .table-scroll {
+    margin-top: 4px;
+  }
+  .workspace .pagination + h2,
+  .workspace .table-scroll + h2,
+  .workspace .list-card + h2 {
+    margin-top: 36px;
+  }
+  .workspace h2:not([class]) + .table-scroll {
+    margin-top: 12px;
+  }
+  .workspace .pagination {
+    margin-bottom: 8px;
+  }
+  .workspace .pagination + h2 {
+    margin-top: 28px;
+    margin-bottom: 12px;
+  }
+  .workspace .pagination button {
+    min-width: 96px;
+  }
+  .row-actions > button:not(.pill-action):not(.text-button) {
+    min-height: 36px;
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+
+  /* Label/input rows: a fixed label column instead of a wide percentage */
+  .form-rows .field,
+  .form-rows .form-grid .field,
+  .wizard-rows {
+    grid-template-columns: minmax(130px, 200px) minmax(0, 1fr);
+  }
+  .form-card {
+    min-width: 0;
+  }
+
+  /* Wizard: dimension fields match the rows above them */
+  .parcel-dimensions label::first-letter {
+    text-transform: uppercase;
+  }
+  .parcel-dimensions {
+    gap: 12px;
+  }
+  .workspace .booking-wizard > p:last-child {
+    margin: 18px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  /* Login: secondary text button lines up with the form edge */
+  .auth-panel form .text-button:not(.reveal) {
+    display: block;
+    margin: 8px 0 0;
+    padding-inline: 0;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Reports filter: fields and actions on one line */
+  .filter-row.stacked {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+    align-items: end;
+  }
+  .filter-row.stacked > .filter-actions {
+    grid-column: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .filter-row.stacked .filter-actions button {
+    width: auto;
+    min-height: 46px;
+  }
+
+  /* Signed-in dashboards use more of the panel */
+  .dash,
+  .profile-page,
+  .settings-page,
+  .courier-home,
+  .parcel-page {
+    max-width: none;
+  }
+  .dash-grid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+  .dash-profile dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .profile-page > form {
+    max-width: 760px;
+  }
+  .settings-stack {
+    display: block;
+    columns: 2 420px;
+    column-gap: 16px;
+  }
+  .settings-stack > * {
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+  .courier-list {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  }
+  .workspace .booking-wizard {
+    max-width: 840px;
+    margin-inline: auto;
+  }
+  .workspace .track-panel {
+    max-width: 640px;
+  }
+
+  /* Create-client form: name, scopes and button share one row */
+  @media (min-width: 900px) {
+    .merchant-client-form:has(fieldset) {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 6px 20px;
+      max-width: none;
+    }
+    .merchant-client-form:has(fieldset) > h2 {
+      grid-column: 1 / -1;
+      margin: 0 0 6px;
+    }
+    .merchant-client-form:has(fieldset) > label {
+      grid-column: 1;
+      margin: 0;
+    }
+    .merchant-client-form:has(fieldset) > input {
+      grid-column: 1;
+    }
+    .merchant-client-form:has(fieldset) > fieldset {
+      grid-column: 2;
+      grid-row: 2 / 4;
+      margin: 0;
+      align-self: stretch;
+    }
+    .merchant-client-form:has(fieldset) > button {
+      grid-column: 3;
+      grid-row: 3;
+    }
+  }
+  /* Webhook form: URL field and its buttons on one row */
+  @media (min-width: 900px) {
+    .merchant-client-form:has(input[type="url"]) {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 6px 14px;
+      max-width: none;
+    }
+    .merchant-client-form:has(input[type="url"]) > h2,
+    .merchant-client-form:has(input[type="url"]) > label,
+    .merchant-client-form:has(input[type="url"]) > .muted {
+      grid-column: 1 / -1;
+      margin: 0;
+    }
+    .merchant-client-form:has(input[type="url"]) > input {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    .merchant-client-form:has(input[type="url"]) > .muted {
+      grid-row: 4;
+      margin-top: 8px;
+    }
+    .merchant-client-form:has(input[type="url"]) > button {
+      grid-row: 3;
+      margin: 0;
+    }
+  }
+  @media (min-width: 760px) {
+    .dash-profile dl {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 40px;
+    }
+    .dash-profile dl > div + div {
+      border-top: 0;
+    }
+    .dash-profile dl > div:nth-child(n + 3) {
+      border-top: 1px solid var(--color-line);
+    }
+  }
+
+  /* Stand-alone form pages (e.g. invite staff): readable width, tidy header */
+  .workspace .auth-panel > form:not(.wizard-rows) {
+    max-width: 760px;
+  }
+  .workspace .auth-panel > form .row-actions {
+    margin-top: 22px;
+  }
+  .auth-panel > h1:has(.title-icon) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: clamp(26px, 2.4vw, 32px);
+    letter-spacing: -0.03em;
+  }
+  .auth-panel > .eyebrow {
+    margin-bottom: 8px;
+  }
+
+  /* Long unbroken values never push the layout sideways */
+  .workspace code,
+  .workspace .mono,
+  .notice,
+  .detail-card,
+  .list-row-main {
+    overflow-wrap: anywhere;
+  }
 }
 
 @keyframes spin {
@@ -2604,9 +2851,54 @@
 /* ------------------------------------------------------------------
    Responsive
    ------------------------------------------------------------------ */
-@media (min-width: 1100px) {
+@media (min-width: 1360px) {
   .header-note {
     display: inline;
+  }
+}
+/* Wide screens: the "add" form sits beside its list instead of above it */
+@media (min-width: 1180px) {
+  .split-layout {
+    grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+    gap: 20px;
+  }
+  .split-layout > .form-card {
+    position: sticky;
+    top: 92px;
+  }
+  .split-layout .form-rows .field,
+  .split-layout .form-rows .form-grid .field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .split-layout .form-rows .field > small,
+  .split-layout .form-rows .field > .field-error {
+    grid-column: 1;
+  }
+}
+/* Header: wrap the role nav onto its own row before it gets squeezed */
+@media (max-width: 1180px) {
+  .app > header {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding-block: 12px 0;
+  }
+  .brand {
+    margin-right: auto;
+  }
+  .role-nav {
+    order: 3;
+    width: 100%;
+    margin: 0;
+    gap: 22px;
+    padding-bottom: 0;
+  }
+  .role-nav a {
+    padding: 10px 0 12px;
+  }
+  .account-nav,
+  .role-nav ~ .account-nav {
+    margin-left: 0;
   }
 }
 @media (min-width: 761px) {
@@ -2628,9 +2920,12 @@
   .hero-title br {
     display: none;
   }
+  /* The illustration is cropped badly when squeezed wide, so drop it here */
   .hero-art {
-    max-height: 200px;
-    object-fit: cover;
+    display: none;
+  }
+  .intro {
+    padding-bottom: 32px;
   }
   .panel {
     min-height: 0;
@@ -2644,19 +2939,6 @@
   }
 }
 @media (max-width: 760px) {
-  .app > header {
-    flex-wrap: wrap;
-    gap: 10px;
-    padding-block: 12px;
-  }
-  .role-nav {
-    order: 3;
-    width: 100%;
-    margin: 0;
-  }
-  .account-nav {
-    margin-left: auto;
-  }
   .intro {
     padding: 24px 20px;
   }
@@ -2692,12 +2974,32 @@
   .filter-row > div {
     width: 100%;
   }
-  .table-scroll {
-    margin-inline: -4px;
+  .filter-row.stacked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .filter-row.stacked > .filter-actions button {
+    flex: 1;
+  }
+  .workspace form > .primary,
+  .workspace form > button.secondary,
+  .workspace .form-card > button,
+  .workspace .form-card form > button {
+    width: 100%;
   }
   .chat-widget-root {
     right: 16px;
     bottom: 16px;
+  }
+  /* Phones: the assistant becomes a round icon so it stops covering content */
+  .chat-floating-button {
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    font-size: 22px;
+  }
+  .chat-label {
+    display: none;
   }
   .dash-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2733,6 +3035,32 @@
     min-height: 36px;
     padding: 0 8px;
     font-size: 12px;
+  }
+  .account-nav button:last-of-type {
+    padding: 0 12px;
+  }
+  .label-full {
+    display: none;
+  }
+  .label-short {
+    display: inline;
+  }
+  .app > header {
+    padding-inline: 16px;
+  }
+  .row-actions {
+    gap: 8px;
+  }
+  .list-row .row-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .stat-grid,
+  .workspace .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .heading-actions {
+    width: 100%;
   }
   .parcel-dimensions,
   .detail-grid {
@@ -2806,5 +3134,301 @@
 @media (max-width: 480px) {
   .courier-detail dl {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Sign-in page: fit exactly one screen on desktop, no page scrolling */
+@media (min-width: 961px) {
+  .app.app-fit {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .app-fit > header {
+    min-height: 60px;
+    padding-block: 6px;
+  }
+  .app-fit > footer {
+    padding-block: 8px;
+  }
+  .app-fit .shell-split {
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    align-items: stretch;
+  }
+  .app-fit .intro {
+    position: static;
+    height: 100%;
+    min-height: 0;
+    padding-top: 32px;
+  }
+  .app-fit .hero-art {
+    margin-top: 8px;
+    max-height: 42%;
+    width: calc(100% + 2 * clamp(28px, 4vw, 64px));
+  }
+  .app-fit .content {
+    min-height: 0;
+    padding-block: 12px;
+  }
+  .app-fit .content .panel {
+    min-height: 0;
+    padding-block: 16px;
+    overflow-y: auto;
+  }
+  .app-fit .field {
+    margin-top: 12px;
+  }
+  .app-fit .muted {
+    margin-bottom: 12px;
+  }
+  .app-fit .switch {
+    margin-top: 16px;
+  }
+  .app-fit .content .auth-panel form .primary {
+    margin-top: 14px;
+  }
+  .app-fit .content .auth-panel .provider {
+    margin-top: 8px;
+  }
+}
+
+/* Customer dashboard: two-column layout with a delivery-van scene */
+.dash-main {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.dash-customer .dash-art {
+  display: none;
+}
+.role-pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #e3f0dd;
+  color: var(--color-forest-800);
+}
+.dash-customer .dash-profile {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 24px;
+  border-radius: 20px;
+}
+.dash-customer .dash-profile dl {
+  flex: 1;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  border-left: 1px solid var(--color-line);
+  padding-left: 24px;
+}
+.dash-customer .dash-profile dl > div {
+  padding-block: 10px;
+}
+.dash-customer .dash-profile dl > div + div,
+.dash-customer .dash-profile dl > div:nth-child(n + 3) {
+  border-top: 1px solid var(--color-line);
+}
+.dash-avatar {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #e3f0dd;
+  color: var(--color-forest-800);
+  font-size: 30px;
+  font-weight: 750;
+}
+.dash-avatar-check {
+  position: absolute;
+  right: -2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #3f9b45;
+  color: #fff;
+  font-size: 16px;
+}
+.dash-customer .dash-notice {
+  align-items: center;
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: #e8f3e3;
+}
+.dash-customer .dash-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dash-customer .dash-tile {
+  min-height: 92px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px -14px rgb(24 59 51 / 30%);
+}
+.dash-tile-text {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.dash-tile-text strong {
+  font-size: 16px;
+}
+.dash-tile-text small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-ink-muted);
+}
+.dash-tile-go {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #e3f0dd;
+  color: var(--color-forest-700);
+}
+.dash-customer .dash-footer {
+  gap: 10px;
+}
+.dash-customer .dash-footer .secondary,
+.dash-customer .dash-link {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: 0 6px 16px -12px rgb(24 59 51 / 35%);
+}
+.dash-art .da-hill { fill: #dcebd5; }
+.dash-art .da-hill2 { fill: #c3dcb8; }
+.dash-art .da-city rect { fill: #e6efe1; }
+.dash-art .da-route { fill: none; stroke: #3f9b45; stroke-width: 2; stroke-dasharray: 3 7; stroke-linecap: round; }
+.dash-art .da-dot { fill: #fff; stroke: #3f9b45; stroke-width: 4; }
+.dash-art .da-pin { fill: #3f9b45; }
+.dash-art .da-shadow { fill: rgb(24 59 51 / 14%); }
+.dash-art .da-van { fill: #f4f6f4; stroke: #d5ddd5; stroke-width: 2; }
+.dash-art .da-window { fill: #2c3a36; }
+.dash-art .da-stripe { fill: #1f4d3d; }
+.dash-art .da-logo { fill: #1f4d3d; }
+.dash-art .da-logo-arrow { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.dash-art .da-wheel { fill: #26302d; }
+.dash-art .da-hub { fill: #c9d1cd; }
+.dash-art .da-box-f { fill: #d6a565; }
+.dash-art .da-box-s { fill: #bf8a4b; }
+.dash-art .da-box-t { fill: #e9c591; }
+
+@media (min-width: 1100px) {
+  .dash-customer {
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.9fr);
+    align-items: center;
+    column-gap: 32px;
+  }
+  .dash-customer .dash-art {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 520px;
+  }
+}
+@media (max-width: 640px) {
+  .dash-customer .dash-profile {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .dash-customer .dash-profile dl {
+    border-left: 0;
+    padding-left: 0;
+    width: 100%;
+  }
+  .dash-customer .dash-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Customer dashboard: no card, content and scene sit straight on the page */
+.panel:has(.dash-customer) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.panel:has(.dash-customer)::before {
+  display: none;
+}
+.dash-customer .dash-art {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 22%),
+    linear-gradient(to top, transparent, #000 14%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 22%),
+    linear-gradient(to top, transparent, #000 14%);
+  mask-composite: intersect;
+}
+
+/* Customer dashboard: fit one desktop screen, tight spacing */
+@media (min-width: 1100px) {
+  .app:has(.dash-customer) {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .app:has(.dash-customer) > header {
+    min-height: 60px;
+    padding-block: 6px;
+  }
+  .app:has(.dash-customer) > footer {
+    padding-block: 8px;
+  }
+  .app:has(.dash-customer) .shell-split {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .app:has(.dash-customer) .stage {
+    padding-block: 8px;
+  }
+  .app:has(.dash-customer) .panel {
+    min-height: 0;
+    padding-block: 12px;
+  }
+  .dash-customer {
+    gap: 0 24px;
+  }
+  .dash-customer .dash-main,
+  .dash-customer {
+    row-gap: 12px;
+  }
+  .dash-customer .dash-hero h1 {
+    font-size: clamp(30px, 3vw, 42px);
+  }
+  .dash-customer .dash-profile {
+    padding: 10px 20px;
+  }
+  .dash-customer .dash-avatar {
+    width: 72px;
+    height: 72px;
+    font-size: 26px;
+  }
+  .dash-customer .dash-profile dl > div {
+    padding-block: 6px;
+  }
+  .dash-customer .dash-notice {
+    padding-block: 8px;
+  }
+  .dash-customer .dash-tile {
+    min-height: 76px;
+    padding-block: 10px;
+  }
+  .dash-customer .dash-art {
+    max-height: calc(100dvh - 160px);
+  }
+  .dash-customer .dash-status:empty {
+    display: none;
   }
 }

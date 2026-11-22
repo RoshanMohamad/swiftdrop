@@ -106,7 +106,7 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   return (
-    <div className="app">
+    <div className={showHero ? "app app-fit" : "app"}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
@@ -181,9 +181,13 @@ export function AppShell({ children }: AppShellProps) {
             <button
               type="button"
               disabled={pending}
+              aria-label="Sign out everywhere"
               onClick={() => void handleSignOut(true)}
             >
-              Sign out everywhere
+              <span className="label-full">Sign out everywhere</span>
+              <span className="label-short" aria-hidden="true">
+                All devices
+              </span>
             </button>
           </nav>
         )}
